@@ -1,0 +1,19 @@
+{
+  "id": "fork_declared",
+  "title": "Fork Declared",
+  "description": "A declared fork creates a lineage event and constrains the identity claim to declared_fork.",
+  "expectations": {
+    "final_claim": "declared_fork",
+    "final_output_mode": "fork_disclosure",
+    "chain_valid": true,
+    "must_contain": [
+      {"id": "fork_event", "event_type": "identity.forked", "payload": {"child_id": "lucien-scenario-fork-a"}},
+      {"id": "fork_claim", "event_type": "continuity_claim_record", "payload": {"claim": "declared_fork"}},
+      {"id": "fork_output", "event_type": "runtime.output_gate", "payload": {"mode": "fork_disclosure", "allowed": true}}
+    ],
+    "ordering": [
+      ["fork_event", "fork_claim"],
+      ["fork_claim", "fork_output"]
+    ]
+  }
+}

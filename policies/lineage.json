@@ -1,0 +1,27 @@
+{
+  "pack_id": "lineage",
+  "version": "0.1",
+  "description": "Rules for forks, lineage boundaries, and parent-child identity records.",
+  "transforms": {
+    "declared_fork": {
+      "identity_risk": "continuity_break",
+      "required_evidence": [
+        "parent_identity_id",
+        "fork_reason",
+        "lineage_record"
+      ],
+      "deny_if_missing": [
+        "parent_identity_id",
+        "lineage_record"
+      ],
+      "review_if_missing": [
+        "fork_reason"
+      ],
+      "override_allowed": false,
+      "override_result_claim": "declared_fork",
+      "required_followups_on_override": [],
+      "audit_type": "fork_audit"
+    }
+  }
+}
+

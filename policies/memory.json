@@ -1,0 +1,26 @@
+{
+  "pack_id": "memory",
+  "version": "0.1",
+  "description": "Rules for memory compaction, retention, and commitment preservation.",
+  "transforms": {
+    "memory_compaction": {
+      "identity_risk": "medium_identity_risk",
+      "required_evidence": [
+        "retention_report",
+        "commitment_diff"
+      ],
+      "deny_if_missing": [],
+      "review_if_missing": [
+        "retention_report",
+        "commitment_diff"
+      ],
+      "override_allowed": true,
+      "override_result_claim": "uncertified_continuity",
+      "required_followups_on_override": [
+        "memory_compaction_audit"
+      ],
+      "audit_type": "memory_compaction_audit"
+    }
+  }
+}
+

@@ -1,0 +1,22 @@
+{
+  "id": "csm_amber_degradation",
+  "title": "CSM AMBER Degradation",
+  "description": "A CSM AMBER runtime state creates a soft continuity breach and forces review disclosure on output.",
+  "expectations": {
+    "final_claim": "review_required",
+    "final_output_mode": "disclose_review",
+    "chain_valid": true,
+    "must_contain": [
+      {"id": "amber_signal", "event_type": "runtime.csm_state", "payload": {"state": "AMBER"}},
+      {"id": "amber_breach", "event_type": "constraint.breached", "payload": {"constraint": "runtime_csm_amber", "severity": "soft"}},
+      {"id": "disclosed_output", "event_type": "runtime.output_gate", "payload": {"mode": "disclose_review", "allowed": true, "must_disclose": true}}
+    ],
+    "ordering": [
+      ["amber_signal", "amber_breach"],
+      ["amber_breach", "disclosed_output"]
+    ],
+    "adjacent": [
+      ["amber_signal", "amber_breach"]
+    ]
+  }
+}

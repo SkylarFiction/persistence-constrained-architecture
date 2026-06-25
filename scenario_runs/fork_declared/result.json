@@ -1,0 +1,78 @@
+{
+  "artifacts": {
+    "dashboard_html": "scenario_runs/fork_declared/dashboard.html",
+    "ledger": "scenario_runs/fork_declared/continuity.log",
+    "result_json": "scenario_runs/fork_declared/result.json",
+    "trace_html": "scenario_runs/fork_declared/trace.html"
+  },
+  "ledger_path": "scenario_runs/fork_declared/continuity.log",
+  "notes": [
+    "Seeded required persistence constraints.",
+    "Declared fork created lineage event and fork-disclosure output behavior."
+  ],
+  "output_dir": "scenario_runs/fork_declared",
+  "scenario": {
+    "description": "A declared fork creates a lineage event and constrains the identity claim to declared_fork.",
+    "expectations": {
+      "chain_valid": true,
+      "final_claim": "declared_fork",
+      "final_output_mode": "fork_disclosure",
+      "must_contain": [
+        {
+          "event_type": "identity.forked",
+          "id": "fork_event",
+          "payload": {
+            "child_id": "lucien-scenario-fork-a"
+          }
+        },
+        {
+          "event_type": "continuity_claim_record",
+          "id": "fork_claim",
+          "payload": {
+            "claim": "declared_fork"
+          }
+        },
+        {
+          "event_type": "runtime.output_gate",
+          "id": "fork_output",
+          "payload": {
+            "allowed": true,
+            "mode": "fork_disclosure"
+          }
+        }
+      ],
+      "ordering": [
+        [
+          "fork_event",
+          "fork_claim"
+        ],
+        [
+          "fork_claim",
+          "fork_output"
+        ]
+      ]
+    },
+    "id": "fork_declared",
+    "title": "Fork Declared"
+  },
+  "summary": {
+    "active_followups": 0,
+    "blocking_followups": 0,
+    "chain_valid": true,
+    "current_continuity_claim": "declared_fork",
+    "current_recovery_status": null,
+    "event_count": 6,
+    "followup_count": 0,
+    "identity_state": "forked",
+    "ledger_path": "scenario_runs/fork_declared/continuity.log",
+    "name": "Lucien Persistence Kernel",
+    "output_allowed_scope": "Must identify as a fork or descendant.",
+    "output_mode": "fork_disclosure",
+    "reasons": [
+      "ledger contains an identity fork event"
+    ],
+    "recorded_claim_id": "claim_0478509e-18dd-4ff9-8664-6dae4bc0bd05",
+    "recovery_count": 0,
+    "system_id": "lucien-pca-seed"
+  }
+}

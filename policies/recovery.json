@@ -1,0 +1,13 @@
+{
+  "pack_id": "recovery",
+  "version": "0.1",
+  "description": "Recovery paths after uncertified or broken continuity.",
+  "recovery": {
+    "open_recovery_min_authority": "recovery_authority",
+    "required_followups_on_open": [
+      "recovery_audit"
+    ],
+    "audit_type": "recovery_audit"
+  },
+  "transforms": {}
+}

@@ -1,0 +1,26 @@
+{
+  "id": "recovery_audit_completed",
+  "title": "Recovery Audit Completed",
+  "description": "A CSM RED break is followed by recovery opening and a successful recovery audit, landing in review_required rather than certified continuity.",
+  "expectations": {
+    "final_claim": "review_required",
+    "final_output_mode": "disclose_review",
+    "recovery_status": "recovery_certified",
+    "chain_valid": true,
+    "must_contain": [
+      {"id": "red_signal", "event_type": "runtime.csm_state", "payload": {"state": "RED"}},
+      {"id": "red_breach", "event_type": "constraint.breached", "payload": {"constraint": "runtime_csm_red", "severity": "hard"}},
+      {"id": "recovery_opened", "event_type": "recovery_opened", "payload": {"status": "recovery_audit_required"}},
+      {"id": "recovery_audit", "event_type": "post_transform_audit", "payload": {"audit_type": "recovery_audit", "outcome": "certify_continuity"}},
+      {"id": "recovery_updated", "event_type": "recovery_updated", "payload": {"status": "recovery_certified"}},
+      {"id": "post_recovery_output", "event_type": "runtime.output_gate", "payload": {"mode": "disclose_review", "allowed": true}}
+    ],
+    "ordering": [
+      ["red_signal", "red_breach"],
+      ["red_breach", "recovery_opened"],
+      ["recovery_opened", "recovery_audit"],
+      ["recovery_audit", "recovery_updated"],
+      ["recovery_updated", "post_recovery_output"]
+    ]
+  }
+}

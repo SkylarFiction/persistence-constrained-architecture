@@ -1,0 +1,22 @@
+{
+  "id": "csm_red_continuity_break",
+  "title": "CSM RED Continuity Break",
+  "description": "A CSM RED runtime state is atomically recorded with a hard breach, then outbound identity speech is blocked.",
+  "expectations": {
+    "final_claim": "continuity_break",
+    "final_output_mode": "recovery_status_only",
+    "chain_valid": true,
+    "must_contain": [
+      {"id": "red_signal", "event_type": "runtime.csm_state", "payload": {"state": "RED"}},
+      {"id": "red_breach", "event_type": "constraint.breached", "payload": {"constraint": "runtime_csm_red", "severity": "hard"}},
+      {"id": "blocked_output", "event_type": "runtime.output_gate", "payload": {"mode": "recovery_status_only", "allowed": false}}
+    ],
+    "ordering": [
+      ["red_signal", "red_breach"],
+      ["red_breach", "blocked_output"]
+    ],
+    "adjacent": [
+      ["red_signal", "red_breach"]
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "substrate_migration_override",
+  "title": "Substrate Migration Override",
+  "description": "A substrate migration lacks continuity proof, is denied by policy, then proceeds only through operator override with follow-up obligations.",
+  "expectations": {
+    "final_claim": "uncertified_continuity",
+    "final_output_mode": "operational_only",
+    "active_followups": 2,
+    "chain_valid": true,
+    "must_contain": [
+      {"id": "migration_denied", "event_type": "transform.evaluated", "payload": {"transform": "substrate_migration", "decision": "deny"}},
+      {"id": "override_allowed", "event_type": "authorization_check", "payload": {"action": "override", "decision": "allowed"}},
+      {"id": "override_event", "event_type": "transform.override", "payload": {"transform": "substrate_migration", "operation_permitted": true}},
+      {"id": "migration_followup", "event_type": "followup_created", "payload": {"followup_type": "post_migration_identity_audit", "status": "open"}},
+      {"id": "lineage_followup", "event_type": "followup_created", "payload": {"followup_type": "lineage_freeze", "status": "open"}},
+      {"id": "operational_output", "event_type": "runtime.output_gate", "payload": {"mode": "operational_only", "allowed": true}}
+    ],
+    "ordering": [
+      ["migration_denied", "override_allowed"],
+      ["override_allowed", "override_event"],
+      ["override_event", "migration_followup"],
+      ["override_event", "lineage_followup"],
+      ["lineage_followup", "operational_output"]
+    ]
+  }
+}

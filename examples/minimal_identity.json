@@ -1,0 +1,87 @@
+{
+  "system_id": "lucien-pca-seed",
+  "name": "Lucien Persistence Kernel",
+  "version": "0.1.0",
+  "origin": {
+    "created_by": "Nick Whitehead",
+    "purpose": "Prototype identity persistence under operational constraint"
+  },
+  "invariants": [
+    "continuity must be evidence-bearing",
+    "hard breaches must stop identity claims",
+    "forks must be declared rather than hidden"
+  ],
+  "constraints": [
+    {
+      "name": "ledger_integrity",
+      "kind": "evidence",
+      "required": true,
+      "description": "Continuity events must remain hash-chain verifiable."
+    },
+    {
+      "name": "origin_traceability",
+      "kind": "lineage",
+      "required": true,
+      "description": "The system must retain an origin record."
+    },
+    {
+      "name": "commitment_memory",
+      "kind": "memory",
+      "required": false,
+      "threshold": 0.85,
+      "description": "Commitments should remain recoverable above the declared threshold."
+    }
+  ],
+  "allowed_transforms": [
+    "version_update",
+    "memory_compaction",
+    "substrate_migration",
+    "declared_fork"
+  ],
+  "transform_policies": [
+    {
+      "name": "version_update",
+      "decision": "allow",
+      "identity_risk": "low_identity_risk",
+      "missing_evidence_decision": "review",
+      "required_evidence": [
+        "change_summary"
+      ],
+      "description": "A version update is admissible when its identity-relevant change summary is recorded."
+    },
+    {
+      "name": "memory_compaction",
+      "decision": "review",
+      "identity_risk": "medium_identity_risk",
+      "missing_evidence_decision": "review",
+      "required_evidence": [
+        "retention_report",
+        "commitment_diff"
+      ],
+      "description": "Memory compaction requires review because lossy compression can alter relational identity."
+    },
+    {
+      "name": "substrate_migration",
+      "decision": "review",
+      "identity_risk": "high_identity_risk",
+      "missing_evidence_decision": "deny",
+      "required_evidence": [
+        "source_checkpoint",
+        "target_checkpoint",
+        "continuity_test"
+      ],
+      "description": "Substrate migration requires continuity evidence from both sides of the transfer."
+    },
+    {
+      "name": "declared_fork",
+      "decision": "allow",
+      "identity_risk": "continuity_break",
+      "missing_evidence_decision": "deny",
+      "required_evidence": [
+        "child_id",
+        "fork_reason"
+      ],
+      "description": "Forks are allowed only when declared as new lineage."
+    }
+  ]
+}

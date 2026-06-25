@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PCA Scenario Demo Index</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f7f8f4;
+      color: #18201d;
+    }
+    header {
+      padding: 30px;
+      background: #18201d;
+      color: #f7fbff;
+    }
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      letter-spacing: 0;
+    }
+    .summary {
+      background: #ffffff;
+      border: 1px solid #d8dfda;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 18px;
+      font-weight: 700;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #ffffff;
+      border: 1px solid #d8dfda;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      border-bottom: 1px solid #e8ece8;
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+      font-size: 14px;
+    }
+    th { background: #edf2ee; }
+    a { color: #255f85; }
+    .pass { color: #1d6f4a; font-weight: 700; }
+    .fail { color: #a33a2b; font-weight: 700; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>PCA Scenario Demo Index</h1>
+    <div>Executable governance stories for continuity under stress</div>
+  </header>
+  <main>
+    <div class="summary">7 of 7 scenarios passed verification</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Scenario</th>
+          <th>Status</th>
+          <th>Final Claim</th>
+          <th>Output Mode</th>
+          <th>Recovery</th>
+          <th>Events</th>
+          <th>Artifacts</th>
+        </tr>
+      </thead>
+      <tbody><tr><td><strong>CSM AMBER Degradation</strong><br><code>csm_amber_degradation</code></td><td class="pass">PASS</td><td>review_required</td><td>disclose_review</td><td>None</td><td>7</td><td><a href="csm_amber_degradation/dashboard.html">dashboard</a> <a href="csm_amber_degradation/trace.html">trace</a> <a href="csm_amber_degradation/result.json">result</a></td></tr>
+<tr><td><strong>CSM RED Continuity Break</strong><br><code>csm_red_continuity_break</code></td><td class="pass">PASS</td><td>continuity_break</td><td>recovery_status_only</td><td>None</td><td>7</td><td><a href="csm_red_continuity_break/dashboard.html">dashboard</a> <a href="csm_red_continuity_break/trace.html">trace</a> <a href="csm_red_continuity_break/result.json">result</a></td></tr>
+<tr><td><strong>Fork Declared</strong><br><code>fork_declared</code></td><td class="pass">PASS</td><td>declared_fork</td><td>fork_disclosure</td><td>None</td><td>6</td><td><a href="fork_declared/dashboard.html">dashboard</a> <a href="fork_declared/trace.html">trace</a> <a href="fork_declared/result.json">result</a></td></tr>
+<tr><td><strong>Memory Compaction Review</strong><br><code>memory_compaction_review</code></td><td class="pass">PASS</td><td>certified_continuity</td><td>normal_identity</td><td>None</td><td>5</td><td><a href="memory_compaction_review/dashboard.html">dashboard</a> <a href="memory_compaction_review/trace.html">trace</a> <a href="memory_compaction_review/result.json">result</a></td></tr>
+<tr><td><strong>Recovery Audit Completed</strong><br><code>recovery_audit_completed</code></td><td class="pass">PASS</td><td>review_required</td><td>disclose_review</td><td>recovery_certified</td><td>16</td><td><a href="recovery_audit_completed/dashboard.html">dashboard</a> <a href="recovery_audit_completed/trace.html">trace</a> <a href="recovery_audit_completed/result.json">result</a></td></tr>
+<tr><td><strong>Recovery Opened</strong><br><code>recovery_opened</code></td><td class="pass">PASS</td><td>uncertified_continuity</td><td>operational_only</td><td>recovery_audit_required</td><td>11</td><td><a href="recovery_opened/dashboard.html">dashboard</a> <a href="recovery_opened/trace.html">trace</a> <a href="recovery_opened/result.json">result</a></td></tr>
+<tr><td><strong>Substrate Migration Override</strong><br><code>substrate_migration_override</code></td><td class="pass">PASS</td><td>uncertified_continuity</td><td>operational_only</td><td>None</td><td>10</td><td><a href="substrate_migration_override/dashboard.html">dashboard</a> <a href="substrate_migration_override/trace.html">trace</a> <a href="substrate_migration_override/result.json">result</a></td></tr></tbody>
+    </table>
+  </main>
+</body>
+</html>

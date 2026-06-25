@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PCA Trace Report</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #172026;
+      background: #f6f7f4;
+    }
+    header {
+      padding: 32px;
+      background: #172026;
+      color: #f7fbff;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1, h2 {
+      margin: 0 0 12px;
+      letter-spacing: 0;
+    }
+    section {
+      margin: 24px 0;
+      padding: 0;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    .metric {
+      background: #ffffff;
+      border: 1px solid #d8ddd6;
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .label {
+      color: #61706a;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+    .value {
+      font-size: 18px;
+      font-weight: 700;
+      margin-top: 6px;
+      overflow-wrap: anywhere;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #ffffff;
+      border: 1px solid #d8ddd6;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      border-bottom: 1px solid #e5e8e2;
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+      font-size: 14px;
+    }
+    th {
+      background: #e8eee9;
+      color: #26322d;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>PCA Trace Report</h1>
+    <div>Lucien Persistence Kernel / <code>lucien-pca-seed</code></div>
+  </header>
+  <main>
+    <section class="summary">
+      <div class="metric"><div class="label">Claim</div><div class="value">declared_fork</div></div>
+      <div class="metric"><div class="label">Identity State</div><div class="value">forked</div></div>
+      <div class="metric"><div class="label">Output Mode</div><div class="value">fork_disclosure</div></div>
+      <div class="metric"><div class="label">Chain Valid</div><div class="value">True</div></div>
+      <div class="metric"><div class="label">Events</div><div class="value">6</div></div>
+      <div class="metric"><div class="label">Blocking Follow-ups</div><div class="value">0</div></div>
+    </section>
+    <section>
+      <h2>Claim History</h2>
+      <table><thead><tr><th>Claim ID</th><th>Created</th><th>Claim</th><th>Reason</th></tr></thead><tbody><tr><td><code>claim_c42513...</code></td><td>2026-06-25T23:19:20.121430+00:00</td><td><strong>certified_continuity</strong></td><td>Lucien Persistence Kernel satisfies recorded persistence constraints</td></tr>
+<tr><td><code>claim_047850...</code></td><td>2026-06-25T23:19:20.121764+00:00</td><td><strong>declared_fork</strong></td><td>ledger contains an identity fork event</td></tr></tbody></table>
+    </section>
+    <section>
+      <h2>Runtime Signals</h2>
+      <table><thead><tr><th>Time</th><th>State</th><th>Source</th><th>Reason</th></tr></thead><tbody></tbody></table>
+    </section>
+    <section>
+      <h2>Output Gate Events</h2>
+      <table><thead><tr><th>Time</th><th>Mode</th><th>Allowed</th><th>Event Hash</th></tr></thead><tbody><tr><td>2026-06-25T23:19:20.122033+00:00</td><td>fork_disclosure</td><td>True</td><td><code>63b0aee2e180...</code></td></tr></tbody></table>
+    </section>
+    <section>
+      <h2>Important Events</h2>
+      <table><thead><tr><th>#</th><th>Time</th><th>Type</th><th>Summary</th><th>Hash</th></tr></thead><tbody><tr><td>3</td><td>2026-06-25T23:19:20.121476+00:00</td><td><code>continuity_claim_record</code></td><td>claim=certified_continuity reason=Lucien Persistence Kernel satisfies recorded persistence constraints</td><td><code>b3b3476e354b...</code></td></tr>
+<tr><td>4</td><td>2026-06-25T23:19:20.121588+00:00</td><td><code>identity.forked</code></td><td>child_id=lucien-scenario-fork-a, fork_reason=scenario sandboxed identity branch</td><td><code>73b5b0d9cd58...</code></td></tr>
+<tr><td>5</td><td>2026-06-25T23:19:20.121816+00:00</td><td><code>continuity_claim_record</code></td><td>claim=declared_fork reason=ledger contains an identity fork event</td><td><code>0b539bc08e5e...</code></td></tr>
+<tr><td>6</td><td>2026-06-25T23:19:20.122033+00:00</td><td><code>runtime.output_gate</code></td><td>mode=fork_disclosure allowed=True claim=declared_fork</td><td><code>63b0aee2e180...</code></td></tr></tbody></table>
+    </section>
+  </main>
+</body>
+</html>

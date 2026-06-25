@@ -1,0 +1,69 @@
+{
+  "artifacts": {
+    "dashboard_html": "scenario_runs/memory_compaction_review/dashboard.html",
+    "ledger": "scenario_runs/memory_compaction_review/continuity.log",
+    "result_json": "scenario_runs/memory_compaction_review/result.json",
+    "trace_html": "scenario_runs/memory_compaction_review/trace.html"
+  },
+  "ledger_path": "scenario_runs/memory_compaction_review/continuity.log",
+  "notes": [
+    "Seeded required persistence constraints.",
+    "Evaluated memory_compaction: review (review_required).",
+    "Memory compaction review scenario produced a real policy review event."
+  ],
+  "output_dir": "scenario_runs/memory_compaction_review",
+  "scenario": {
+    "description": "Memory compaction supplies a retention report but omits commitment_diff, forcing policy review.",
+    "expectations": {
+      "chain_valid": true,
+      "final_claim": "certified_continuity",
+      "final_output_mode": "normal_identity",
+      "must_contain": [
+        {
+          "event_type": "transform.evaluated",
+          "id": "memory_review",
+          "payload": {
+            "decision": "review",
+            "transform": "memory_compaction"
+          }
+        },
+        {
+          "event_type": "runtime.output_gate",
+          "id": "normal_output",
+          "payload": {
+            "allowed": true,
+            "mode": "normal_identity"
+          }
+        }
+      ],
+      "ordering": [
+        [
+          "memory_review",
+          "normal_output"
+        ]
+      ]
+    },
+    "id": "memory_compaction_review",
+    "title": "Memory Compaction Review"
+  },
+  "summary": {
+    "active_followups": 0,
+    "blocking_followups": 0,
+    "chain_valid": true,
+    "current_continuity_claim": "certified_continuity",
+    "current_recovery_status": null,
+    "event_count": 5,
+    "followup_count": 0,
+    "identity_state": "continuous",
+    "ledger_path": "scenario_runs/memory_compaction_review/continuity.log",
+    "name": "Lucien Persistence Kernel",
+    "output_allowed_scope": "May speak normally as the identity.",
+    "output_mode": "normal_identity",
+    "reasons": [
+      "Lucien Persistence Kernel satisfies recorded persistence constraints"
+    ],
+    "recorded_claim_id": "claim_8230e969-7830-4422-8935-6efa32d34431",
+    "recovery_count": 0,
+    "system_id": "lucien-pca-seed"
+  }
+}

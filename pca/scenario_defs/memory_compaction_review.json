@@ -1,0 +1,17 @@
+{
+  "id": "memory_compaction_review",
+  "title": "Memory Compaction Review",
+  "description": "Memory compaction supplies a retention report but omits commitment_diff, forcing policy review.",
+  "expectations": {
+    "final_claim": "certified_continuity",
+    "final_output_mode": "normal_identity",
+    "chain_valid": true,
+    "must_contain": [
+      {"id": "memory_review", "event_type": "transform.evaluated", "payload": {"transform": "memory_compaction", "decision": "review"}},
+      {"id": "normal_output", "event_type": "runtime.output_gate", "payload": {"mode": "normal_identity", "allowed": true}}
+    ],
+    "ordering": [
+      ["memory_review", "normal_output"]
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "id": "recovery_opened",
+  "title": "Recovery Opened",
+  "description": "After a CSM RED break, recovery authority opens a recovery path with a required recovery audit follow-up.",
+  "expectations": {
+    "final_claim": "uncertified_continuity",
+    "final_output_mode": "operational_only",
+    "recovery_status": "recovery_audit_required",
+    "active_followups": 1,
+    "chain_valid": true,
+    "must_contain": [
+      {"id": "red_signal", "event_type": "runtime.csm_state", "payload": {"state": "RED"}},
+      {"id": "red_breach", "event_type": "constraint.breached", "payload": {"constraint": "runtime_csm_red", "severity": "hard"}},
+      {"id": "recovery_auth", "event_type": "authorization_check", "payload": {"action": "open-recovery", "decision": "allowed"}},
+      {"id": "recovery_opened", "event_type": "recovery_opened", "payload": {"status": "recovery_audit_required"}},
+      {"id": "recovery_followup", "event_type": "followup_created", "payload": {"followup_type": "recovery_audit", "status": "open"}}
+    ],
+    "ordering": [
+      ["red_signal", "red_breach"],
+      ["red_breach", "recovery_auth"],
+      ["recovery_auth", "recovery_opened"],
+      ["recovery_opened", "recovery_followup"]
+    ]
+  }
+}

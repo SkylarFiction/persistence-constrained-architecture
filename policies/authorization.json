@@ -1,0 +1,16 @@
+{
+  "pack_id": "authorization",
+  "version": "0.1",
+  "description": "Authority classes and minimum permissions for governance actions.",
+  "authorization": {
+    "override_min_authority": "operator",
+    "complete_followup_min_authority": "operator",
+    "fail_followup_min_authority": "steward",
+    "waive_followup_min_authority": "root_authority",
+    "recovery_min_authority": "recovery_authority",
+    "authority_aliases": {
+      "human_operator": "operator"
+    }
+  },
+  "transforms": {}
+}

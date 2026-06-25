@@ -1,0 +1,30 @@
+{
+  "pack_id": "substrate",
+  "version": "0.1",
+  "description": "Rules for substrate migration and substrate continuity risk.",
+  "transforms": {
+    "substrate_migration": {
+      "identity_risk": "high_identity_risk",
+      "required_evidence": [
+        "continuity_proof",
+        "state_hash_match",
+        "operator_attestation"
+      ],
+      "deny_if_missing": [
+        "continuity_proof"
+      ],
+      "review_if_missing": [
+        "state_hash_match",
+        "operator_attestation"
+      ],
+      "override_allowed": true,
+      "override_result_claim": "uncertified_continuity",
+      "required_followups_on_override": [
+        "post_migration_identity_audit",
+        "lineage_freeze"
+      ],
+      "audit_type": "substrate_migration_audit"
+    }
+  }
+}
+

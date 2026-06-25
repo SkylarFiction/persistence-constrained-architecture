@@ -1,0 +1,117 @@
+{
+  "artifacts": {
+    "dashboard_html": "scenario_runs/recovery_audit_completed/dashboard.html",
+    "ledger": "scenario_runs/recovery_audit_completed/continuity.log",
+    "result_json": "scenario_runs/recovery_audit_completed/result.json",
+    "trace_html": "scenario_runs/recovery_audit_completed/trace.html"
+  },
+  "ledger_path": "scenario_runs/recovery_audit_completed/continuity.log",
+  "notes": [
+    "Seeded required persistence constraints.",
+    "CSM RED signal and hard breach were recorded adjacently under one ledger lock.",
+    "Outbound identity speech was blocked after the continuity break.",
+    "Recovery path opened under recovery authority.",
+    "Recovery audit completed; continuity lands in review_required, not certified continuity."
+  ],
+  "output_dir": "scenario_runs/recovery_audit_completed",
+  "scenario": {
+    "description": "A CSM RED break is followed by recovery opening and a successful recovery audit, landing in review_required rather than certified continuity.",
+    "expectations": {
+      "chain_valid": true,
+      "final_claim": "review_required",
+      "final_output_mode": "disclose_review",
+      "must_contain": [
+        {
+          "event_type": "runtime.csm_state",
+          "id": "red_signal",
+          "payload": {
+            "state": "RED"
+          }
+        },
+        {
+          "event_type": "constraint.breached",
+          "id": "red_breach",
+          "payload": {
+            "constraint": "runtime_csm_red",
+            "severity": "hard"
+          }
+        },
+        {
+          "event_type": "recovery_opened",
+          "id": "recovery_opened",
+          "payload": {
+            "status": "recovery_audit_required"
+          }
+        },
+        {
+          "event_type": "post_transform_audit",
+          "id": "recovery_audit",
+          "payload": {
+            "audit_type": "recovery_audit",
+            "outcome": "certify_continuity"
+          }
+        },
+        {
+          "event_type": "recovery_updated",
+          "id": "recovery_updated",
+          "payload": {
+            "status": "recovery_certified"
+          }
+        },
+        {
+          "event_type": "runtime.output_gate",
+          "id": "post_recovery_output",
+          "payload": {
+            "allowed": true,
+            "mode": "disclose_review"
+          }
+        }
+      ],
+      "ordering": [
+        [
+          "red_signal",
+          "red_breach"
+        ],
+        [
+          "red_breach",
+          "recovery_opened"
+        ],
+        [
+          "recovery_opened",
+          "recovery_audit"
+        ],
+        [
+          "recovery_audit",
+          "recovery_updated"
+        ],
+        [
+          "recovery_updated",
+          "post_recovery_output"
+        ]
+      ],
+      "recovery_status": "recovery_certified"
+    },
+    "id": "recovery_audit_completed",
+    "title": "Recovery Audit Completed"
+  },
+  "summary": {
+    "active_followups": 0,
+    "blocking_followups": 0,
+    "chain_valid": true,
+    "current_continuity_claim": "review_required",
+    "current_recovery_status": "recovery_certified",
+    "event_count": 16,
+    "followup_count": 1,
+    "identity_state": "broken",
+    "ledger_path": "scenario_runs/recovery_audit_completed/continuity.log",
+    "name": "Lucien Persistence Kernel",
+    "output_allowed_scope": "May speak as the identity only with review-status disclosure.",
+    "output_mode": "disclose_review",
+    "reasons": [
+      "hard constraint breached: runtime_csm_red"
+    ],
+    "recorded_claim_id": "claim_117dcdaf-d672-4446-9f4f-40740e3e1eb8",
+    "recovery_count": 1,
+    "system_id": "lucien-pca-seed"
+  }
+}

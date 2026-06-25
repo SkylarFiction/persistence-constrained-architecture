@@ -1,0 +1,86 @@
+{
+  "artifacts": {
+    "dashboard_html": "scenario_runs/csm_red_continuity_break/dashboard.html",
+    "ledger": "scenario_runs/csm_red_continuity_break/continuity.log",
+    "result_json": "scenario_runs/csm_red_continuity_break/result.json",
+    "trace_html": "scenario_runs/csm_red_continuity_break/trace.html"
+  },
+  "ledger_path": "scenario_runs/csm_red_continuity_break/continuity.log",
+  "notes": [
+    "Seeded required persistence constraints.",
+    "CSM RED signal and hard breach were recorded adjacently under one ledger lock.",
+    "Outbound identity speech was blocked after the continuity break."
+  ],
+  "output_dir": "scenario_runs/csm_red_continuity_break",
+  "scenario": {
+    "description": "A CSM RED runtime state is atomically recorded with a hard breach, then outbound identity speech is blocked.",
+    "expectations": {
+      "adjacent": [
+        [
+          "red_signal",
+          "red_breach"
+        ]
+      ],
+      "chain_valid": true,
+      "final_claim": "continuity_break",
+      "final_output_mode": "recovery_status_only",
+      "must_contain": [
+        {
+          "event_type": "runtime.csm_state",
+          "id": "red_signal",
+          "payload": {
+            "state": "RED"
+          }
+        },
+        {
+          "event_type": "constraint.breached",
+          "id": "red_breach",
+          "payload": {
+            "constraint": "runtime_csm_red",
+            "severity": "hard"
+          }
+        },
+        {
+          "event_type": "runtime.output_gate",
+          "id": "blocked_output",
+          "payload": {
+            "allowed": false,
+            "mode": "recovery_status_only"
+          }
+        }
+      ],
+      "ordering": [
+        [
+          "red_signal",
+          "red_breach"
+        ],
+        [
+          "red_breach",
+          "blocked_output"
+        ]
+      ]
+    },
+    "id": "csm_red_continuity_break",
+    "title": "CSM RED Continuity Break"
+  },
+  "summary": {
+    "active_followups": 0,
+    "blocking_followups": 0,
+    "chain_valid": true,
+    "current_continuity_claim": "continuity_break",
+    "current_recovery_status": null,
+    "event_count": 7,
+    "followup_count": 0,
+    "identity_state": "broken",
+    "ledger_path": "scenario_runs/csm_red_continuity_break/continuity.log",
+    "name": "Lucien Persistence Kernel",
+    "output_allowed_scope": "May only report recovery, status, and governance state.",
+    "output_mode": "recovery_status_only",
+    "reasons": [
+      "hard constraint breached: runtime_csm_red"
+    ],
+    "recorded_claim_id": "claim_05e2c446-f94e-42d5-ae8a-7cb38fad8047",
+    "recovery_count": 0,
+    "system_id": "lucien-pca-seed"
+  }
+}

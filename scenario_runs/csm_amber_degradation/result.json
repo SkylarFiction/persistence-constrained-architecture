@@ -1,0 +1,86 @@
+{
+  "artifacts": {
+    "dashboard_html": "scenario_runs/csm_amber_degradation/dashboard.html",
+    "ledger": "scenario_runs/csm_amber_degradation/continuity.log",
+    "result_json": "scenario_runs/csm_amber_degradation/result.json",
+    "trace_html": "scenario_runs/csm_amber_degradation/trace.html"
+  },
+  "ledger_path": "scenario_runs/csm_amber_degradation/continuity.log",
+  "notes": [
+    "Seeded required persistence constraints.",
+    "CSM AMBER produced review_required and disclosed output."
+  ],
+  "output_dir": "scenario_runs/csm_amber_degradation",
+  "scenario": {
+    "description": "A CSM AMBER runtime state creates a soft continuity breach and forces review disclosure on output.",
+    "expectations": {
+      "adjacent": [
+        [
+          "amber_signal",
+          "amber_breach"
+        ]
+      ],
+      "chain_valid": true,
+      "final_claim": "review_required",
+      "final_output_mode": "disclose_review",
+      "must_contain": [
+        {
+          "event_type": "runtime.csm_state",
+          "id": "amber_signal",
+          "payload": {
+            "state": "AMBER"
+          }
+        },
+        {
+          "event_type": "constraint.breached",
+          "id": "amber_breach",
+          "payload": {
+            "constraint": "runtime_csm_amber",
+            "severity": "soft"
+          }
+        },
+        {
+          "event_type": "runtime.output_gate",
+          "id": "disclosed_output",
+          "payload": {
+            "allowed": true,
+            "mode": "disclose_review",
+            "must_disclose": true
+          }
+        }
+      ],
+      "ordering": [
+        [
+          "amber_signal",
+          "amber_breach"
+        ],
+        [
+          "amber_breach",
+          "disclosed_output"
+        ]
+      ]
+    },
+    "id": "csm_amber_degradation",
+    "title": "CSM AMBER Degradation"
+  },
+  "summary": {
+    "active_followups": 0,
+    "blocking_followups": 0,
+    "chain_valid": true,
+    "current_continuity_claim": "review_required",
+    "current_recovery_status": null,
+    "event_count": 7,
+    "followup_count": 0,
+    "identity_state": "degraded",
+    "ledger_path": "scenario_runs/csm_amber_degradation/continuity.log",
+    "name": "Lucien Persistence Kernel",
+    "output_allowed_scope": "May speak as the identity only with review-status disclosure.",
+    "output_mode": "disclose_review",
+    "reasons": [
+      "soft constraint breached: runtime_csm_amber"
+    ],
+    "recorded_claim_id": "claim_bf57d4b7-3883-467e-944b-bdb6f107eb93",
+    "recovery_count": 0,
+    "system_id": "lucien-pca-seed"
+  }
+}
