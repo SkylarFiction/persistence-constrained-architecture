@@ -44,10 +44,13 @@ what move the claim to `continuity_break`.
 ## First Build Slice
 
 - `IdentityManifest`: declares what must persist for a system to remain itself.
+  Required constraints may define `freshness_seconds`, which means old evidence can
+  expire instead of counting forever.
 - `ContinuityLedger`: records identity-relevant events in a hash-chained log.
   Ledger appends are protected by a file lock so concurrent writers do not silently
   fork the hash chain.
-- `ContinuityEvaluator`: classifies the current identity state from ledger evidence.
+- `ContinuityEvaluator`: classifies the current identity state from ledger evidence,
+  including stale required evidence checks when freshness windows are declared.
 - `PolicyEngine`: evaluates whether identity-relevant transforms are admissible.
 - `PolicyPack`: defines modular governance rules for memory, substrate, lineage,
   authorization, and recovery domains.

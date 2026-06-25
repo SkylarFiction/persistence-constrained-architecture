@@ -54,6 +54,12 @@ incident response system.
 PCA v0.1 does not compute RTI thresholds itself. It records the CSM verdict and
 enforces the continuity-governance consequences of that verdict.
 
+## Freshness Is Constraint-Level
+
+Required manifest constraints can define `freshness_seconds`, and stale required
+evidence suspends continuity. PCA v0.1 does not yet compute full recovery-time
+models, distributed clock guarantees, or per-policy temporal logic.
+
 ## Output Gating Is Text-Level
 
 The output wrapper gates outbound text and records privacy-conscious audit metadata.

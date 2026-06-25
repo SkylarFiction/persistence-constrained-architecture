@@ -22,9 +22,10 @@ The evaluator reads the manifest and ledger and classifies the identity state as
 continuous, degraded, forked, suspended, or broken. It gives a simple state summary
 from recorded evidence.
 
-The v0.1 evaluator is intentionally ledger-derived and historical. It does not yet
-model evidence TTLs, freshness windows, or recovery time constants internally. Those
-time-aware controls belong on the near-term roadmap.
+The evaluator is time-aware for required constraint evidence. A manifest constraint
+may declare `freshness_seconds`; if its latest evidence is older than that window,
+the identity is suspended until fresh evidence is recorded. PCA v0.1 still does not
+model full recovery time constants internally.
 
 ## Policy Packs
 

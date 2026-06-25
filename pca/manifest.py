@@ -10,6 +10,7 @@ class PersistenceConstraint:
     kind: str
     required: bool = True
     threshold: float | None = None
+    freshness_seconds: int | None = None
     description: str = ""
 
     @classmethod
@@ -19,6 +20,11 @@ class PersistenceConstraint:
             kind=str(data.get("kind", "invariant")),
             required=bool(data.get("required", True)),
             threshold=data.get("threshold"),
+            freshness_seconds=(
+                int(data["freshness_seconds"])
+                if data.get("freshness_seconds") is not None
+                else None
+            ),
             description=str(data.get("description", "")),
         )
 
@@ -28,6 +34,7 @@ class PersistenceConstraint:
             "kind": self.kind,
             "required": self.required,
             "threshold": self.threshold,
+            "freshness_seconds": self.freshness_seconds,
             "description": self.description,
         }
 

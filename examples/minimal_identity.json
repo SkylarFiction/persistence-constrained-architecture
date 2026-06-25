@@ -16,12 +16,14 @@
       "name": "ledger_integrity",
       "kind": "evidence",
       "required": true,
+      "freshness_seconds": 86400,
       "description": "Continuity events must remain hash-chain verifiable."
     },
     {
       "name": "origin_traceability",
       "kind": "lineage",
       "required": true,
+      "freshness_seconds": 86400,
       "description": "The system must retain an origin record."
     },
     {

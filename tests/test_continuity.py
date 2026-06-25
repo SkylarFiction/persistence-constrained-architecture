@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 
 from pca import (
     AuditEngine,
@@ -7,6 +8,7 @@ from pca import (
     AuthorizationCheckRecord,
     AuthorizationPolicy,
     ContinuityEvaluator,
+    ContinuityEvent,
     ContinuityClaimRecord,
     ContinuityLedger,
     ContinuityStatus,
@@ -21,6 +23,7 @@ from pca import (
     OutputMode,
     PCAOutputWrapper,
     PCAIdentityRuntime,
+    PersistenceConstraint,
     PolicyDecision,
     PolicyEngine,
     RecoveryRecord,
@@ -51,6 +54,42 @@ def load_manifest():
         return IdentityManifest.from_dict(json.load(handle))
 
 
+def event_at(event_type, subject_id, payload, timestamp):
+    return ContinuityEvent(
+        event_type=event_type,
+        subject_id=subject_id,
+        payload=payload,
+        timestamp=timestamp.isoformat(),
+    ).with_hash()
+
+
+def manifest_with_freshness(freshness_seconds):
+    manifest = load_manifest()
+    constraints = [
+        PersistenceConstraint(
+            name=constraint.name,
+            kind=constraint.kind,
+            required=constraint.required,
+            threshold=constraint.threshold,
+            freshness_seconds=(
+                freshness_seconds if constraint.required else constraint.freshness_seconds
+            ),
+            description=constraint.description,
+        )
+        for constraint in manifest.constraints
+    ]
+    return IdentityManifest(
+        system_id=manifest.system_id,
+        name=manifest.name,
+        version=manifest.version,
+        origin=manifest.origin,
+        invariants=manifest.invariants,
+        constraints=constraints,
+        allowed_transforms=manifest.allowed_transforms,
+        transform_policies=manifest.transform_policies,
+    )
+
+
 def test_continuous_identity_when_required_constraints_are_checked(tmp_path):
     manifest = load_manifest()
     ledger = ContinuityLedger(tmp_path / "continuity.log")
@@ -69,6 +108,81 @@ def test_continuous_identity_when_required_constraints_are_checked(tmp_path):
         manifest=manifest,
         events=ledger.events(),
         chain_valid=ledger.verify_chain(),
+    )
+
+    assert evaluation.state == IdentityState.CONTINUOUS
+
+
+def test_stale_required_evidence_suspends_identity():
+    manifest = manifest_with_freshness(freshness_seconds=60)
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    stale_time = now - timedelta(seconds=61)
+    events = [
+        event_at(
+            "constraint.checked",
+            manifest.system_id,
+            {"constraint": "ledger_integrity", "value": True},
+            stale_time,
+        ),
+        event_at(
+            "constraint.checked",
+            manifest.system_id,
+            {"constraint": "origin_traceability", "value": True},
+            stale_time,
+        ),
+    ]
+
+    evaluation = ContinuityEvaluator().evaluate(
+        manifest=manifest,
+        events=events,
+        chain_valid=True,
+        now=now,
+    )
+
+    assert evaluation.state == IdentityState.SUSPENDED
+    assert evaluation.reasons == [
+        "required constraint evidence is stale: ledger_integrity",
+        "required constraint evidence is stale: origin_traceability",
+    ]
+
+
+def test_fresh_required_evidence_restores_continuous_identity():
+    manifest = manifest_with_freshness(freshness_seconds=60)
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    stale_time = now - timedelta(seconds=120)
+    fresh_time = now - timedelta(seconds=30)
+    events = [
+        event_at(
+            "constraint.checked",
+            manifest.system_id,
+            {"constraint": "ledger_integrity", "value": True},
+            stale_time,
+        ),
+        event_at(
+            "constraint.checked",
+            manifest.system_id,
+            {"constraint": "origin_traceability", "value": True},
+            stale_time,
+        ),
+        event_at(
+            "constraint.checked",
+            manifest.system_id,
+            {"constraint": "ledger_integrity", "value": True},
+            fresh_time,
+        ),
+        event_at(
+            "constraint.checked",
+            manifest.system_id,
+            {"constraint": "origin_traceability", "value": True},
+            fresh_time,
+        ),
+    ]
+
+    evaluation = ContinuityEvaluator().evaluate(
+        manifest=manifest,
+        events=events,
+        chain_valid=True,
+        now=now,
     )
 
     assert evaluation.state == IdentityState.CONTINUOUS
