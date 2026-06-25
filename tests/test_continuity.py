@@ -102,6 +102,92 @@ def test_hard_breach_breaks_identity_claim(tmp_path):
     assert evaluation.state == IdentityState.BROKEN
 
 
+def test_hard_breach_cannot_be_followed_by_certified_claim(tmp_path):
+    manifest = load_manifest()
+
+    def seeded_ledger(name):
+        ledger = ContinuityLedger(tmp_path / name / "continuity.log")
+        ledger.append(
+            "constraint.checked",
+            manifest.system_id,
+            {"constraint": "ledger_integrity", "value": True},
+        )
+        ledger.append(
+            "constraint.checked",
+            manifest.system_id,
+            {"constraint": "origin_traceability", "value": True},
+        )
+        breach = ledger.append(
+            "constraint.breached",
+            manifest.system_id,
+            {"constraint": "runtime_csm_red", "severity": "hard"},
+        )
+        return ledger, breach
+
+    def forged_certified_claim(ledger, breach):
+        forged = ContinuityClaimRecord.create(
+            identity_id=manifest.system_id,
+            claim="certified_continuity",
+            source_event_ids=[breach.event_hash],
+            active_blockers=[],
+            reason="forged downstream certification",
+        )
+        ledger.append("continuity_claim_record", manifest.system_id, forged.to_dict())
+
+    def recovery_opened(ledger, _breach):
+        recovery = RecoveryRecord.open(
+            identity_id=manifest.system_id,
+            opened_by="recovery_authority",
+            reason="hard breach recovery opened",
+            source_claim_id=None,
+        )
+        ledger.append("recovery_opened", manifest.system_id, recovery.to_dict())
+
+    def recovery_certified(ledger, _breach):
+        recovery = RecoveryRecord.open(
+            identity_id=manifest.system_id,
+            opened_by="recovery_authority",
+            reason="hard breach recovery opened",
+            source_claim_id=None,
+        )
+        ledger.append("recovery_opened", manifest.system_id, recovery.to_dict())
+        certified = recovery.with_status(
+            RecoveryStatus.CERTIFIED,
+            evidence={"recovery_audit_report": "ok"},
+        )
+        ledger.append("recovery_updated", manifest.system_id, certified.to_dict())
+
+    adversarial_tails = {
+        "no_tail": lambda _ledger, _breach: None,
+        "later_required_evidence": lambda ledger, _breach: ledger.append(
+            "constraint.checked",
+            manifest.system_id,
+            {"constraint": "origin_traceability", "value": True},
+        ),
+        "later_soft_breach": lambda ledger, _breach: ledger.append(
+            "constraint.breached",
+            manifest.system_id,
+            {"constraint": "runtime_csm_amber", "severity": "soft"},
+        ),
+        "later_fork": lambda ledger, _breach: ledger.append(
+            "identity.forked",
+            manifest.system_id,
+            {"child_id": "lucien-branch-a", "fork_reason": "after breach"},
+        ),
+        "forged_certified_claim": forged_certified_claim,
+        "recovery_opened": recovery_opened,
+        "recovery_certified": recovery_certified,
+    }
+
+    for name, append_tail in adversarial_tails.items():
+        ledger, breach = seeded_ledger(name)
+        append_tail(ledger, breach)
+
+        claim, _blockers, _reasons = derive_current_claim(ledger, manifest)
+
+        assert claim != "certified_continuity", name
+
+
 def test_declared_fork_is_classified_as_forked(tmp_path):
     manifest = load_manifest()
     ledger = ContinuityLedger(tmp_path / "continuity.log")

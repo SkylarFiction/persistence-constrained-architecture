@@ -29,6 +29,18 @@ Policy Packs make PCA modular. Each pack defines the evidence, risk, denial rule
 follow-up obligations, and audit expectations for one identity-risk domain. Missing
 policy does not mean permission. Missing policy means denial.
 
+In v0.1, PCA does not compute every persistence metric internally. Runtime measures
+such as RTI are treated as monitor outputs from an external CSM-style classifier.
+PCA records those verdicts, locks them into the ledger, and governs their
+consequences for continuity claims and output behavior. In other words, this build
+enforces the governance response to a trusted persistence verdict; it is not yet the
+full monitor that computes the persistence inequality itself.
+
+`deny` means the requested transformation is not authorized as presented. It does
+not automatically mean identity continuity is broken. Missing evidence can leave the
+identity `uncertified_continuity`; hard breaches and failed critical obligations are
+what move the claim to `continuity_break`.
+
 ## First Build Slice
 
 - `IdentityManifest`: declares what must persist for a system to remain itself.

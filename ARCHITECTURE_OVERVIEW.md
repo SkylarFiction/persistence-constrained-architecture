@@ -22,6 +22,10 @@ The evaluator reads the manifest and ledger and classifies the identity state as
 continuous, degraded, forked, suspended, or broken. It gives a simple state summary
 from recorded evidence.
 
+The v0.1 evaluator is intentionally ledger-derived and historical. It does not yet
+model evidence TTLs, freshness windows, or recovery time constants internally. Those
+time-aware controls belong on the near-term roadmap.
+
 ## Policy Packs
 
 Policy packs define modular governance rules for domains such as memory, substrate,
@@ -71,6 +75,10 @@ The CSM bridge connects runtime coherence telemetry to PCA. AMBER creates a soft
 runtime breach and review disclosure. RED creates a hard `runtime_csm_red` breach.
 The RED signal and hard breach are recorded under the ledger lock before output is
 allowed through.
+
+The bridge consumes CSM verdicts; it does not compute RTI thresholds in this package.
+PCA's job in v0.1 is to make the monitor verdict ledger-backed and enforce the
+resulting continuity claim and output gate.
 
 ## Output Gate
 

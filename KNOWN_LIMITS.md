@@ -15,6 +15,14 @@ treated as a production security boundary. It does not yet provide hardened proc
 isolation, access control, external authentication, tamper-resistant storage, or
 distributed consensus.
 
+## Hash Chain Is Locally Verifiable Only
+
+The ledger hash chain detects truncation, reordering, accidental corruption, and
+inconsistent appends by non-coordinated local writers. It does not stop a writer with
+filesystem access from rewriting the entire log and recomputing hashes. Stronger
+tamper evidence requires a head hash anchored outside the writer's control, such as
+signed heads, periodic notarization, append-only storage, or WORM media.
+
 ## Not Distributed Consensus
 
 The ledger is hash-chained and file-locked, but it is not replicated across nodes.
@@ -43,6 +51,8 @@ ledger entries, reports, dashboards, and regression checks from reproducible flo
 The CSM bridge accepts Lucien-style CSM monitor outputs and hard-kill payloads. It
 does not yet replace a full production runtime monitor, telemetry pipeline, or
 incident response system.
+PCA v0.1 does not compute RTI thresholds itself. It records the CSM verdict and
+enforces the continuity-governance consequences of that verdict.
 
 ## Output Gating Is Text-Level
 
