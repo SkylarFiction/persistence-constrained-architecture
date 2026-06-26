@@ -1342,6 +1342,8 @@ def test_trace_report_summarizes_runtime_lifecycle(tmp_path):
     assert report.runtime_signals[0]["state"] == "RED"
     assert len(report.output_gate_events) == 1
     assert report.output_gate_events[0]["allowed"] is False
+    assert report.evidence_freshness[0]["status"] == "fresh"
+    assert report.summary["state_precedence"] == list(EVALUATION_PRECEDENCE)
     assert "PCA Trace Report" in html
     assert "continuity_break" in html
 
@@ -1374,3 +1376,11 @@ def test_dashboard_renders_runtime_lifecycle(tmp_path):
     assert "continuity_break" in html
     assert "recovery_status_only" in html
     assert "eventSearch" in html
+    assert "Evidence Freshness" in html
+    assert "State Precedence" in html
+    assert "Anchor Status" in html
+    assert "Active Blockers" in html
+    assert "Recovery Timeline" in html
+    assert "Lineage" in html
+    assert "Authorization Attempts" in html
+    assert "Policy Errors" in html

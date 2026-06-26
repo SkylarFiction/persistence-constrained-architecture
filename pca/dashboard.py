@@ -19,6 +19,10 @@ def _json_script(report: TraceReport) -> str:
     return json.dumps(report.to_dict(), sort_keys=True).replace("</", "<\\/")
 
 
+def _empty_row(columns: int, message: str) -> str:
+    return f"<tr><td colspan=\"{columns}\" class=\"empty\">{escape(message)}</td></tr>"
+
+
 def render_dashboard_html(report: TraceReport) -> str:
     data = report.to_dict()
     summary = data["summary"]
@@ -61,6 +65,73 @@ def render_dashboard_html(report: TraceReport) -> str:
         f"<td><code>{escape(_short_hash(str(event['output_sha256'])))}</code></td>"
         "</tr>"
         for event in data["output_gate_events"]
+    )
+    freshness_rows = "\n".join(
+        "<tr>"
+        f"<td><code>{escape(str(row['constraint']))}</code></td>"
+        f"<td>{escape(str(row['required']))}</td>"
+        f"<td>{escape(str(row['status']))}</td>"
+        f"<td>{escape(str(row['freshness_seconds']))}</td>"
+        f"<td>{escape(str(row['age_seconds']))}</td>"
+        f"<td><code>{escape(_short_hash(str(row['latest_event_hash'] or '')))}</code></td>"
+        "</tr>"
+        for row in data["evidence_freshness"]
+    )
+    followup_rows = "\n".join(
+        "<tr>"
+        f"<td><code>{escape(str(record['followup_id']))}</code></td>"
+        f"<td>{escape(str(record['followup_type']))}</td>"
+        f"<td>{escape(str(record['status']))}</td>"
+        f"<td>{escape(str(record['reason']))}</td>"
+        "</tr>"
+        for record in data["active_followups"]
+    ) or _empty_row(4, "No active blockers.")
+    recovery_rows = "\n".join(
+        "<tr>"
+        f"<td><code>{escape(str(record['recovery_id']))}</code></td>"
+        f"<td>{escape(str(record['status']))}</td>"
+        f"<td>{escape(str(record['opened_by']))}</td>"
+        f"<td>{escape(str(record['reason']))}</td>"
+        "</tr>"
+        for record in data["recovery_records"]
+    ) or _empty_row(4, "No recovery records.")
+    lineage_rows = "\n".join(
+        "<tr>"
+        f"<td>{escape(str(record['parent_id']))}</td>"
+        f"<td>{escape(str(record['child_id']))}</td>"
+        f"<td>{escape(str(record['reason']))}</td>"
+        f"<td><code>{escape(_short_hash(str(record['event_hash'])))}</code></td>"
+        "</tr>"
+        for record in data["lineage"]
+    ) or _empty_row(4, "No declared forks.")
+    authorization_rows = "\n".join(
+        "<tr>"
+        f"<td>{escape(str(record['timestamp']))}</td>"
+        f"<td>{escape(str(record['action']))}</td>"
+        f"<td>{escape(str(record['actor_authority']))}</td>"
+        f"<td>{escape(str(record['required_authority']))}</td>"
+        f"<td>{escape(str(record['decision']))}</td>"
+        "</tr>"
+        for record in data["authorization_checks"]
+    ) or _empty_row(5, "No authorization checks recorded.")
+    policy_error_items = "\n".join(
+        f"<li>{escape(error)}</li>"
+        for error in data["policy_errors"]
+    ) or "<li class=\"empty\">No policy errors.</li>"
+    precedence_items = "\n".join(
+        f"<li>{escape(rule)}</li>"
+        for rule in summary["state_precedence"]
+    )
+    anchor = data.get("anchor_verification")
+    anchor_reasons = (
+        ", ".join(anchor["reasons"])
+        if anchor is not None
+        else "No anchor verification requested."
+    )
+    anchor_hash = (
+        _short_hash(str(anchor["latest_anchor"]["head_hash"]))
+        if anchor is not None and anchor.get("latest_anchor") is not None
+        else ""
     )
     report_json = _json_script(report)
     return f"""<!doctype html>
@@ -198,6 +269,16 @@ def render_dashboard_html(report: TraceReport) -> str:
       font-size: 12px;
     }}
     .claim-path p {{ margin: 4px 0 0; color: var(--muted); }}
+    .precedence {{
+      margin: 0;
+      padding-left: 20px;
+      columns: 2;
+    }}
+    .precedence li {{ margin-bottom: 6px; }}
+    .policy-errors {{
+      margin: 0;
+      padding-left: 20px;
+    }}
     .signals {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -227,10 +308,48 @@ def render_dashboard_html(report: TraceReport) -> str:
       <div class="metric"><div class="label">Events</div><div class="value">{escape(str(summary['event_count']))}</div></div>
       <div class="metric"><div class="label">Active Follow-ups</div><div class="value">{escape(str(summary['active_followups']))}</div></div>
       <div class="metric"><div class="label">Recovery Status</div><div class="value">{escape(str(summary['current_recovery_status']))}</div></div>
+      <div class="metric"><div class="label">Anchor Valid</div><div class="value">{escape(str(summary['anchor_valid']))}</div></div>
+      <div class="metric"><div class="label">Policy Errors</div><div class="value">{escape(str(summary['policy_error_count']))}</div></div>
+    </section>
+    <section class="grid">
+      <div class="panel">
+        <h2>Anchor Status</h2>
+        <div class="label">Latest Anchored Head</div>
+        <div class="value"><code>{escape(anchor_hash)}</code></div>
+        <p>{escape(anchor_reasons)}</p>
+      </div>
+      <div class="panel">
+        <h2>State Precedence</h2>
+        <ol class="precedence">{precedence_items}</ol>
+      </div>
+      <div class="panel">
+        <h2>Policy Errors</h2>
+        <ul class="policy-errors">{policy_error_items}</ul>
+      </div>
+    </section>
+    <section>
+      <h2>Evidence Freshness</h2>
+      <table><thead><tr><th>Constraint</th><th>Required</th><th>Status</th><th>Freshness Seconds</th><th>Age Seconds</th><th>Latest Event</th></tr></thead><tbody>{freshness_rows}</tbody></table>
     </section>
     <section class="panel">
       <h2>Claim Path</h2>
       <ol class="claim-path">{claim_steps or '<li class="empty">No claim records yet.</li>'}</ol>
+    </section>
+    <section>
+      <h2>Active Blockers</h2>
+      <table><thead><tr><th>Follow-up ID</th><th>Type</th><th>Status</th><th>Reason</th></tr></thead><tbody>{followup_rows}</tbody></table>
+    </section>
+    <section>
+      <h2>Recovery Timeline</h2>
+      <table><thead><tr><th>Recovery ID</th><th>Status</th><th>Opened By</th><th>Reason</th></tr></thead><tbody>{recovery_rows}</tbody></table>
+    </section>
+    <section>
+      <h2>Lineage</h2>
+      <table><thead><tr><th>Parent</th><th>Child</th><th>Reason</th><th>Event</th></tr></thead><tbody>{lineage_rows}</tbody></table>
+    </section>
+    <section>
+      <h2>Authorization Attempts</h2>
+      <table><thead><tr><th>Time</th><th>Action</th><th>Actor</th><th>Required</th><th>Decision</th></tr></thead><tbody>{authorization_rows}</tbody></table>
     </section>
     <section>
       <h2>Runtime Signals</h2>

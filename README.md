@@ -74,7 +74,9 @@ what move the claim to `continuity_break`.
 - `TraceReport`: turns ledger history into a readable lifecycle summary and optional
   standalone HTML report.
 - `Dashboard`: renders a standalone operational view with claim status, lifecycle
-  timeline, runtime signals, output-gate events, and event filtering.
+  timeline, runtime signals, output-gate events, event filtering, evidence freshness,
+  state precedence, anchor status, blockers, recovery, lineage, authorization checks,
+  and policy errors.
 - `ScenarioRunner`: runs reproducible governance demonstrations that generate real
   ledgers, trace reports, dashboards, and result summaries.
 - `ScenarioVerification`: checks expected scenario invariants such as required

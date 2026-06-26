@@ -133,7 +133,9 @@ They provide a readable lifecycle artifact.
 
 The dashboard is a standalone HTML view generated from trace data. It shows current
 posture, claim path, runtime signals, output-gate ledger entries, and a filterable
-governance timeline.
+governance timeline. Dashboard v2 also surfaces evidence freshness, evaluator
+precedence, anchor verification, active blockers, recovery timeline, lineage,
+authorization attempts, and policy errors.
 
 ## Scenario Runner
 

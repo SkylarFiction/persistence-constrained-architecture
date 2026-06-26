@@ -483,7 +483,7 @@ def main() -> int:
         return 0
 
     if args.command == "trace-report":
-        report = build_trace_report(ledger, manifest)
+        report = build_trace_report(ledger, manifest, anchor_path=args.anchors)
         output = report.to_dict()
         if args.html:
             output["html_path"] = str(write_trace_report_html(report, args.html))
@@ -491,7 +491,7 @@ def main() -> int:
         return 0
 
     if args.command == "dashboard":
-        report = build_trace_report(ledger, manifest)
+        report = build_trace_report(ledger, manifest, anchor_path=args.anchors)
         html_path = write_dashboard_html(report, args.html)
         print_json(
             {

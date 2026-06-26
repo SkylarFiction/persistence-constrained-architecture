@@ -85,6 +85,7 @@
   },
   "summary": {
     "active_followups": 1,
+    "anchor_valid": null,
     "blocking_followups": 1,
     "chain_valid": true,
     "current_continuity_claim": "uncertified_continuity",
@@ -96,11 +97,22 @@
     "name": "Lucien Persistence Kernel",
     "output_allowed_scope": "May answer operationally, but cannot claim stable identity.",
     "output_mode": "operational_only",
+    "policy_error_count": 0,
     "reasons": [
       "hard constraint breached: runtime_csm_red"
     ],
-    "recorded_claim_id": "claim_b42448be-db22-450a-bcde-226f20b61237",
+    "recorded_claim_id": "claim_5b02ac4a-c348-44ad-8ccc-e7540dd7858a",
     "recovery_count": 1,
+    "state_precedence": [
+      "chain_invalid",
+      "no_events",
+      "hard_breach",
+      "declared_fork",
+      "stale_required_evidence",
+      "missing_required_evidence",
+      "soft_breach",
+      "continuous"
+    ],
     "system_id": "lucien-pca-seed"
   }
 }

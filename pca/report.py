@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
 from typing import Any
 
+from .anchors import verify_latest_anchor
 from .claims import claims_from_events, current_claim_record
-from .evaluator import ContinuityEvaluator
+from .evaluator import EVALUATION_PRECEDENCE, ContinuityEvaluator
 from .followups import active_followups, followups_from_events
 from .ledger import ContinuityEvent, ContinuityLedger
+from .lineage import lineage_records
 from .manifest import IdentityManifest
 from .output_gate import OutputGate
 from .recovery import current_recovery_record, recovery_records_from_events
@@ -39,6 +42,13 @@ class TraceReport:
     runtime_signals: list[dict[str, Any]]
     output_gate_events: list[dict[str, Any]]
     important_events: list[dict[str, Any]]
+    evidence_freshness: list[dict[str, Any]]
+    active_followups: list[dict[str, Any]]
+    recovery_records: list[dict[str, Any]]
+    lineage: list[dict[str, Any]]
+    authorization_checks: list[dict[str, Any]]
+    policy_errors: list[str]
+    anchor_verification: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -47,6 +57,13 @@ class TraceReport:
             "runtime_signals": self.runtime_signals,
             "output_gate_events": self.output_gate_events,
             "important_events": self.important_events,
+            "evidence_freshness": self.evidence_freshness,
+            "active_followups": self.active_followups,
+            "recovery_records": self.recovery_records,
+            "lineage": self.lineage,
+            "authorization_checks": self.authorization_checks,
+            "policy_errors": self.policy_errors,
+            "anchor_verification": self.anchor_verification,
         }
 
 
@@ -98,6 +115,7 @@ def _event_summary(event: ContinuityEvent) -> str:
 def build_trace_report(
     ledger: ContinuityLedger,
     manifest: IdentityManifest,
+    anchor_path: str | Path | None = None,
 ) -> TraceReport:
     events = ledger.events()
     evaluation = ContinuityEvaluator().evaluate(
@@ -114,6 +132,12 @@ def build_trace_report(
     current_recovery = current_recovery_record(events)
     followups = followups_from_events(events)
     recoveries = recovery_records_from_events(events)
+    active_followup_records = active_followups(events)
+    anchor_verification = (
+        verify_latest_anchor(ledger, anchor_path).to_dict()
+        if anchor_path is not None
+        else None
+    )
 
     summary = {
         "system_id": manifest.system_id,
@@ -138,6 +162,13 @@ def build_trace_report(
             current_recovery.status.value if current_recovery is not None else None
         ),
         "reasons": reasons,
+        "state_precedence": list(EVALUATION_PRECEDENCE),
+        "policy_error_count": len(manifest.policy_errors),
+        "anchor_valid": (
+            anchor_verification["valid"]
+            if anchor_verification is not None
+            else None
+        ),
     }
     important_events = [
         {
@@ -182,7 +213,80 @@ def build_trace_report(
             if event.event_type == "runtime.output_gate"
         ],
         important_events=important_events,
+        evidence_freshness=_evidence_freshness(events, manifest),
+        active_followups=[record.to_dict() for record in active_followup_records],
+        recovery_records=[record.to_dict() for record in recoveries],
+        lineage=[record.to_dict() for record in lineage_records(events)],
+        authorization_checks=[
+            {
+                "timestamp": event.timestamp,
+                "event_hash": event.event_hash,
+                **event.payload,
+            }
+            for event in events
+            if event.event_type == "authorization_check"
+        ],
+        policy_errors=manifest.policy_errors,
+        anchor_verification=anchor_verification,
     )
+
+
+def _evidence_freshness(
+    events: list[ContinuityEvent],
+    manifest: IdentityManifest,
+) -> list[dict[str, Any]]:
+    latest: dict[str, ContinuityEvent] = {}
+    for event in events:
+        if event.event_type in {"constraint.checked", "constraint.breached"}:
+            constraint_name = event.payload.get("constraint")
+            if constraint_name is not None:
+                latest[str(constraint_name)] = event
+    now = datetime.now(timezone.utc)
+    rows = []
+    for constraint in manifest.constraints:
+        event = latest.get(constraint.name)
+        age_seconds = None
+        stale = False
+        if event is not None:
+            timestamp = _parse_timestamp(event.timestamp)
+            age_seconds = max(0, int((now - timestamp).total_seconds()))
+            stale = (
+                constraint.freshness_seconds is not None
+                and age_seconds > constraint.freshness_seconds
+            )
+        rows.append(
+            {
+                "constraint": constraint.name,
+                "required": constraint.required,
+                "freshness_seconds": constraint.freshness_seconds,
+                "latest_event_type": event.event_type if event is not None else None,
+                "latest_timestamp": event.timestamp if event is not None else None,
+                "latest_event_hash": event.event_hash if event is not None else None,
+                "age_seconds": age_seconds,
+                "stale": stale,
+                "status": _freshness_status(constraint.required, event, stale),
+            }
+        )
+    return rows
+
+
+def _freshness_status(
+    required: bool,
+    event: ContinuityEvent | None,
+    stale: bool,
+) -> str:
+    if event is None:
+        return "missing_required" if required else "missing_optional"
+    if stale:
+        return "stale_required" if required else "stale_optional"
+    return "fresh"
+
+
+def _parse_timestamp(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def render_trace_report_html(report: TraceReport) -> str:
