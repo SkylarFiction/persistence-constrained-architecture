@@ -24,6 +24,7 @@ from pca import (
     RecoveryRecord,
     RecoveryStatus,
     TransformRequest,
+    append_ledger_anchor,
     authorization_policy_from_packs,
     authorize,
     build_manifest_from_policy_results,
@@ -42,6 +43,7 @@ from pca import (
     safe_load_policy_pack,
     write_dashboard_html,
     write_trace_report_html,
+    verify_latest_anchor,
 )
 
 
@@ -127,6 +129,7 @@ def main() -> int:
     )
     parser.add_argument("--manifest", default="examples/minimal_identity.json")
     parser.add_argument("--ledger", default="data/continuity.log")
+    parser.add_argument("--anchors", default="data/ledger_anchors.log")
     parser.add_argument(
         "--policy-pack",
         action="append",
@@ -153,6 +156,12 @@ def main() -> int:
     subparsers.add_parser("speak-gate")
     subparsers.add_parser("seed-required")
     subparsers.add_parser("lineage")
+
+    anchor_parser = subparsers.add_parser("anchor-head")
+    anchor_parser.add_argument("--authority", default="local_operator")
+    anchor_parser.add_argument("--note", default="")
+
+    subparsers.add_parser("verify-anchor")
 
     report_parser = subparsers.add_parser("trace-report")
     report_parser.add_argument(
@@ -306,6 +315,31 @@ def main() -> int:
                 "seeded": True,
                 "ledger": str(ledger.path),
                 "claim_record": claim.to_dict() if claim else None,
+            }
+        )
+        return 0
+
+    if args.command == "anchor-head":
+        anchor = append_ledger_anchor(
+            ledger,
+            args.anchors,
+            authority=args.authority,
+            note=args.note,
+        )
+        print_json(
+            {
+                "anchor_path": args.anchors,
+                "anchor": anchor.to_dict(),
+            }
+        )
+        return 0
+
+    if args.command == "verify-anchor":
+        verification = verify_latest_anchor(ledger, args.anchors)
+        print_json(
+            {
+                "anchor_path": args.anchors,
+                **verification.to_dict(),
             }
         )
         return 0

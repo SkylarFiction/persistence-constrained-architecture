@@ -30,6 +30,7 @@ from pca import (
     RecoveryRecord,
     RecoveryStatus,
     TransformRequest,
+    append_ledger_anchor,
     active_followups,
     authorization_policy_from_packs,
     authorize,
@@ -49,6 +50,7 @@ from pca import (
     render_trace_report_html,
     recovery_records_from_events,
     safe_load_policy_pack,
+    verify_latest_anchor,
 )
 
 
@@ -379,6 +381,66 @@ def test_hard_breach_breaks_identity_claim(tmp_path):
     )
 
     assert evaluation.state == IdentityState.BROKEN
+
+
+def test_ledger_anchor_records_current_head(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "ledger_integrity", "value": True},
+    )
+    anchor = append_ledger_anchor(
+        ledger,
+        tmp_path / "anchors.log",
+        authority="root_authority",
+        note="release checkpoint",
+    )
+
+    assert anchor.event_count == 1
+    assert anchor.head_hash == ledger.last_hash()
+    assert anchor.chain_valid is True
+    assert anchor.previous_anchor_hash == "GENESIS"
+    assert anchor.anchor_hash
+
+
+def test_latest_anchor_verifies_against_ledger(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "ledger_integrity", "value": True},
+    )
+    append_ledger_anchor(ledger, tmp_path / "anchors.log")
+
+    verification = verify_latest_anchor(ledger, tmp_path / "anchors.log")
+
+    assert verification.valid is True
+    assert verification.reasons == ["latest anchor matches ledger head"]
+
+
+def test_latest_anchor_detects_later_ledger_change(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "ledger_integrity", "value": True},
+    )
+    append_ledger_anchor(ledger, tmp_path / "anchors.log")
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "origin_traceability", "value": True},
+    )
+
+    verification = verify_latest_anchor(ledger, tmp_path / "anchors.log")
+
+    assert verification.valid is False
+    assert "ledger head hash does not match latest anchor" in verification.reasons
+    assert "ledger event count does not match latest anchor" in verification.reasons
 
 
 def test_hard_breach_cannot_be_followed_by_certified_claim(tmp_path):

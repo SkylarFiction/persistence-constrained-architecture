@@ -51,6 +51,8 @@ what move the claim to `continuity_break`.
 - `ContinuityLedger`: records identity-relevant events in a hash-chained log.
   Ledger appends are protected by a file lock so concurrent writers do not silently
   fork the hash chain.
+- `LedgerAnchorRecord`: exports the current ledger head into a separate hash-chained
+  anchor log so later verification can detect drift from the anchored head.
 - `ContinuityEvaluator`: classifies the current identity state from ledger evidence,
   including stale required evidence checks when freshness windows are declared.
 - `PolicyEngine`: evaluates whether identity-relevant transforms are admissible.
@@ -132,6 +134,8 @@ python3 -m pca.scenario_runner verify-all
 python3 -m pca.scenario_runner demo
 python3 pca_cli.py seed-required
 python3 pca_cli.py status
+python3 pca_cli.py anchor-head --authority root_authority --note release_checkpoint
+python3 pca_cli.py verify-anchor
 python3 pca_cli.py --policies policies/ transform substrate_migration
 python3 pca_cli.py --policy-pack policies/substrate.json transform substrate_migration
 python3 pca_cli.py --policies policies/ transform substrate_migration --override emergency --authority operator

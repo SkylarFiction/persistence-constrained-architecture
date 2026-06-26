@@ -23,6 +23,11 @@ filesystem access from rewriting the entire log and recomputing hashes. Stronger
 tamper evidence requires a head hash anchored outside the writer's control, such as
 signed heads, periodic notarization, append-only storage, or WORM media.
 
+PCA v0.1 can write local ledger-head anchors into a separate hash-chained anchor log.
+That helps detect drift from a recorded head, but it is still not equivalent to
+external notarization unless the anchor log or head hash is copied somewhere outside
+the local writer's control.
+
 ## Not Distributed Consensus
 
 The ledger is hash-chained and file-locked, but it is not replicated across nodes.

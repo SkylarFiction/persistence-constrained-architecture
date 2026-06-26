@@ -16,6 +16,15 @@ The continuity ledger records identity-relevant events in a hash-chained append 
 Each event points to the previous event hash. Local appends are protected by a file
 lock so concurrent writers do not silently fork the ledger head.
 
+## Ledger Anchors
+
+Ledger anchors export the current ledger head into a separate hash-chained anchor
+log. Each anchor records the ledger path, event count, head hash, chain validity,
+authority, note, and previous anchor hash. `verify-anchor` checks whether the local
+ledger still matches the latest anchored head. This is not external notarization
+yet, but it creates the boundary where signed heads, timestamping, WORM storage, or
+public release anchors can attach.
+
 ## Continuity Evaluator
 
 The evaluator reads the manifest and ledger and classifies the identity state as
