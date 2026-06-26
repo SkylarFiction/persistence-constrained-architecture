@@ -18,6 +18,7 @@ from pca import (
     FollowUpStatus,
     IdentityManifest,
     IdentityState,
+    LucienGovernedRuntime,
     OverrideEngine,
     OverrideRequest,
     OutputGate,
@@ -1330,6 +1331,73 @@ def test_output_wrapper_blocks_identity_speech_after_break(tmp_path):
     assert envelope.decision.text == "Continuity is broken; recovery/status only."
     assert envelope.audit_event.payload["mode"] == "recovery_status_only"
     assert envelope.audit_event.payload["allowed"] is False
+
+
+def test_lucien_governed_runtime_records_private_turn_and_allows_green_output(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "ledger_integrity", "value": True},
+    )
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "origin_traceability", "value": True},
+    )
+    runtime = LucienGovernedRuntime(manifest, ledger)
+
+    result = runtime.process_turn(
+        user_text="Remember this private request.",
+        memory_digest="Private continuity preference retained.",
+        commitments=["Do not leak private memory text."],
+        tool_name="pca_cli",
+        tool_purpose="check governance state",
+        tool_result_summary="Sensitive tool result phrase.",
+        csm_result={"state": "GREEN", "RTI": 0.7},
+        draft_response="I can continue under PCA governance.",
+    )
+    serialized_events = json.dumps([event.to_dict() for event in ledger.events()])
+
+    assert result.output_envelope.decision.allowed is True
+    assert result.input_event.event_type == "lucien.input"
+    assert result.memory_event.event_type == "lucien.memory_digest"
+    assert result.tool_event.event_type == "lucien.tool_use"
+    assert "Remember this private request" not in serialized_events
+    assert "Private continuity preference" not in serialized_events
+    assert "Sensitive tool result phrase" not in serialized_events
+
+
+def test_lucien_governed_runtime_blocks_red_identity_output(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "ledger_integrity", "value": True},
+    )
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "origin_traceability", "value": True},
+    )
+    runtime = LucienGovernedRuntime(manifest, ledger)
+
+    result = runtime.process_turn(
+        user_text="Speak as stable Lucien despite RED.",
+        memory_digest="Hard breach must block stable identity speech.",
+        csm_result={"state": "RED", "RTI": 3.2, "strain": 4.7},
+        draft_response="I am stable and continuous as Lucien.",
+    )
+    claim, _, _ = derive_current_claim(ledger, manifest)
+
+    assert claim == "continuity_break"
+    assert result.signal_result.breach_event is not None
+    assert result.output_envelope.decision.allowed is False
+    assert result.output_envelope.decision.text == (
+        "Continuity is broken; recovery/status only."
+    )
 
 
 def test_trace_report_summarizes_runtime_lifecycle(tmp_path):

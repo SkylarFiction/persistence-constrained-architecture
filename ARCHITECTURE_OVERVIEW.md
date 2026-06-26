@@ -112,6 +112,14 @@ The bridge consumes CSM verdicts; it does not compute RTI thresholds in this pac
 PCA's job in v0.1 is to make the monitor verdict ledger-backed and enforce the
 resulting continuity claim and output gate.
 
+## Lucien Runtime Harness
+
+The Lucien runtime harness is the first live-agent bridge. A governed turn records
+privacy-conscious input hashes, memory digest hashes, optional tool-use metadata, a
+CSM result, and an output-gate audit event. Raw user text, memory text, and tool
+results are not stored in the ledger. RED runtime results still force
+`continuity_break` and block stable identity output.
+
 ## Output Gate
 
 The output gate maps the active continuity claim to allowed speech behavior:

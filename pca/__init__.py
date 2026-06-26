@@ -48,6 +48,7 @@ from .followups import (
 )
 from .ledger import ContinuityEvent, ContinuityLedger
 from .lineage import LineageRecord, lineage_records
+from .lucien import LucienGovernedRuntime, LucienTurnResult
 from .manifest import IdentityManifest, PersistenceConstraint
 from .override import OverrideEngine, OverrideRecord, OverrideRequest
 from .output_gate import OutputGate, OutputGateDecision, OutputMode
@@ -134,6 +135,8 @@ __all__ = [
     "IdentityRisk",
     "LineageRecord",
     "LedgerAnchorRecord",
+    "LucienGovernedRuntime",
+    "LucienTurnResult",
     "OverrideEngine",
     "OverrideRecord",
     "OverrideRequest",

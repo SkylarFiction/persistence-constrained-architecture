@@ -81,7 +81,7 @@
     "reasons": [
       "soft constraint breached: runtime_csm_amber"
     ],
-    "recorded_claim_id": "claim_52dc14d5-b1d2-4429-a141-17cb210f0094",
+    "recorded_claim_id": "claim_fa539491-dae1-45a7-9741-2e783353007b",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

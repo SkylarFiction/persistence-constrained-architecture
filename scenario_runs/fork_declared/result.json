@@ -73,7 +73,7 @@
     "reasons": [
       "ledger contains an identity fork event"
     ],
-    "recorded_claim_id": "claim_80d83333-c765-4cc9-a878-3be9f9923c96",
+    "recorded_claim_id": "claim_ca6c0b71-a560-4dde-98a5-b05a77f16fca",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

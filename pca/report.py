@@ -22,6 +22,9 @@ IMPORTANT_EVENT_TYPES = {
     "continuity_claim_record",
     "constraint.breached",
     "identity.forked",
+    "lucien.input",
+    "lucien.memory_digest",
+    "lucien.tool_use",
     "runtime.csm_state",
     "runtime.output_gate",
     "transform.evaluated",
@@ -93,6 +96,21 @@ def _event_summary(event: ContinuityEvent) -> str:
         return (
             f"mode={payload.get('mode')} allowed={payload.get('allowed')} "
             f"claim={payload.get('claim')}"
+        )
+    if event.event_type == "lucien.input":
+        return (
+            f"channel={payload.get('channel')} "
+            f"input_length={payload.get('input_length')}"
+        )
+    if event.event_type == "lucien.memory_digest":
+        return (
+            f"digest_length={payload.get('digest_length')} "
+            f"commitments={payload.get('commitment_count')}"
+        )
+    if event.event_type == "lucien.tool_use":
+        return (
+            f"tool={payload.get('tool_name')} "
+            f"purpose={payload.get('purpose')}"
         )
     if event.event_type == "transform.evaluated":
         return (

@@ -69,6 +69,9 @@ what move the claim to `continuity_break`.
 - `OutputGate`: maps continuity claims to allowed identity-speech modes.
 - `PCAIdentityRuntime`: gives agent runtimes a small adapter for recording CSM-style
   signals and checking whether output may speak as the identity.
+- `LucienGovernedRuntime`: records Lucien turns as privacy-conscious input, memory,
+  tool, CSM, and output-gate events so a running Lucien-style loop can be governed by
+  PCA.
 - `CSMRuntimeBridge`: connects Lucien-style CSM monitor results and hard-kill audit
   logs to PCA continuity events.
 - `PCAOutputWrapper`: gates outbound text and writes privacy-conscious audit events
@@ -129,6 +132,7 @@ python3 scripts/regression_check.py
 python3 scripts/csm_bridge_demo.py
 python3 scripts/lifecycle_trace_demo.py
 python3 scripts/dashboard_demo.py
+python3 scripts/lucien_runtime_demo.py
 python3 -m pca.scenario_runner list
 python3 -m pca.scenario_runner run csm_red_continuity_break
 python3 -m pca.scenario_runner run-all
