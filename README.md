@@ -75,6 +75,11 @@ what move the claim to `continuity_break`.
 - `GrowthRecord`: lets Lucien propose, accept, reject, or review learned memories,
   commitments, skills, preferences, policies, and identity-impacting changes without
   storing raw learned text in the ledger.
+- `GrowthGate`: constrains growth by current continuity claim, so broken or
+  uncertified continuity cannot silently absorb identity-bearing learning.
+- `SelfModel`: derives Lucien's accepted memories, commitments, skills,
+  preferences, policies, and identity-impacting changes from accepted growth
+  records.
 - `CSMRuntimeBridge`: connects Lucien-style CSM monitor results and hard-kill audit
   logs to PCA continuity events.
 - `PCAOutputWrapper`: gates outbound text and writes privacy-conscious audit events
@@ -169,7 +174,9 @@ python3 pca_cli.py transform version_update --evidence change_summary=no_identit
 python3 pca_cli.py fork lucien-branch-a --reason sandboxed_identity_experiment
 python3 pca_cli.py lineage
 python3 pca_cli.py propose-growth memory --summary "User prefers governed learning" --impact low
+python3 pca_cli.py growth-gate accept --impact medium
 python3 pca_cli.py growth
+python3 pca_cli.py self-model
 ```
 
 Scenario outputs are written to `scenario_runs/<scenario_id>/`:

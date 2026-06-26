@@ -128,6 +128,19 @@ and length-counted rather than stored raw. Low and medium impact growth starts a
 `proposed`; high and identity-defining growth starts as `requires_review`. Growth can
 then be accepted or rejected through explicit ledger updates.
 
+Growth is continuity-aware. The growth gate evaluates the current continuity claim
+before learning is proposed or accepted. Certified continuity permits normal
+governed growth. Review and uncertified states constrain growth. A continuity break
+blocks identity-bearing growth from entering Lucien's accepted self-model.
+
+## Self-Model
+
+Lucien's self-model is derived from accepted growth records. It is not a separate
+mutable memory store. The self-model groups accepted growth by memory, commitment,
+skill, preference, policy, and identity, while preserving the same privacy rule:
+raw learned text is not stored, only hashes, lengths, evidence references, impact,
+and reasons.
+
 ## Output Gate
 
 The output gate maps the active continuity claim to allowed speech behavior:

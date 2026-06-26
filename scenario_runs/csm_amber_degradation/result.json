@@ -64,6 +64,7 @@
     "title": "CSM AMBER Degradation"
   },
   "summary": {
+    "accepted_growth_count": 0,
     "active_followups": 0,
     "active_growth_count": 0,
     "anchor_valid": null,
@@ -83,7 +84,7 @@
     "reasons": [
       "soft constraint breached: runtime_csm_amber"
     ],
-    "recorded_claim_id": "claim_29fc9547-3b58-4ff7-b68b-6ab4cfabc977",
+    "recorded_claim_id": "claim_38224e58-1bbe-4626-9e3c-6e4bac3e9461",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

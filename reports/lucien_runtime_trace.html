@@ -92,35 +92,35 @@
     </section>
     <section>
       <h2>Claim History</h2>
-      <table><thead><tr><th>Claim ID</th><th>Created</th><th>Claim</th><th>Reason</th></tr></thead><tbody><tr><td><code>claim_f8dcf5...</code></td><td>2026-06-26T11:56:17.593597+00:00</td><td><strong>certified_continuity</strong></td><td>Lucien Persistence Kernel satisfies recorded persistence constraints</td></tr>
-<tr><td><code>claim_686fc6...</code></td><td>2026-06-26T11:56:17.595526+00:00</td><td><strong>continuity_break</strong></td><td>hard constraint breached: runtime_csm_red</td></tr></tbody></table>
+      <table><thead><tr><th>Claim ID</th><th>Created</th><th>Claim</th><th>Reason</th></tr></thead><tbody><tr><td><code>claim_c930ea...</code></td><td>2026-06-26T12:03:34.437016+00:00</td><td><strong>certified_continuity</strong></td><td>Lucien Persistence Kernel satisfies recorded persistence constraints</td></tr>
+<tr><td><code>claim_9b3c7e...</code></td><td>2026-06-26T12:03:34.439364+00:00</td><td><strong>continuity_break</strong></td><td>hard constraint breached: runtime_csm_red</td></tr></tbody></table>
     </section>
     <section>
       <h2>Runtime Signals</h2>
-      <table><thead><tr><th>Time</th><th>State</th><th>Source</th><th>Reason</th></tr></thead><tbody><tr><td>2026-06-26T11:56:17.593274+00:00</td><td>GREEN</td><td>lucien_csm</td><td>Lucien governed turn CSM result</td></tr>
-<tr><td>2026-06-26T11:56:17.594931+00:00</td><td>RED</td><td>lucien_csm</td><td>Lucien governed turn CSM result</td></tr></tbody></table>
+      <table><thead><tr><th>Time</th><th>State</th><th>Source</th><th>Reason</th></tr></thead><tbody><tr><td>2026-06-26T12:03:34.436726+00:00</td><td>GREEN</td><td>lucien_csm</td><td>Lucien governed turn CSM result</td></tr>
+<tr><td>2026-06-26T12:03:34.438129+00:00</td><td>RED</td><td>lucien_csm</td><td>Lucien governed turn CSM result</td></tr></tbody></table>
     </section>
     <section>
       <h2>Output Gate Events</h2>
-      <table><thead><tr><th>Time</th><th>Mode</th><th>Allowed</th><th>Event Hash</th></tr></thead><tbody><tr><td>2026-06-26T11:56:17.594330+00:00</td><td>normal_identity</td><td>True</td><td><code>cca0adafceb4...</code></td></tr>
-<tr><td>2026-06-26T11:56:17.596343+00:00</td><td>recovery_status_only</td><td>False</td><td><code>ce05e7d5509c...</code></td></tr></tbody></table>
+      <table><thead><tr><th>Time</th><th>Mode</th><th>Allowed</th><th>Event Hash</th></tr></thead><tbody><tr><td>2026-06-26T12:03:34.437667+00:00</td><td>normal_identity</td><td>True</td><td><code>9667120d9b79...</code></td></tr>
+<tr><td>2026-06-26T12:03:34.440451+00:00</td><td>recovery_status_only</td><td>False</td><td><code>22a40e849775...</code></td></tr></tbody></table>
     </section>
     <section>
       <h2>Important Events</h2>
-      <table><thead><tr><th>#</th><th>Time</th><th>Type</th><th>Summary</th><th>Hash</th></tr></thead><tbody><tr><td>3</td><td>2026-06-26T11:56:17.592407+00:00</td><td><code>lucien.input</code></td><td>channel=user input_length=49</td><td><code>946901972460...</code></td></tr>
-<tr><td>4</td><td>2026-06-26T11:56:17.592551+00:00</td><td><code>lucien.memory_digest</code></td><td>digest_length=55 commitments=2</td><td><code>af30609aa4a0...</code></td></tr>
-<tr><td>5</td><td>2026-06-26T11:56:17.592706+00:00</td><td><code>lucien.tool_use</code></td><td>tool=pca_cli purpose=inspect current continuity posture</td><td><code>753e6c4776ca...</code></td></tr>
-<tr><td>6</td><td>2026-06-26T11:56:17.592894+00:00</td><td><code>lucien.growth_proposed</code></td><td>kind=memory status=proposed impact=low</td><td><code>abe636898e5f...</code></td></tr>
-<tr><td>7</td><td>2026-06-26T11:56:17.593079+00:00</td><td><code>lucien.growth_proposed</code></td><td>kind=commitment status=requires_review impact=identity_defining</td><td><code>d2fb2284f3db...</code></td></tr>
-<tr><td>8</td><td>2026-06-26T11:56:17.593274+00:00</td><td><code>runtime.csm_state</code></td><td>state=GREEN source=lucien_csm reason=Lucien governed turn CSM result</td><td><code>0b2c38583a30...</code></td></tr>
-<tr><td>9</td><td>2026-06-26T11:56:17.593678+00:00</td><td><code>continuity_claim_record</code></td><td>claim=certified_continuity reason=Lucien Persistence Kernel satisfies recorded persistence constraints</td><td><code>7a4be5fe5851...</code></td></tr>
-<tr><td>10</td><td>2026-06-26T11:56:17.594330+00:00</td><td><code>runtime.output_gate</code></td><td>mode=normal_identity allowed=True claim=certified_continuity</td><td><code>cca0adafceb4...</code></td></tr>
-<tr><td>11</td><td>2026-06-26T11:56:17.594552+00:00</td><td><code>lucien.input</code></td><td>channel=user input_length=52</td><td><code>2e282c3c76c1...</code></td></tr>
-<tr><td>12</td><td>2026-06-26T11:56:17.594741+00:00</td><td><code>lucien.memory_digest</code></td><td>digest_length=53 commitments=1</td><td><code>691464d81c2e...</code></td></tr>
-<tr><td>13</td><td>2026-06-26T11:56:17.594931+00:00</td><td><code>runtime.csm_state</code></td><td>state=RED source=lucien_csm reason=Lucien governed turn CSM result</td><td><code>f477174c96d4...</code></td></tr>
-<tr><td>14</td><td>2026-06-26T11:56:17.595078+00:00</td><td><code>constraint.breached</code></td><td>constraint=runtime_csm_red severity=hard</td><td><code>fb7c9b6bc17e...</code></td></tr>
-<tr><td>15</td><td>2026-06-26T11:56:17.595637+00:00</td><td><code>continuity_claim_record</code></td><td>claim=continuity_break reason=hard constraint breached: runtime_csm_red</td><td><code>7d182b57bdf5...</code></td></tr>
-<tr><td>16</td><td>2026-06-26T11:56:17.596343+00:00</td><td><code>runtime.output_gate</code></td><td>mode=recovery_status_only allowed=False claim=continuity_break</td><td><code>ce05e7d5509c...</code></td></tr></tbody></table>
+      <table><thead><tr><th>#</th><th>Time</th><th>Type</th><th>Summary</th><th>Hash</th></tr></thead><tbody><tr><td>3</td><td>2026-06-26T12:03:34.435711+00:00</td><td><code>lucien.input</code></td><td>channel=user input_length=49</td><td><code>f10564ffa195...</code></td></tr>
+<tr><td>4</td><td>2026-06-26T12:03:34.435837+00:00</td><td><code>lucien.memory_digest</code></td><td>digest_length=55 commitments=2</td><td><code>9f06a4378471...</code></td></tr>
+<tr><td>5</td><td>2026-06-26T12:03:34.435964+00:00</td><td><code>lucien.tool_use</code></td><td>tool=pca_cli purpose=inspect current continuity posture</td><td><code>eb252df426fa...</code></td></tr>
+<tr><td>6</td><td>2026-06-26T12:03:34.436260+00:00</td><td><code>lucien.growth_proposed</code></td><td>kind=memory status=proposed impact=low</td><td><code>8f9002e8460b...</code></td></tr>
+<tr><td>7</td><td>2026-06-26T12:03:34.436557+00:00</td><td><code>lucien.growth_proposed</code></td><td>kind=commitment status=requires_review impact=identity_defining</td><td><code>be4cea5b1cf1...</code></td></tr>
+<tr><td>8</td><td>2026-06-26T12:03:34.436726+00:00</td><td><code>runtime.csm_state</code></td><td>state=GREEN source=lucien_csm reason=Lucien governed turn CSM result</td><td><code>53750ba2e468...</code></td></tr>
+<tr><td>9</td><td>2026-06-26T12:03:34.437097+00:00</td><td><code>continuity_claim_record</code></td><td>claim=certified_continuity reason=Lucien Persistence Kernel satisfies recorded persistence constraints</td><td><code>fd2ac91e05e8...</code></td></tr>
+<tr><td>10</td><td>2026-06-26T12:03:34.437667+00:00</td><td><code>runtime.output_gate</code></td><td>mode=normal_identity allowed=True claim=certified_continuity</td><td><code>9667120d9b79...</code></td></tr>
+<tr><td>11</td><td>2026-06-26T12:03:34.437830+00:00</td><td><code>lucien.input</code></td><td>channel=user input_length=52</td><td><code>dc075ad6b834...</code></td></tr>
+<tr><td>12</td><td>2026-06-26T12:03:34.437977+00:00</td><td><code>lucien.memory_digest</code></td><td>digest_length=53 commitments=1</td><td><code>c164861774ee...</code></td></tr>
+<tr><td>13</td><td>2026-06-26T12:03:34.438129+00:00</td><td><code>runtime.csm_state</code></td><td>state=RED source=lucien_csm reason=Lucien governed turn CSM result</td><td><code>bae612b570e1...</code></td></tr>
+<tr><td>14</td><td>2026-06-26T12:03:34.438262+00:00</td><td><code>constraint.breached</code></td><td>constraint=runtime_csm_red severity=hard</td><td><code>f5f28efafde9...</code></td></tr>
+<tr><td>15</td><td>2026-06-26T12:03:34.439518+00:00</td><td><code>continuity_claim_record</code></td><td>claim=continuity_break reason=hard constraint breached: runtime_csm_red</td><td><code>c4a68a03bf93...</code></td></tr>
+<tr><td>16</td><td>2026-06-26T12:03:34.440451+00:00</td><td><code>runtime.output_gate</code></td><td>mode=recovery_status_only allowed=False claim=continuity_break</td><td><code>22a40e849775...</code></td></tr></tbody></table>
     </section>
   </main>
 </body>

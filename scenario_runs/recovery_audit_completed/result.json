@@ -95,6 +95,7 @@
     "title": "Recovery Audit Completed"
   },
   "summary": {
+    "accepted_growth_count": 0,
     "active_followups": 0,
     "active_growth_count": 0,
     "anchor_valid": null,
@@ -114,7 +115,7 @@
     "reasons": [
       "hard constraint breached: runtime_csm_red"
     ],
-    "recorded_claim_id": "claim_17819462-ac8d-46aa-b26f-b19269c3d479",
+    "recorded_claim_id": "claim_12d450a2-cece-45ad-af7e-b8f5405f7d70",
     "recovery_count": 1,
     "state_precedence": [
       "chain_invalid",

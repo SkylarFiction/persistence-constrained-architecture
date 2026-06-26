@@ -47,6 +47,7 @@
     "title": "Memory Compaction Review"
   },
   "summary": {
+    "accepted_growth_count": 0,
     "active_followups": 0,
     "active_growth_count": 0,
     "anchor_valid": null,
@@ -66,7 +67,7 @@
     "reasons": [
       "Lucien Persistence Kernel satisfies recorded persistence constraints"
     ],
-    "recorded_claim_id": "claim_01ce542a-9006-494f-aa96-bd3044313831",
+    "recorded_claim_id": "claim_bb26838c-0bb0-4af4-9919-322864301df7",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

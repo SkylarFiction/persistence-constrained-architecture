@@ -56,6 +56,7 @@
     "title": "Fork Declared"
   },
   "summary": {
+    "accepted_growth_count": 0,
     "active_followups": 0,
     "active_growth_count": 0,
     "anchor_valid": null,
@@ -75,7 +76,7 @@
     "reasons": [
       "ledger contains an identity fork event"
     ],
-    "recorded_claim_id": "claim_856f0304-92e6-4ce0-bb24-1c6916ee4774",
+    "recorded_claim_id": "claim_e9caafaf-6535-447e-a613-b50545e801a9",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

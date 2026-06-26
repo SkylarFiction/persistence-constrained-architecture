@@ -84,6 +84,7 @@
     "title": "Recovery Opened"
   },
   "summary": {
+    "accepted_growth_count": 0,
     "active_followups": 1,
     "active_growth_count": 0,
     "anchor_valid": null,
@@ -103,7 +104,7 @@
     "reasons": [
       "hard constraint breached: runtime_csm_red"
     ],
-    "recorded_claim_id": "claim_8e3ef27c-bb76-47b4-be69-db904d3b38ba",
+    "recorded_claim_id": "claim_be08cab0-80bc-41eb-8f3a-a66e6c54d299",
     "recovery_count": 1,
     "state_precedence": [
       "chain_invalid",

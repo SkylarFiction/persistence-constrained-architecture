@@ -125,6 +125,22 @@ def render_dashboard_html(report: TraceReport) -> str:
         "</tr>"
         for record in data["growth_records"]
     ) or _empty_row(6, "No growth records.")
+    self_model_items = []
+    for kind, records in data["self_model"]["by_kind"].items():
+        for record in records:
+            self_model_items.append(
+                "<tr>"
+                f"<td>{escape(str(kind))}</td>"
+                f"<td><code>{escape(str(record['growth_id']))}</code></td>"
+                f"<td>{escape(str(record['identity_impact']))}</td>"
+                f"<td><code>{escape(_short_hash(str(record['summary_sha256'])))}</code></td>"
+                f"<td>{escape(str(record['reason']))}</td>"
+                "</tr>"
+            )
+    self_model_rows = "\n".join(self_model_items) or _empty_row(
+        5,
+        "No accepted growth in the self-model.",
+    )
     policy_error_items = "\n".join(
         f"<li>{escape(error)}</li>"
         for error in data["policy_errors"]
@@ -323,6 +339,7 @@ def render_dashboard_html(report: TraceReport) -> str:
       <div class="metric"><div class="label">Policy Errors</div><div class="value">{escape(str(summary['policy_error_count']))}</div></div>
       <div class="metric"><div class="label">Growth Records</div><div class="value">{escape(str(summary['growth_count']))}</div></div>
       <div class="metric"><div class="label">Active Growth</div><div class="value">{escape(str(summary['active_growth_count']))}</div></div>
+      <div class="metric"><div class="label">Accepted Growth</div><div class="value">{escape(str(summary['accepted_growth_count']))}</div></div>
     </section>
     <section class="grid">
       <div class="panel">
@@ -367,6 +384,10 @@ def render_dashboard_html(report: TraceReport) -> str:
     <section>
       <h2>Growth Records</h2>
       <table><thead><tr><th>Growth ID</th><th>Kind</th><th>Status</th><th>Impact</th><th>Summary Hash</th><th>Reason</th></tr></thead><tbody>{growth_rows}</tbody></table>
+    </section>
+    <section>
+      <h2>Lucien Self-Model</h2>
+      <table><thead><tr><th>Kind</th><th>Growth ID</th><th>Impact</th><th>Summary Hash</th><th>Reason</th></tr></thead><tbody>{self_model_rows}</tbody></table>
     </section>
     <section>
       <h2>Runtime Signals</h2>

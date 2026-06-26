@@ -16,6 +16,7 @@ from .lineage import lineage_records
 from .manifest import IdentityManifest
 from .output_gate import OutputGate
 from .recovery import current_recovery_record, recovery_records_from_events
+from .self_model import derive_self_model
 from .state import derive_current_claim
 
 
@@ -55,6 +56,7 @@ class TraceReport:
     authorization_checks: list[dict[str, Any]]
     growth_records: list[dict[str, Any]]
     active_growth: list[dict[str, Any]]
+    self_model: dict[str, Any]
     policy_errors: list[str]
     anchor_verification: dict[str, Any] | None = None
 
@@ -72,6 +74,7 @@ class TraceReport:
             "authorization_checks": self.authorization_checks,
             "growth_records": self.growth_records,
             "active_growth": self.active_growth,
+            "self_model": self.self_model,
             "policy_errors": self.policy_errors,
             "anchor_verification": self.anchor_verification,
         }
@@ -164,6 +167,7 @@ def build_trace_report(
     recoveries = recovery_records_from_events(events)
     growth_records = growth_records_from_events(events)
     active_growth = active_growth_records(events)
+    self_model = derive_self_model(events, manifest.system_id)
     active_followup_records = active_followups(events)
     anchor_verification = (
         verify_latest_anchor(ledger, anchor_path).to_dict()
@@ -192,6 +196,7 @@ def build_trace_report(
         "recovery_count": len(recoveries),
         "growth_count": len(growth_records),
         "active_growth_count": len(active_growth),
+        "accepted_growth_count": self_model.accepted_growth_count,
         "current_recovery_status": (
             current_recovery.status.value if current_recovery is not None else None
         ),
@@ -262,6 +267,7 @@ def build_trace_report(
         ],
         growth_records=[record.to_dict() for record in growth_records],
         active_growth=[record.to_dict() for record in active_growth],
+        self_model=self_model.to_dict(),
         policy_errors=manifest.policy_errors,
         anchor_verification=anchor_verification,
     )

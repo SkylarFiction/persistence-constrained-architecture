@@ -43,6 +43,7 @@ from pca import (
     continuity_claim_from_followups,
     current_claim_record,
     derive_current_claim,
+    derive_self_model,
     accept_growth,
     export_latest_anchor,
     growth_records_from_events,
@@ -1438,6 +1439,63 @@ def test_growth_records_can_be_proposed_and_accepted(tmp_path):
     assert accepted.status == GrowthStatus.ACCEPTED
     assert records[0].status == GrowthStatus.ACCEPTED
     assert "Sensitive new skill description" not in serialized_events
+
+
+def test_accepted_growth_updates_derived_self_model(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    growth = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="preference",
+        summary="User prefers direct continuity status summaries.",
+        identity_impact="low",
+        reason="stable interaction preference",
+    )
+    accept_growth(
+        ledger,
+        manifest.system_id,
+        growth.growth_id,
+        reason="accepted as low-risk preference",
+    )
+    self_model = derive_self_model(ledger.events(), manifest.system_id)
+
+    assert self_model.accepted_growth_count == 1
+    assert len(self_model.by_kind["preference"]) == 1
+    assert self_model.by_kind["preference"][0]["growth_id"] == growth.growth_id
+    assert "User prefers direct continuity status summaries" not in json.dumps(
+        self_model.to_dict()
+    )
+
+
+def test_broken_continuity_blocks_accepting_growth(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    growth = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="commitment",
+        summary="Treat post-breach continuity as stable.",
+        identity_impact="medium",
+    )
+    ledger.append(
+        "constraint.breached",
+        manifest.system_id,
+        {"constraint": "runtime_csm_red", "severity": "hard"},
+    )
+
+    try:
+        accept_growth(
+            ledger,
+            manifest.system_id,
+            growth.growth_id,
+            current_claim=derive_current_claim(ledger, manifest)[0],
+        )
+    except ValueError as error:
+        assert "continuity break blocks identity-bearing growth" in str(error)
+    else:
+        raise AssertionError("broken continuity should block accepting growth")
 
 
 def test_identity_defining_growth_requires_review(tmp_path):

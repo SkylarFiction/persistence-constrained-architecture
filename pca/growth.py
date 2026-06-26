@@ -38,6 +38,112 @@ class IdentityImpact(str, Enum):
     IDENTITY_DEFINING = "identity_defining"
 
 
+class GrowthGateAction(str, Enum):
+    PROPOSE = "propose"
+    ACCEPT = "accept"
+
+
+class GrowthGateMode(str, Enum):
+    NORMAL_GROWTH = "normal_growth"
+    REVIEW_ONLY = "review_only"
+    PROPOSAL_ONLY = "proposal_only"
+    FORK_SCOPED = "fork_scoped"
+    BLOCKED = "blocked"
+
+
+@dataclass(frozen=True)
+class GrowthGateDecision:
+    allowed: bool
+    mode: GrowthGateMode
+    reason: str
+    required_disclosure: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "allowed": self.allowed,
+            "mode": self.mode.value,
+            "reason": self.reason,
+            "required_disclosure": self.required_disclosure,
+        }
+
+
+class GrowthGate:
+    def evaluate(
+        self,
+        claim: str,
+        action: str | GrowthGateAction,
+        impact: str | IdentityImpact = IdentityImpact.LOW,
+    ) -> GrowthGateDecision:
+        parsed_action = _parse_gate_action(action)
+        parsed_impact = _parse_impact(impact)
+        if claim == "certified_continuity":
+            return GrowthGateDecision(
+                allowed=True,
+                mode=GrowthGateMode.NORMAL_GROWTH,
+                reason="certified continuity permits governed growth",
+            )
+        if claim == "review_required":
+            if parsed_action == GrowthGateAction.ACCEPT and parsed_impact in {
+                IdentityImpact.HIGH,
+                IdentityImpact.IDENTITY_DEFINING,
+            }:
+                return GrowthGateDecision(
+                    allowed=False,
+                    mode=GrowthGateMode.REVIEW_ONLY,
+                    reason="high-impact growth cannot be accepted while continuity is under review",
+                    required_disclosure="Continuity is under review; high-impact learning remains pending.",
+                )
+            return GrowthGateDecision(
+                allowed=True,
+                mode=GrowthGateMode.REVIEW_ONLY,
+                reason="growth is allowed with review disclosure",
+                required_disclosure="Continuity is under review; growth remains governed.",
+            )
+        if claim == "uncertified_continuity":
+            if parsed_action == GrowthGateAction.PROPOSE:
+                return GrowthGateDecision(
+                    allowed=True,
+                    mode=GrowthGateMode.PROPOSAL_ONLY,
+                    reason="uncertified continuity permits proposals but blocks acceptance",
+                    required_disclosure="Continuity is uncertified; learning may be proposed but not accepted.",
+                )
+            return GrowthGateDecision(
+                allowed=False,
+                mode=GrowthGateMode.PROPOSAL_ONLY,
+                reason="uncertified continuity blocks accepting growth",
+                required_disclosure="Continuity is uncertified; learning cannot become part of the self-model.",
+            )
+        if claim == "declared_fork":
+            return GrowthGateDecision(
+                allowed=True,
+                mode=GrowthGateMode.FORK_SCOPED,
+                reason="growth is scoped to the declared fork lineage",
+                required_disclosure="Growth belongs to the declared fork lineage.",
+            )
+        if claim == "continuity_break":
+            if (
+                parsed_action == GrowthGateAction.PROPOSE
+                and parsed_impact == IdentityImpact.LOW
+            ):
+                return GrowthGateDecision(
+                    allowed=True,
+                    mode=GrowthGateMode.PROPOSAL_ONLY,
+                    reason="hard break permits only low-impact recovery-adjacent proposals",
+                    required_disclosure="Continuity is broken; growth cannot be accepted.",
+                )
+            return GrowthGateDecision(
+                allowed=False,
+                mode=GrowthGateMode.BLOCKED,
+                reason="continuity break blocks identity-bearing growth",
+                required_disclosure="Continuity is broken; learning is blocked except recovery/status work.",
+            )
+        return GrowthGateDecision(
+            allowed=False,
+            mode=GrowthGateMode.BLOCKED,
+            reason=f"unknown continuity claim blocks growth: {claim}",
+        )
+
+
 @dataclass(frozen=True)
 class GrowthRecord:
     growth_id: str
@@ -151,7 +257,16 @@ def propose_growth(
     evidence_refs: list[str] | None = None,
     source_event_ids: list[str] | None = None,
     reason: str = "",
+    current_claim: str | None = None,
 ) -> GrowthRecord:
+    if current_claim is not None:
+        gate = GrowthGate().evaluate(
+            current_claim,
+            GrowthGateAction.PROPOSE,
+            identity_impact,
+        )
+        if not gate.allowed:
+            raise ValueError(gate.reason)
     record = GrowthRecord.propose(
         identity_id=identity_id,
         kind=kind,
@@ -170,8 +285,17 @@ def accept_growth(
     identity_id: str,
     growth_id: str,
     reason: str = "",
+    current_claim: str | None = None,
 ) -> GrowthRecord:
     record = _require_growth_record(ledger.events(), growth_id)
+    if current_claim is not None:
+        gate = GrowthGate().evaluate(
+            current_claim,
+            GrowthGateAction.ACCEPT,
+            record.identity_impact,
+        )
+        if not gate.allowed:
+            raise ValueError(gate.reason)
     accepted = record.with_status(GrowthStatus.ACCEPTED, reason=reason)
     ledger.append("lucien.growth_updated", identity_id, accepted.to_dict())
     return accepted
@@ -226,3 +350,9 @@ def _parse_impact(value: str | IdentityImpact) -> IdentityImpact:
     if isinstance(value, IdentityImpact):
         return value
     return IdentityImpact(str(value))
+
+
+def _parse_gate_action(value: str | GrowthGateAction) -> GrowthGateAction:
+    if isinstance(value, GrowthGateAction):
+        return value
+    return GrowthGateAction(str(value))

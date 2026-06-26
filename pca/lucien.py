@@ -88,6 +88,7 @@ class LucienGovernedRuntime:
             evidence_refs=evidence_refs,
             source_event_ids=source_event_ids,
             reason=reason,
+            current_claim=self.identity_runtime.current_claim(),
         )
 
     def record_memory_digest(

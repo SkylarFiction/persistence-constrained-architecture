@@ -47,6 +47,10 @@ from .followups import (
     required_evidence_for,
 )
 from .growth import (
+    GrowthGate,
+    GrowthGateAction,
+    GrowthGateDecision,
+    GrowthGateMode,
     GrowthKind,
     GrowthRecord,
     GrowthStatus,
@@ -115,6 +119,7 @@ from .scenarios import (
     verify_scenario,
     write_demo_index,
 )
+from .self_model import SelfModel, derive_self_model
 from .state import (
     default_claim_for_identity_state,
     derive_current_claim,
@@ -142,6 +147,10 @@ __all__ = [
     "FollowUpRecord",
     "FollowUpStatus",
     "GrowthKind",
+    "GrowthGate",
+    "GrowthGateAction",
+    "GrowthGateDecision",
+    "GrowthGateMode",
     "GrowthRecord",
     "GrowthStatus",
     "IdentityManifest",
@@ -172,6 +181,7 @@ __all__ = [
     "RuntimeSignalResult",
     "ScenarioDefinition",
     "ScenarioRunResult",
+    "SelfModel",
     "TraceReport",
     "TransformEvaluation",
     "TransformPolicy",
@@ -192,6 +202,7 @@ __all__ = [
     "current_recovery_record",
     "default_claim_for_identity_state",
     "derive_current_claim",
+    "derive_self_model",
     "export_latest_anchor",
     "find_followup",
     "find_recovery",

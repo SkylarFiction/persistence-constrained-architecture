@@ -64,6 +64,7 @@
     "title": "CSM RED Continuity Break"
   },
   "summary": {
+    "accepted_growth_count": 0,
     "active_followups": 0,
     "active_growth_count": 0,
     "anchor_valid": null,
@@ -83,7 +84,7 @@
     "reasons": [
       "hard constraint breached: runtime_csm_red"
     ],
-    "recorded_claim_id": "claim_18cbc5c6-67d3-44f5-888c-6f29e96cb3c2",
+    "recorded_claim_id": "claim_5c233c62-9459-45e1-a763-4152c548f3b0",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

@@ -14,6 +14,8 @@ from pca import (
     ContinuityLedger,
     FollowUpRecord,
     FollowUpStatus,
+    GrowthGate,
+    GrowthGateAction,
     IdentityManifest,
     OverrideEngine,
     OverrideRequest,
@@ -32,6 +34,7 @@ from pca import (
     claims_from_events,
     current_claim_record,
     current_recovery_record,
+    derive_self_model,
     derive_current_claim,
     export_latest_anchor,
     find_followup,
@@ -161,6 +164,14 @@ def main() -> int:
     subparsers.add_parser("speak-gate")
     subparsers.add_parser("seed-required")
     subparsers.add_parser("lineage")
+    subparsers.add_parser("self-model")
+
+    growth_gate_parser = subparsers.add_parser("growth-gate")
+    growth_gate_parser.add_argument(
+        "action",
+        choices=[action.value for action in GrowthGateAction],
+    )
+    growth_gate_parser.add_argument("--impact", default="low")
 
     growth_parser = subparsers.add_parser("growth")
     growth_parser.add_argument("--status")
@@ -517,6 +528,32 @@ def main() -> int:
         )
         return 0
 
+    if args.command == "self-model":
+        print_json(
+            {
+                "self_model": derive_self_model(
+                    ledger.events(),
+                    manifest.system_id,
+                ).to_dict()
+            }
+        )
+        return 0
+
+    if args.command == "growth-gate":
+        current_claim, _, _ = derive_current_claim(ledger, manifest)
+        decision = GrowthGate().evaluate(
+            current_claim,
+            args.action,
+            args.impact,
+        )
+        print_json(
+            {
+                "current_continuity_claim": current_claim,
+                "growth_gate": decision.to_dict(),
+            }
+        )
+        return 0
+
     if args.command == "growth":
         records = growth_records_from_events(ledger.events())
         if args.status:
@@ -539,6 +576,7 @@ def main() -> int:
             identity_impact=args.impact,
             evidence_refs=args.evidence_ref,
             reason=args.reason,
+            current_claim=derive_current_claim(ledger, manifest)[0],
         )
         print_json({"growth": record.to_dict()})
         return 0
@@ -549,6 +587,7 @@ def main() -> int:
             identity_id=manifest.system_id,
             growth_id=args.growth_id,
             reason=args.reason,
+            current_claim=derive_current_claim(ledger, manifest)[0],
         )
         print_json({"growth": record.to_dict()})
         return 0
