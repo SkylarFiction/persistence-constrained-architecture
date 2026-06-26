@@ -48,6 +48,7 @@
   },
   "summary": {
     "active_followups": 0,
+    "active_growth_count": 0,
     "anchor_valid": null,
     "blocking_followups": 0,
     "chain_valid": true,
@@ -55,6 +56,7 @@
     "current_recovery_status": null,
     "event_count": 5,
     "followup_count": 0,
+    "growth_count": 0,
     "identity_state": "continuous",
     "ledger_path": "scenario_runs/memory_compaction_review/continuity.log",
     "name": "Lucien Persistence Kernel",
@@ -64,7 +66,7 @@
     "reasons": [
       "Lucien Persistence Kernel satisfies recorded persistence constraints"
     ],
-    "recorded_claim_id": "claim_c8da1a2e-1d93-4905-9e7c-99e86e4c4a4f",
+    "recorded_claim_id": "claim_01ce542a-9006-494f-aa96-bd3044313831",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

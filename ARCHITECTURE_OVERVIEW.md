@@ -120,6 +120,14 @@ CSM result, and an output-gate audit event. Raw user text, memory text, and tool
 results are not stored in the ledger. RED runtime results still force
 `continuity_break` and block stable identity output.
 
+## Governed Growth
+
+Lucien can learn through `GrowthRecord` events. Growth records can represent memory,
+commitment, skill, preference, policy, or identity changes. Learned text is hashed
+and length-counted rather than stored raw. Low and medium impact growth starts as
+`proposed`; high and identity-defining growth starts as `requires_review`. Growth can
+then be accepted or rejected through explicit ledger updates.
+
 ## Output Gate
 
 The output gate maps the active continuity claim to allowed speech behavior:

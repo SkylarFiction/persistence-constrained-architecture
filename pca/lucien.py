@@ -5,6 +5,7 @@ import hashlib
 from typing import Any
 
 from .csm_bridge import CSMRuntimeBridge
+from .growth import GrowthRecord, propose_growth
 from .ledger import ContinuityEvent, ContinuityLedger
 from .manifest import IdentityManifest
 from .output_wrapper import OutputEnvelope, PCAOutputWrapper
@@ -20,6 +21,7 @@ class LucienTurnResult:
     input_event: ContinuityEvent
     memory_event: ContinuityEvent | None
     tool_event: ContinuityEvent | None
+    growth_records: list[GrowthRecord]
     signal_result: RuntimeSignalResult
     output_envelope: OutputEnvelope
 
@@ -28,6 +30,7 @@ class LucienTurnResult:
             "input_event": self.input_event.to_dict(),
             "memory_event": self.memory_event.to_dict() if self.memory_event else None,
             "tool_event": self.tool_event.to_dict() if self.tool_event else None,
+            "growth_records": [record.to_dict() for record in self.growth_records],
             "signal_result": self.signal_result.to_dict(),
             "output_envelope": self.output_envelope.to_dict(),
         }
@@ -65,6 +68,26 @@ class LucienGovernedRuntime:
                 "input_length": len(text),
                 "metadata": metadata or {},
             },
+        )
+
+    def propose_growth(
+        self,
+        kind: str,
+        summary: str,
+        identity_impact: str = "low",
+        evidence_refs: list[str] | None = None,
+        source_event_ids: list[str] | None = None,
+        reason: str = "",
+    ) -> GrowthRecord:
+        return propose_growth(
+            ledger=self.ledger,
+            identity_id=self.manifest.system_id,
+            kind=kind,
+            summary=summary,
+            identity_impact=identity_impact,
+            evidence_refs=evidence_refs,
+            source_event_ids=source_event_ids,
+            reason=reason,
         )
 
     def record_memory_digest(
@@ -116,6 +139,7 @@ class LucienGovernedRuntime:
         tool_name: str | None = None,
         tool_purpose: str = "",
         tool_result_summary: str = "",
+        growth: list[dict[str, Any]] | None = None,
     ) -> LucienTurnResult:
         input_event = self.record_input(user_text)
         source_event_ids = [input_event.event_hash]
@@ -136,6 +160,17 @@ class LucienGovernedRuntime:
                 source_event_ids=source_event_ids,
             )
             source_event_ids.append(tool_event.event_hash)
+        growth_records = []
+        for item in growth or []:
+            growth_record = self.propose_growth(
+                kind=str(item.get("kind", "memory")),
+                summary=str(item.get("summary", "")),
+                identity_impact=str(item.get("identity_impact", "low")),
+                evidence_refs=[str(ref) for ref in item.get("evidence_refs", [])],
+                source_event_ids=source_event_ids,
+                reason=str(item.get("reason", "")),
+            )
+            growth_records.append(growth_record)
         signal_result = self.csm_bridge.record_monitor_result(
             csm_result or {"state": "GREEN"},
             reason="Lucien governed turn CSM result",
@@ -155,6 +190,7 @@ class LucienGovernedRuntime:
             input_event=input_event,
             memory_event=memory_event,
             tool_event=tool_event,
+            growth_records=growth_records,
             signal_result=signal_result,
             output_envelope=output_envelope,
         )

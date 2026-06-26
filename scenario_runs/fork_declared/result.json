@@ -57,6 +57,7 @@
   },
   "summary": {
     "active_followups": 0,
+    "active_growth_count": 0,
     "anchor_valid": null,
     "blocking_followups": 0,
     "chain_valid": true,
@@ -64,6 +65,7 @@
     "current_recovery_status": null,
     "event_count": 6,
     "followup_count": 0,
+    "growth_count": 0,
     "identity_state": "forked",
     "ledger_path": "scenario_runs/fork_declared/continuity.log",
     "name": "Lucien Persistence Kernel",
@@ -73,7 +75,7 @@
     "reasons": [
       "ledger contains an identity fork event"
     ],
-    "recorded_claim_id": "claim_ca6c0b71-a560-4dde-98a5-b05a77f16fca",
+    "recorded_claim_id": "claim_856f0304-92e6-4ce0-bb24-1c6916ee4774",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

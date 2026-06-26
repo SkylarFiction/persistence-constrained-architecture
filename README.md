@@ -72,6 +72,9 @@ what move the claim to `continuity_break`.
 - `LucienGovernedRuntime`: records Lucien turns as privacy-conscious input, memory,
   tool, CSM, and output-gate events so a running Lucien-style loop can be governed by
   PCA.
+- `GrowthRecord`: lets Lucien propose, accept, reject, or review learned memories,
+  commitments, skills, preferences, policies, and identity-impacting changes without
+  storing raw learned text in the ledger.
 - `CSMRuntimeBridge`: connects Lucien-style CSM monitor results and hard-kill audit
   logs to PCA continuity events.
 - `PCAOutputWrapper`: gates outbound text and writes privacy-conscious audit events
@@ -165,6 +168,8 @@ python3 pca_cli.py dashboard --html reports/pca_dashboard.html
 python3 pca_cli.py transform version_update --evidence change_summary=no_identity_invariant_changed
 python3 pca_cli.py fork lucien-branch-a --reason sandboxed_identity_experiment
 python3 pca_cli.py lineage
+python3 pca_cli.py propose-growth memory --summary "User prefers governed learning" --impact low
+python3 pca_cli.py growth
 ```
 
 Scenario outputs are written to `scenario_runs/<scenario_id>/`:

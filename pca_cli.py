@@ -37,9 +37,13 @@ from pca import (
     find_followup,
     find_recovery,
     followups_from_events,
+    growth_records_from_events,
     lineage_records,
+    accept_growth,
+    propose_growth,
     record_claim_if_changed,
     recovery_records_from_events,
+    reject_growth,
     safe_load_policy_directory,
     safe_load_policy_pack,
     write_dashboard_html,
@@ -157,6 +161,29 @@ def main() -> int:
     subparsers.add_parser("speak-gate")
     subparsers.add_parser("seed-required")
     subparsers.add_parser("lineage")
+
+    growth_parser = subparsers.add_parser("growth")
+    growth_parser.add_argument("--status")
+
+    propose_growth_parser = subparsers.add_parser("propose-growth")
+    propose_growth_parser.add_argument("kind")
+    propose_growth_parser.add_argument("--summary", required=True)
+    propose_growth_parser.add_argument("--impact", default="low")
+    propose_growth_parser.add_argument("--reason", default="")
+    propose_growth_parser.add_argument(
+        "--evidence-ref",
+        action="append",
+        default=[],
+        help="Evidence reference id or URI. May be repeated.",
+    )
+
+    accept_growth_parser = subparsers.add_parser("accept-growth")
+    accept_growth_parser.add_argument("growth_id")
+    accept_growth_parser.add_argument("--reason", default="")
+
+    reject_growth_parser = subparsers.add_parser("reject-growth")
+    reject_growth_parser.add_argument("growth_id")
+    reject_growth_parser.add_argument("--reason", default="")
 
     anchor_parser = subparsers.add_parser("anchor-head")
     anchor_parser.add_argument("--authority", default="local_operator")
@@ -488,6 +515,52 @@ def main() -> int:
                 ],
             }
         )
+        return 0
+
+    if args.command == "growth":
+        records = growth_records_from_events(ledger.events())
+        if args.status:
+            records = [record for record in records if record.status.value == args.status]
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "count": len(records),
+                "growth": [record.to_dict() for record in records],
+            }
+        )
+        return 0
+
+    if args.command == "propose-growth":
+        record = propose_growth(
+            ledger=ledger,
+            identity_id=manifest.system_id,
+            kind=args.kind,
+            summary=args.summary,
+            identity_impact=args.impact,
+            evidence_refs=args.evidence_ref,
+            reason=args.reason,
+        )
+        print_json({"growth": record.to_dict()})
+        return 0
+
+    if args.command == "accept-growth":
+        record = accept_growth(
+            ledger=ledger,
+            identity_id=manifest.system_id,
+            growth_id=args.growth_id,
+            reason=args.reason,
+        )
+        print_json({"growth": record.to_dict()})
+        return 0
+
+    if args.command == "reject-growth":
+        record = reject_growth(
+            ledger=ledger,
+            identity_id=manifest.system_id,
+            growth_id=args.growth_id,
+            reason=args.reason,
+        )
+        print_json({"growth": record.to_dict()})
         return 0
 
     if args.command == "runtime-signal":

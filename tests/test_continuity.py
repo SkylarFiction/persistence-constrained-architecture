@@ -16,6 +16,7 @@ from pca import (
     EVALUATION_PRECEDENCE,
     FollowUpRecord,
     FollowUpStatus,
+    GrowthStatus,
     IdentityManifest,
     IdentityState,
     LucienGovernedRuntime,
@@ -42,7 +43,9 @@ from pca import (
     continuity_claim_from_followups,
     current_claim_record,
     derive_current_claim,
+    accept_growth,
     export_latest_anchor,
+    growth_records_from_events,
     load_policy_directory,
     load_policy_pack,
     lineage_records,
@@ -52,6 +55,7 @@ from pca import (
     render_trace_report_html,
     recovery_records_from_events,
     safe_load_policy_pack,
+    propose_growth,
     verify_latest_anchor,
 )
 
@@ -1357,16 +1361,26 @@ def test_lucien_governed_runtime_records_private_turn_and_allows_green_output(tm
         tool_result_summary="Sensitive tool result phrase.",
         csm_result={"state": "GREEN", "RTI": 0.7},
         draft_response="I can continue under PCA governance.",
+        growth=[
+            {
+                "kind": "memory",
+                "summary": "Private learned preference.",
+                "identity_impact": "low",
+            }
+        ],
     )
     serialized_events = json.dumps([event.to_dict() for event in ledger.events()])
 
     assert result.output_envelope.decision.allowed is True
+    assert len(result.growth_records) == 1
+    assert result.growth_records[0].status == GrowthStatus.PROPOSED
     assert result.input_event.event_type == "lucien.input"
     assert result.memory_event.event_type == "lucien.memory_digest"
     assert result.tool_event.event_type == "lucien.tool_use"
     assert "Remember this private request" not in serialized_events
     assert "Private continuity preference" not in serialized_events
     assert "Sensitive tool result phrase" not in serialized_events
+    assert "Private learned preference" not in serialized_events
 
 
 def test_lucien_governed_runtime_blocks_red_identity_output(tmp_path):
@@ -1398,6 +1412,48 @@ def test_lucien_governed_runtime_blocks_red_identity_output(tmp_path):
     assert result.output_envelope.decision.text == (
         "Continuity is broken; recovery/status only."
     )
+
+
+def test_growth_records_can_be_proposed_and_accepted(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    growth = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="skill",
+        summary="Sensitive new skill description.",
+        identity_impact="medium",
+        reason="learned from supervised session",
+    )
+    accepted = accept_growth(
+        ledger,
+        manifest.system_id,
+        growth.growth_id,
+        reason="reviewed and accepted",
+    )
+    records = growth_records_from_events(ledger.events())
+    serialized_events = json.dumps([event.to_dict() for event in ledger.events()])
+
+    assert accepted.status == GrowthStatus.ACCEPTED
+    assert records[0].status == GrowthStatus.ACCEPTED
+    assert "Sensitive new skill description" not in serialized_events
+
+
+def test_identity_defining_growth_requires_review(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    growth = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="identity",
+        summary="Change the definition of Lucien continuity.",
+        identity_impact="identity_defining",
+        reason="identity-impacting learning must be reviewed",
+    )
+
+    assert growth.status == GrowthStatus.REQUIRES_REVIEW
 
 
 def test_trace_report_summarizes_runtime_lifecycle(tmp_path):
@@ -1475,3 +1531,4 @@ def test_dashboard_renders_runtime_lifecycle(tmp_path):
     assert "Lineage" in html
     assert "Authorization Attempts" in html
     assert "Policy Errors" in html
+    assert "Growth Records" in html

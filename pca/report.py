@@ -10,6 +10,7 @@ from .anchors import verify_latest_anchor
 from .claims import claims_from_events, current_claim_record
 from .evaluator import EVALUATION_PRECEDENCE, ContinuityEvaluator
 from .followups import active_followups, followups_from_events
+from .growth import active_growth_records, growth_records_from_events
 from .ledger import ContinuityEvent, ContinuityLedger
 from .lineage import lineage_records
 from .manifest import IdentityManifest
@@ -25,6 +26,8 @@ IMPORTANT_EVENT_TYPES = {
     "lucien.input",
     "lucien.memory_digest",
     "lucien.tool_use",
+    "lucien.growth_proposed",
+    "lucien.growth_updated",
     "runtime.csm_state",
     "runtime.output_gate",
     "transform.evaluated",
@@ -50,6 +53,8 @@ class TraceReport:
     recovery_records: list[dict[str, Any]]
     lineage: list[dict[str, Any]]
     authorization_checks: list[dict[str, Any]]
+    growth_records: list[dict[str, Any]]
+    active_growth: list[dict[str, Any]]
     policy_errors: list[str]
     anchor_verification: dict[str, Any] | None = None
 
@@ -65,6 +70,8 @@ class TraceReport:
             "recovery_records": self.recovery_records,
             "lineage": self.lineage,
             "authorization_checks": self.authorization_checks,
+            "growth_records": self.growth_records,
+            "active_growth": self.active_growth,
             "policy_errors": self.policy_errors,
             "anchor_verification": self.anchor_verification,
         }
@@ -112,6 +119,11 @@ def _event_summary(event: ContinuityEvent) -> str:
             f"tool={payload.get('tool_name')} "
             f"purpose={payload.get('purpose')}"
         )
+    if event.event_type in {"lucien.growth_proposed", "lucien.growth_updated"}:
+        return (
+            f"kind={payload.get('kind')} status={payload.get('status')} "
+            f"impact={payload.get('identity_impact')}"
+        )
     if event.event_type == "transform.evaluated":
         return (
             f"transform={payload.get('transform')} "
@@ -150,6 +162,8 @@ def build_trace_report(
     current_recovery = current_recovery_record(events)
     followups = followups_from_events(events)
     recoveries = recovery_records_from_events(events)
+    growth_records = growth_records_from_events(events)
+    active_growth = active_growth_records(events)
     active_followup_records = active_followups(events)
     anchor_verification = (
         verify_latest_anchor(ledger, anchor_path).to_dict()
@@ -176,6 +190,8 @@ def build_trace_report(
         "active_followups": len(active_followups(events)),
         "followup_count": len(followups),
         "recovery_count": len(recoveries),
+        "growth_count": len(growth_records),
+        "active_growth_count": len(active_growth),
         "current_recovery_status": (
             current_recovery.status.value if current_recovery is not None else None
         ),
@@ -244,6 +260,8 @@ def build_trace_report(
             for event in events
             if event.event_type == "authorization_check"
         ],
+        growth_records=[record.to_dict() for record in growth_records],
+        active_growth=[record.to_dict() for record in active_growth],
         policy_errors=manifest.policy_errors,
         anchor_verification=anchor_verification,
     )

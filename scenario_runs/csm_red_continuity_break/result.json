@@ -65,6 +65,7 @@
   },
   "summary": {
     "active_followups": 0,
+    "active_growth_count": 0,
     "anchor_valid": null,
     "blocking_followups": 0,
     "chain_valid": true,
@@ -72,6 +73,7 @@
     "current_recovery_status": null,
     "event_count": 7,
     "followup_count": 0,
+    "growth_count": 0,
     "identity_state": "broken",
     "ledger_path": "scenario_runs/csm_red_continuity_break/continuity.log",
     "name": "Lucien Persistence Kernel",
@@ -81,7 +83,7 @@
     "reasons": [
       "hard constraint breached: runtime_csm_red"
     ],
-    "recorded_claim_id": "claim_783dd121-5cee-4a78-ad31-51b28b176158",
+    "recorded_claim_id": "claim_18cbc5c6-67d3-44f5-888c-6f29e96cb3c2",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",
