@@ -41,6 +41,7 @@ from pca import (
     build_manifest_from_packs,
     build_manifest_from_policy_results,
     claims_from_events,
+    compile_self_model,
     continuity_claim_from_followups,
     current_claim_record,
     derive_current_claim,
@@ -1468,6 +1469,35 @@ def test_accepted_growth_updates_derived_self_model(tmp_path):
     assert "User prefers direct continuity status summaries" not in json.dumps(
         self_model.to_dict()
     )
+
+
+def test_compiled_self_model_is_evidence_linked_without_raw_text(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    growth = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="memory",
+        summary="Private memory summary should stay out of compiled model.",
+        identity_impact="low",
+        evidence_refs=["ev_private_memory"],
+        reason="accepted memory test",
+    )
+    accept_growth(
+        ledger,
+        manifest.system_id,
+        growth.growth_id,
+        reason="reviewed",
+    )
+    compiled = compile_self_model(
+        derive_self_model(ledger.events(), manifest.system_id)
+    )
+
+    assert "Lucien Self-Model" in compiled
+    assert growth.growth_id in compiled
+    assert "ev_private_memory" in compiled
+    assert "Private memory summary" not in compiled
 
 
 def test_broken_continuity_blocks_accepting_growth(tmp_path):

@@ -32,6 +32,7 @@ from pca import (
     build_manifest_from_policy_results,
     build_trace_report,
     claims_from_events,
+    compile_self_model,
     current_claim_record,
     current_recovery_record,
     derive_self_model,
@@ -164,7 +165,9 @@ def main() -> int:
     subparsers.add_parser("speak-gate")
     subparsers.add_parser("seed-required")
     subparsers.add_parser("lineage")
-    subparsers.add_parser("self-model")
+    self_model_parser = subparsers.add_parser("self-model")
+    self_model_parser.add_argument("--compile", action="store_true")
+    self_model_parser.add_argument("--output")
 
     growth_gate_parser = subparsers.add_parser("growth-gate")
     growth_gate_parser.add_argument(
@@ -529,14 +532,18 @@ def main() -> int:
         return 0
 
     if args.command == "self-model":
-        print_json(
-            {
-                "self_model": derive_self_model(
-                    ledger.events(),
-                    manifest.system_id,
-                ).to_dict()
-            }
+        self_model = derive_self_model(
+            ledger.events(),
+            manifest.system_id,
         )
+        if args.compile:
+            compiled = compile_self_model(self_model)
+            if args.output:
+                Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+                Path(args.output).write_text(compiled, encoding="utf-8")
+            print(compiled, end="")
+            return 0
+        print_json({"self_model": self_model.to_dict()})
         return 0
 
     if args.command == "growth-gate":

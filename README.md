@@ -80,6 +80,8 @@ what move the claim to `continuity_break`.
 - `SelfModel`: derives Lucien's accepted memories, commitments, skills,
   preferences, policies, and identity-impacting changes from accepted growth
   records.
+- `SelfModelCompiler`: renders accepted growth into an evidence-linked review
+  artifact without inventing raw memory prose.
 - `LucienChatShell`: a tiny persistent conversational shell that loads continuity
   state, derives the self-model, classifies possible growth, sends growth through
   the Growth Gate, emits governed output, and refreshes a dashboard.
@@ -180,6 +182,7 @@ python3 pca_cli.py propose-growth memory --summary "User prefers governed learni
 python3 pca_cli.py growth-gate accept --impact medium
 python3 pca_cli.py growth
 python3 pca_cli.py self-model
+python3 pca_cli.py self-model --compile --output reports/lucien_self_model.txt
 python3 lucien_chat.py --seed-required --message "Remember that PCA learning must be governed."
 ```
 

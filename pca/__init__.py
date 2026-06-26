@@ -119,7 +119,7 @@ from .scenarios import (
     verify_scenario,
     write_demo_index,
 )
-from .self_model import SelfModel, derive_self_model
+from .self_model import SelfModel, compile_self_model, derive_self_model
 from .state import (
     default_claim_for_identity_state,
     derive_current_claim,
@@ -197,6 +197,7 @@ __all__ = [
     "build_trace_report",
     "claim_reason",
     "claims_from_events",
+    "compile_self_model",
     "continuity_claim_from_followups",
     "current_claim_record",
     "current_recovery_record",

@@ -150,6 +150,11 @@ skill, preference, policy, and identity, while preserving the same privacy rule:
 raw learned text is not stored, only hashes, lengths, evidence references, impact,
 and reasons.
 
+The self-model compiler renders that derived state into a reviewable text artifact.
+Because raw growth summaries are not stored, the compiler does not invent prose
+memories. It lists accepted records by kind with impact level, summary hash, length,
+evidence references, and acceptance reason.
+
 ## Output Gate
 
 The output gate maps the active continuity claim to allowed speech behavior:
