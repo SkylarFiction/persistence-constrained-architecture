@@ -24,7 +24,7 @@ def _run_step(name: str, fn) -> bool:
 
 
 def _compile_project() -> int:
-    paths = ["pca", "pca_cli.py", "scripts", "tests"]
+    paths = ["pca", "lucien", "pca_cli.py", "lucien_chat.py", "scripts", "tests"]
     ok = all(
         compileall.compile_file(path, quiet=1)
         if Path(path).is_file()

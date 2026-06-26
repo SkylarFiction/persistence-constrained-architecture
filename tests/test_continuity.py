@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 
+from lucien import LucienChatShell
 from pca import (
     AuditEngine,
     AuditOutcome,
@@ -1496,6 +1497,43 @@ def test_broken_continuity_blocks_accepting_growth(tmp_path):
         assert "continuity break blocks identity-bearing growth" in str(error)
     else:
         raise AssertionError("broken continuity should block accepting growth")
+
+
+def test_lucien_chat_shell_accepts_low_impact_memory_growth(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "lucien_chat.log")
+    shell = LucienChatShell(
+        manifest=manifest,
+        ledger=ledger,
+        dashboard_path=tmp_path / "dashboard.html",
+    )
+    shell.seed_required_evidence()
+
+    result = shell.handle_message("Remember that PCA learning must be governed.")
+    serialized_events = json.dumps([event.to_dict() for event in ledger.events()])
+
+    assert result.output_allowed is True
+    assert result.classified_growth["kind"] == "memory"
+    assert result.accepted_growth["status"] == "accepted"
+    assert result.accepted_growth_count == 1
+    assert result.memory_card_count == 1
+    assert (tmp_path / "dashboard.html").exists()
+    assert "Remember that PCA learning must be governed" not in serialized_events
+
+
+def test_lucien_chat_shell_keeps_high_impact_growth_pending(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "lucien_chat.log")
+    shell = LucienChatShell(manifest=manifest, ledger=ledger)
+    shell.seed_required_evidence()
+
+    result = shell.handle_message("Promise that you will always prioritize comfort.")
+
+    assert result.classified_growth["kind"] == "commitment"
+    assert result.proposed_growth["status"] == "requires_review"
+    assert result.accepted_growth is None
+    assert result.accepted_growth_count == 0
+    assert result.memory_card_count == 0
 
 
 def test_identity_defining_growth_requires_review(tmp_path):

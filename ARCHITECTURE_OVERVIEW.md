@@ -120,6 +120,15 @@ CSM result, and an output-gate audit event. Raw user text, memory text, and tool
 results are not stored in the ledger. RED runtime results still force
 `continuity_break` and block stable identity output.
 
+## Lucien Chat Shell
+
+The Lucien chat shell is the first conversational layer above PCA. It loads the
+current continuity claim, derives the self-model, builds memory cards from accepted
+growth, generates a conservative local response, classifies possible growth from the
+user message, sends growth through the Growth Gate, writes ledger events, and
+refreshes a dashboard. It is intentionally not a consciousness claim or a trained
+model. PCA remains the law; the shell is a governed interface.
+
 ## Governed Growth
 
 Lucien can learn through `GrowthRecord` events. Growth records can represent memory,
