@@ -33,6 +33,7 @@ from pca import (
     current_claim_record,
     current_recovery_record,
     derive_current_claim,
+    export_latest_anchor,
     find_followup,
     find_recovery,
     followups_from_events,
@@ -162,6 +163,13 @@ def main() -> int:
     anchor_parser.add_argument("--note", default="")
 
     subparsers.add_parser("verify-anchor")
+
+    export_anchor_parser = subparsers.add_parser("export-anchor")
+    export_anchor_parser.add_argument(
+        "--output",
+        default="reports/latest_anchor.json",
+        help="Write the latest anchor verification checkpoint to this JSON file.",
+    )
 
     report_parser = subparsers.add_parser("trace-report")
     report_parser.add_argument(
@@ -340,6 +348,20 @@ def main() -> int:
             {
                 "anchor_path": args.anchors,
                 **verification.to_dict(),
+            }
+        )
+        return 0
+
+    if args.command == "export-anchor":
+        export = export_latest_anchor(
+            ledger=ledger,
+            anchor_path=args.anchors,
+            output_path=args.output,
+        )
+        print_json(
+            {
+                "output": args.output,
+                **export.to_dict(),
             }
         )
         return 0

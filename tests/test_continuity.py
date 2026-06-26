@@ -41,6 +41,7 @@ from pca import (
     continuity_claim_from_followups,
     current_claim_record,
     derive_current_claim,
+    export_latest_anchor,
     load_policy_directory,
     load_policy_pack,
     lineage_records,
@@ -441,6 +442,28 @@ def test_latest_anchor_detects_later_ledger_change(tmp_path):
     assert verification.valid is False
     assert "ledger head hash does not match latest anchor" in verification.reasons
     assert "ledger event count does not match latest anchor" in verification.reasons
+
+
+def test_anchor_export_writes_portable_checkpoint(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "ledger_integrity", "value": True},
+    )
+    anchor_path = tmp_path / "anchors.log"
+    append_ledger_anchor(ledger, anchor_path, authority="root_authority")
+    output_path = tmp_path / "latest_anchor.json"
+
+    export = export_latest_anchor(ledger, anchor_path, output_path)
+    exported = json.loads(output_path.read_text(encoding="utf-8"))
+
+    assert export.export_hash
+    assert exported["export_hash"] == export.export_hash
+    assert exported["verification"]["valid"] is True
+    assert exported["verification"]["latest_anchor"]["head_hash"] == ledger.last_hash()
+    assert exported["verification"]["current_event_count"] == 1
 
 
 def test_hard_breach_cannot_be_followed_by_certified_claim(tmp_path):

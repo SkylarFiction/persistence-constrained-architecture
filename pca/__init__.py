@@ -6,9 +6,11 @@ from .audits import (
     required_checks_for_audit,
 )
 from .anchors import (
+    AnchorExport,
     AnchorVerification,
     LedgerAnchorRecord,
     append_ledger_anchor,
+    export_latest_anchor,
     load_anchor_records,
     verify_anchor_chain,
     verify_latest_anchor,
@@ -119,6 +121,7 @@ __all__ = [
     "AuditEngine",
     "AuditOutcome",
     "AuditRecord",
+    "AnchorExport",
     "AnchorVerification",
     "AuthorizationCheckRecord",
     "AuthorityClass",
@@ -169,6 +172,7 @@ __all__ = [
     "current_recovery_record",
     "default_claim_for_identity_state",
     "derive_current_claim",
+    "export_latest_anchor",
     "find_followup",
     "find_recovery",
     "followups_from_events",

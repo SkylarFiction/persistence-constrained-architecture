@@ -53,6 +53,8 @@ what move the claim to `continuity_break`.
   fork the hash chain.
 - `LedgerAnchorRecord`: exports the current ledger head into a separate hash-chained
   anchor log so later verification can detect drift from the anchored head.
+- `AnchorExport`: writes a portable JSON checkpoint containing the latest anchor
+  verification and export hash for review packets or external notarization.
 - `ContinuityEvaluator`: classifies the current identity state from ledger evidence,
   including stale required evidence checks when freshness windows are declared.
 - `PolicyEngine`: evaluates whether identity-relevant transforms are admissible.
@@ -138,6 +140,7 @@ python3 pca_cli.py seed-required
 python3 pca_cli.py status
 python3 pca_cli.py anchor-head --authority root_authority --note release_checkpoint
 python3 pca_cli.py verify-anchor
+python3 pca_cli.py export-anchor --output reports/latest_anchor.json
 python3 pca_cli.py --policies policies/ transform substrate_migration
 python3 pca_cli.py --policy-pack policies/substrate.json transform substrate_migration
 python3 pca_cli.py --policies policies/ transform substrate_migration --override emergency --authority operator

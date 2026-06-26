@@ -25,6 +25,11 @@ ledger still matches the latest anchored head. This is not external notarization
 yet, but it creates the boundary where signed heads, timestamping, WORM storage, or
 public release anchors can attach.
 
+`export-anchor` writes a portable JSON checkpoint containing the latest anchor
+verification, current ledger head, event count, anchor record, and export hash. That
+file is the natural artifact to copy into a release, review bundle, or later
+notarization workflow.
+
 ## Continuity Evaluator
 
 The evaluator reads the manifest and ledger and classifies the identity state as

@@ -122,6 +122,50 @@ class AnchorVerification:
         }
 
 
+@dataclass(frozen=True)
+class AnchorExport:
+    exported_at: str
+    anchor_path: str
+    verification: AnchorVerification
+    export_hash: str = ""
+
+    @classmethod
+    def create(
+        cls,
+        anchor_path: str | Path,
+        verification: AnchorVerification,
+    ) -> "AnchorExport":
+        export = cls(
+            exported_at=datetime.now(timezone.utc).isoformat(),
+            anchor_path=str(anchor_path),
+            verification=verification,
+        )
+        return export.with_hash()
+
+    def hash_payload(self) -> dict[str, Any]:
+        return {
+            "exported_at": self.exported_at,
+            "anchor_path": self.anchor_path,
+            "verification": self.verification.to_dict(),
+        }
+
+    def with_hash(self) -> "AnchorExport":
+        export_hash = hashlib.sha256(
+            _canonical_json(self.hash_payload()).encode("utf-8")
+        ).hexdigest()
+        return AnchorExport(
+            exported_at=self.exported_at,
+            anchor_path=self.anchor_path,
+            verification=self.verification,
+            export_hash=export_hash,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        data = self.hash_payload()
+        data["export_hash"] = self.export_hash
+        return data
+
+
 def load_anchor_records(path: str | Path) -> list[LedgerAnchorRecord]:
     anchor_path = Path(path)
     if not anchor_path.exists():
@@ -199,3 +243,21 @@ def verify_latest_anchor(
         current_head_hash=current_head_hash,
         current_event_count=current_event_count,
     )
+
+
+def export_latest_anchor(
+    ledger: ContinuityLedger,
+    anchor_path: str | Path,
+    output_path: str | Path,
+) -> AnchorExport:
+    export = AnchorExport.create(
+        anchor_path=anchor_path,
+        verification=verify_latest_anchor(ledger, anchor_path),
+    )
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(export.to_dict(), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return export
