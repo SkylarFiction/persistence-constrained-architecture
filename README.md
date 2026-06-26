@@ -27,7 +27,9 @@ identity is allowed to make, why that claim is allowed, what evidence supports i
 and what prior claim it supersedes.
 Policy Packs make PCA modular. Each pack defines the evidence, risk, denial rules,
 follow-up obligations, and audit expectations for one identity-risk domain. Missing
-policy does not mean permission. Missing policy means denial.
+policy does not mean permission. Missing policy means denial. Malformed policy is
+also fail-closed: bad packs are carried as policy errors on the active manifest, and
+identity-changing transforms are denied until the policy set is repaired.
 
 In v0.1, PCA does not compute every persistence metric internally. Runtime measures
 such as RTI are treated as monitor outputs from an external CSM-style classifier.

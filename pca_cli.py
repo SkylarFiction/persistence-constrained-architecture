@@ -26,7 +26,7 @@ from pca import (
     TransformRequest,
     authorization_policy_from_packs,
     authorize,
-    build_manifest_from_packs,
+    build_manifest_from_policy_results,
     build_trace_report,
     claims_from_events,
     current_claim_record,
@@ -36,10 +36,10 @@ from pca import (
     find_recovery,
     followups_from_events,
     lineage_records,
-    load_policy_directory,
-    load_policy_pack,
     record_claim_if_changed,
     recovery_records_from_events,
+    safe_load_policy_directory,
+    safe_load_policy_pack,
     write_dashboard_html,
     write_trace_report_html,
 )
@@ -54,15 +54,16 @@ def apply_policy_packs(
     policy_pack_paths: list[str],
     policy_directories: list[str],
 ) -> tuple[IdentityManifest, AuthorizationPolicy]:
-    packs = []
+    results = []
     for directory in policy_directories:
-        packs.extend(load_policy_directory(directory))
+        results.extend(safe_load_policy_directory(directory))
     for policy_pack_path in policy_pack_paths:
-        packs.append(load_policy_pack(policy_pack_path))
+        results.append(safe_load_policy_pack(policy_pack_path))
+    packs = [result.pack for result in results if result.valid and result.pack]
     authorization_policy = authorization_policy_from_packs(packs)
-    if not packs:
+    if not results:
         return manifest, authorization_policy
-    return build_manifest_from_packs(manifest, packs), authorization_policy
+    return build_manifest_from_policy_results(manifest, results), authorization_policy
 
 
 def print_json(data: dict) -> None:

@@ -136,6 +136,24 @@ class PolicyEngine:
         manifest: IdentityManifest,
         request: TransformRequest,
     ) -> TransformEvaluation:
+        if manifest.policy_errors:
+            return TransformEvaluation(
+                decision=PolicyDecision.DENY,
+                reasons=[
+                    f"policy set invalid: {error}"
+                    for error in manifest.policy_errors
+                ],
+                provided_evidence=sorted(request.evidence),
+                identity_risk=IdentityRisk.CONTINUITY_BREAK,
+                continuity_status=ContinuityStatus.UNCERTIFIED,
+                source_policy_pack="invalid_policy",
+                override_allowed=False,
+                reason=(
+                    "Policy pack loading failed; identity-changing transforms "
+                    "fail closed until policy errors are resolved."
+                ),
+            )
+
         policy = manifest.transform_policy(request.transform)
         if policy is None:
             return TransformEvaluation(

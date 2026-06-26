@@ -46,6 +46,10 @@ Policy packs define modular governance rules for domains such as memory, substra
 lineage, authorization, and recovery. A policy pack can require evidence, set risk
 levels, deny missing proof, permit or forbid override, and require follow-up audits.
 
+Policy loading is fail-closed. Malformed policy packs produce explicit policy
+errors on the active manifest. While those errors are present, identity-changing
+transform evaluations return `deny` with `invalid_policy` as the source.
+
 ## Policy Engine
 
 The policy engine evaluates proposed transformations against the active manifest and

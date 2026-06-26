@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 import json
 from pathlib import Path
 from typing import Any
@@ -23,6 +23,20 @@ DECISION_ORDER = {
 }
 
 
+@dataclass(frozen=True)
+class PolicyPackLoadResult:
+    source: str
+    pack: dict[str, Any] | None = None
+    errors: list[str] = field(default_factory=list)
+
+    @property
+    def valid(self) -> bool:
+        return self.pack is not None and not self.errors
+
+    def error_messages(self) -> list[str]:
+        return list(self.errors or [])
+
+
 def load_policy_pack(path: str | Path) -> dict[str, Any]:
     pack_path = Path(path)
     pack = json.loads(pack_path.read_text(encoding="utf-8"))
@@ -38,7 +52,40 @@ def load_policy_directory(path: str | Path) -> list[dict[str, Any]]:
     ]
 
 
+def safe_load_policy_pack(path: str | Path) -> PolicyPackLoadResult:
+    pack_path = Path(path)
+    source = str(pack_path)
+    try:
+        pack = json.loads(pack_path.read_text(encoding="utf-8"))
+        validate_policy_pack(pack, source)
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+        return PolicyPackLoadResult(
+            source=source,
+            pack=None,
+            errors=[f"{source}: {error}"],
+        )
+    return PolicyPackLoadResult(source=source, pack=pack, errors=[])
+
+
+def safe_load_policy_directory(path: str | Path) -> list[PolicyPackLoadResult]:
+    directory = Path(path)
+    if not directory.exists():
+        return [
+            PolicyPackLoadResult(
+                source=str(directory),
+                pack=None,
+                errors=[f"{directory}: policy directory does not exist"],
+            )
+        ]
+    return [
+        safe_load_policy_pack(pack_path)
+        for pack_path in sorted(directory.glob("*.json"))
+    ]
+
+
 def validate_policy_pack(pack: dict[str, Any], source: str = "<memory>") -> None:
+    if not isinstance(pack, dict):
+        raise ValueError(f"Policy pack must be an object: {source}")
     if "pack_id" not in pack:
         raise ValueError(f"Policy pack missing pack_id: {source}")
     if "transforms" not in pack:
@@ -78,7 +125,27 @@ def build_manifest_from_packs(
         base_manifest,
         allowed_transforms=[policy.name for policy in pack_policies],
         transform_policies=pack_policies,
+        policy_errors=[],
     )
+
+
+def build_manifest_from_policy_results(
+    base_manifest: IdentityManifest,
+    results: list[PolicyPackLoadResult],
+) -> IdentityManifest:
+    packs = [result.pack for result in results if result.valid and result.pack]
+    errors = [
+        error
+        for result in results
+        for error in result.error_messages()
+    ]
+    if not packs:
+        return replace(
+            base_manifest,
+            policy_errors=errors,
+        )
+    manifest = build_manifest_from_packs(base_manifest, packs)
+    return replace(manifest, policy_errors=errors)
 
 
 def authorization_policy_from_packs(

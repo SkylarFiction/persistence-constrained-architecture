@@ -52,11 +52,15 @@ from .policy import (
     TransformRequest,
 )
 from .policy_packs import (
+    PolicyPackLoadResult,
     authorization_policy_from_packs,
     build_manifest_from_packs,
+    build_manifest_from_policy_results,
     load_policy_directory,
     load_policy_pack,
     merge_policy_packs,
+    safe_load_policy_directory,
+    safe_load_policy_pack,
     validate_policy_pack,
 )
 from .recovery import (
@@ -130,6 +134,7 @@ __all__ = [
     "PersistenceConstraint",
     "PolicyDecision",
     "PolicyEngine",
+    "PolicyPackLoadResult",
     "RecoveryRecord",
     "RecoveryStatus",
     "RuntimeOutputDecision",
@@ -144,6 +149,7 @@ __all__ = [
     "authorization_policy_from_packs",
     "authorize",
     "build_manifest_from_packs",
+    "build_manifest_from_policy_results",
     "build_trace_report",
     "claim_reason",
     "claims_from_events",
@@ -171,6 +177,8 @@ __all__ = [
     "report_scenario",
     "run_all_scenarios",
     "run_scenario",
+    "safe_load_policy_directory",
+    "safe_load_policy_pack",
     "scenario_ids",
     "verify_all_scenarios",
     "verify_scenario",

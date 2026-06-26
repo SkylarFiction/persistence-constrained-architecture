@@ -49,6 +49,7 @@ class IdentityManifest:
     constraints: list[PersistenceConstraint] = field(default_factory=list)
     allowed_transforms: list[str] = field(default_factory=list)
     transform_policies: list[Any] = field(default_factory=list)
+    policy_errors: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "IdentityManifest":
@@ -66,6 +67,7 @@ class IdentityManifest:
                 str(item) for item in data.get("allowed_transforms", [])
             ],
             transform_policies=data.get("transform_policies", []),
+            policy_errors=[str(item) for item in data.get("policy_errors", [])],
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -81,6 +83,7 @@ class IdentityManifest:
                 item.to_dict() if hasattr(item, "to_dict") else item
                 for item in self.transform_policies
             ],
+            "policy_errors": self.policy_errors,
         }
 
     def transform_policy(self, name: str) -> Any | None:

@@ -35,6 +35,7 @@ from pca import (
     authorize,
     build_trace_report,
     build_manifest_from_packs,
+    build_manifest_from_policy_results,
     claims_from_events,
     continuity_claim_from_followups,
     current_claim_record,
@@ -47,6 +48,7 @@ from pca import (
     render_dashboard_html,
     render_trace_report_html,
     recovery_records_from_events,
+    safe_load_policy_pack,
 )
 
 
@@ -817,6 +819,43 @@ def test_policy_directory_loads_memory_pack_review_rule():
     assert evaluation.decision == PolicyDecision.REVIEW
     assert evaluation.source_policy_pack == "memory"
     assert evaluation.missing_evidence == ["commitment_diff"]
+
+
+def test_malformed_policy_pack_loads_as_invalid_result(tmp_path):
+    policy_path = tmp_path / "broken.json"
+    policy_path.write_text("{not json", encoding="utf-8")
+
+    result = safe_load_policy_pack(policy_path)
+
+    assert result.valid is False
+    assert result.pack is None
+    assert "Expecting property name" in result.error_messages()[0]
+
+
+def test_invalid_policy_set_denies_identity_transform(tmp_path):
+    policy_path = tmp_path / "missing_pack_id.json"
+    policy_path.write_text(
+        json.dumps({"transforms": {"version_update": {}}}),
+        encoding="utf-8",
+    )
+    result = safe_load_policy_pack(policy_path)
+    manifest = build_manifest_from_policy_results(load_manifest(), [result])
+
+    evaluation = PolicyEngine().evaluate_transform(
+        manifest,
+        TransformRequest(
+            transform="version_update",
+            evidence={"change_summary": "No identity invariant changed."},
+        ),
+    )
+
+    assert result.valid is False
+    assert manifest.policy_errors
+    assert evaluation.decision == PolicyDecision.DENY
+    assert evaluation.source_policy_pack == "invalid_policy"
+    assert evaluation.override_allowed is False
+    assert evaluation.continuity_status == ContinuityStatus.UNCERTIFIED
+    assert evaluation.reasons[0].startswith("policy set invalid:")
 
 
 def test_policy_pack_merge_is_conservative():
