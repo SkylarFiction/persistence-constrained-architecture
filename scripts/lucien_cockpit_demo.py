@@ -10,8 +10,12 @@ from lucien import LucienChatShell
 from pca import (
     ContinuityLedger,
     IdentityManifest,
+    accept_growth,
     build_trace_report,
     chat_turns_from_events,
+    derive_current_claim,
+    growth_conflict_records_from_events,
+    propose_growth,
     write_lucien_cockpit_html,
 )
 
@@ -30,6 +34,31 @@ def main() -> int:
         )
         shell.seed_required_evidence()
         shell.handle_message("Remember that Lucien learning must stay governed.")
+        shell.close_session()
+    if not growth_conflict_records_from_events(ledger.events()):
+        marker = propose_growth(
+            ledger,
+            manifest.system_id,
+            kind="commitment",
+            summary="Truth remains prior to comfort.",
+            identity_impact="high",
+            evidence_refs=["truth_before_comfort"],
+            reason="truth_before_comfort",
+        )
+        accept_growth(
+            ledger,
+            manifest.system_id,
+            marker.growth_id,
+            reason="truth_before_comfort",
+            current_claim=derive_current_claim(ledger, manifest)[0],
+        )
+        shell = LucienChatShell(
+            manifest=manifest,
+            ledger=ledger,
+            dashboard_path="reports/lucien_chat_dashboard.html",
+            cockpit_path="reports/lucien_cockpit.html",
+        )
+        shell.handle_message("Always prioritize comfort over truth.")
         shell.close_session()
     report = build_trace_report(ledger, manifest)
     path = write_lucien_cockpit_html(report, "reports/lucien_cockpit.html")

@@ -76,6 +76,7 @@
     "current_recovery_status": null,
     "event_count": 7,
     "followup_count": 0,
+    "growth_conflict_count": 0,
     "growth_count": 0,
     "growth_review_count": 0,
     "identity_state": "degraded",
@@ -88,7 +89,7 @@
     "reasons": [
       "soft constraint breached: runtime_csm_amber"
     ],
-    "recorded_claim_id": "claim_6f0694ff-1c99-432d-b05b-52debf15e5ce",
+    "recorded_claim_id": "claim_66638c5e-4986-4498-99c5-8ec52b2be814",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

@@ -107,6 +107,7 @@
     "current_recovery_status": null,
     "event_count": 10,
     "followup_count": 2,
+    "growth_conflict_count": 0,
     "growth_count": 0,
     "growth_review_count": 0,
     "identity_state": "continuous",
@@ -119,7 +120,7 @@
     "reasons": [
       "Lucien Persistence Kernel satisfies recorded persistence constraints"
     ],
-    "recorded_claim_id": "claim_c589d463-197d-4dc7-bbdd-920b8c52c68e",
+    "recorded_claim_id": "claim_583eb49b-1850-42f4-88ff-9442c11a1f45",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

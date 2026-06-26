@@ -74,6 +74,11 @@ from .growth import (
     reject_growth,
     review_growth,
 )
+from .growth_conflicts import (
+    GrowthConflictRecord,
+    growth_conflict_records_from_events,
+    record_growth_conflict,
+)
 from .ledger import ContinuityEvent, ContinuityLedger
 from .lineage import LineageRecord, lineage_records
 from .lucien import LucienGovernedRuntime, LucienTurnResult
@@ -169,6 +174,7 @@ __all__ = [
     "GrowthGateDecision",
     "GrowthGateMode",
     "GrowthRecord",
+    "GrowthConflictRecord",
     "GrowthReviewDecision",
     "GrowthReviewRecord",
     "GrowthStatus",
@@ -233,6 +239,7 @@ __all__ = [
     "followups_from_events",
     "growth_records_from_events",
     "growth_review_records_from_events",
+    "growth_conflict_records_from_events",
     "lineage_records",
     "load_anchor_records",
     "load_policy_directory",
@@ -245,6 +252,7 @@ __all__ = [
     "propose_growth",
     "record_claim_if_changed",
     "record_chat_turn",
+    "record_growth_conflict",
     "required_evidence_for",
     "required_checks_for_audit",
     "recovery_records_from_events",

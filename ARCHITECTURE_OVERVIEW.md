@@ -159,6 +159,14 @@ resulting status. This completes the first learning lifecycle:
 conversation -> growth proposal -> review queue -> accept/reject -> self-model update
 ```
 
+## Growth Conflict Detection
+
+Lucien can flag proposed growth that may contradict accepted commitment, policy, or
+identity markers. Because raw accepted summaries are not stored, conflict detection
+uses explicit evidence references and acceptance reasons such as
+`truth_before_comfort`. Detected conflicts are written to the ledger and prevent
+silent auto-acceptance.
+
 ## Self-Model
 
 Lucien's self-model is derived from accepted growth records. It is not a separate

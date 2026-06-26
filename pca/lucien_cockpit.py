@@ -18,6 +18,10 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         for record in data["growth_records"]
         if record["status"] in {"proposed", "requires_review"}
     ]
+    conflict_by_growth_id = {
+        conflict["proposed_growth_id"]: conflict
+        for conflict in data["growth_conflicts"]
+    }
     memory_rows = "\n".join(
         "<tr>"
         f"<td><code>{escape(_short_hash(str(card['memory_id'])))}</code></td>"
@@ -34,10 +38,20 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         f"<td>{escape(str(record['status']))}</td>"
         f"<td>{escape(str(record['identity_impact']))}</td>"
         f"<td><code>{escape(_short_hash(str(record['growth_id'])))}</code></td>"
-        f"<td>{escape(str(record['reason']))}</td>"
+        f"<td>{escape(_growth_reason(record, conflict_by_growth_id))}</td>"
+        f"<td><pre class=\"mini-command\"><code>{escape(_review_commands(str(record['growth_id'])))}</code></pre></td>"
         "</tr>"
         for record in pending_growth
-    ) or _empty_row(5, "No growth awaiting review.")
+    ) or _empty_row(6, "No growth awaiting review.")
+    conflict_rows = "\n".join(
+        "<tr>"
+        f"<td><code>{escape(_short_hash(str(conflict['proposed_growth_id'])))}</code></td>"
+        f"<td>{escape(str(conflict['conflict_type']))}</td>"
+        f"<td>{escape(str(conflict['severity']))}</td>"
+        f"<td>{escape(str(conflict['reason']))}</td>"
+        "</tr>"
+        for conflict in data["growth_conflicts"][-8:]
+    ) or _empty_row(4, "No growth conflicts detected.")
     session_rows = "\n".join(
         "<tr>"
         f"<td><code>{escape(_short_hash(str(session['session_id'])))}</code></td>"
@@ -124,7 +138,8 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
     th, td {{ text-align: left; border-bottom: 1px solid #e8ece8; padding: 10px; vertical-align: top; overflow-wrap: anywhere; }}
     th {{ color: var(--muted); font-size: 12px; text-transform: uppercase; }}
     code {{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }}
-    .command {{ background: #eef3f0; border: 1px solid var(--line); padding: 12px; overflow-x: auto; }}
+    .command, .mini-command {{ background: #eef3f0; border: 1px solid var(--line); padding: 12px; overflow-x: auto; }}
+    .mini-command {{ margin: 0; padding: 8px; font-size: 11px; white-space: pre-wrap; }}
     .empty {{ color: var(--muted); }}
     .pill {{ display: inline-block; padding: 4px 8px; border-radius: 999px; background: #e8f0ec; color: var(--green); font-weight: 700; }}
     @media (max-width: 880px) {{
@@ -160,13 +175,17 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
     <div class="grid">
       <section>
         <h2>Growth Review Queue</h2>
-        <table><thead><tr><th>Kind</th><th>Status</th><th>Impact</th><th>ID</th><th>Reason</th></tr></thead><tbody>{growth_rows}</tbody></table>
+        <table><thead><tr><th>Kind</th><th>Status</th><th>Impact</th><th>ID</th><th>Reason</th><th>Review Commands</th></tr></thead><tbody>{growth_rows}</tbody></table>
       </section>
       <section>
         <h2>Memory Cards</h2>
         <table><thead><tr><th>ID</th><th>Confidence</th><th>Claim</th><th>Hash</th><th>Reason</th></tr></thead><tbody>{memory_rows}</tbody></table>
       </section>
     </div>
+    <section>
+      <h2>Growth Conflicts</h2>
+      <table><thead><tr><th>Growth</th><th>Type</th><th>Severity</th><th>Reason</th></tr></thead><tbody>{conflict_rows}</tbody></table>
+    </section>
     <div class="grid">
       <section>
         <h2>Recent Sessions</h2>
@@ -222,3 +241,19 @@ def _self_model_rows(self_model: dict) -> str:
             "</tr>"
         )
     return "\n".join(rows)
+
+
+def _growth_reason(record: dict, conflict_by_growth_id: dict) -> str:
+    conflict = conflict_by_growth_id.get(record["growth_id"])
+    if conflict is None:
+        return str(record["reason"])
+    return f"{record['reason']} / conflict: {conflict['reason']}"
+
+
+def _review_commands(growth_id: str) -> str:
+    return "\n".join(
+        [
+            f"python3 pca_cli.py review-growth {growth_id} --accept --reviewer steward --reason \"reviewed\"",
+            f"python3 pca_cli.py review-growth {growth_id} --reject --reviewer steward --reason \"conflict or drift\"",
+        ]
+    )

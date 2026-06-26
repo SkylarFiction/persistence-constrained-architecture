@@ -107,6 +107,7 @@
     "current_recovery_status": "recovery_certified",
     "event_count": 16,
     "followup_count": 1,
+    "growth_conflict_count": 0,
     "growth_count": 0,
     "growth_review_count": 0,
     "identity_state": "broken",
@@ -119,7 +120,7 @@
     "reasons": [
       "hard constraint breached: runtime_csm_red"
     ],
-    "recorded_claim_id": "claim_b5a2b4d3-1c9e-4f90-a7f1-0221099e3b7c",
+    "recorded_claim_id": "claim_74180ec3-03d7-4a11-8402-a390e1ea31f0",
     "recovery_count": 1,
     "state_precedence": [
       "chain_invalid",

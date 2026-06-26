@@ -137,6 +137,16 @@ def render_dashboard_html(report: TraceReport) -> str:
         "</tr>"
         for record in data["growth_reviews"]
     ) or _empty_row(7, "No growth reviews recorded.")
+    growth_conflict_rows = "\n".join(
+        "<tr>"
+        f"<td>{escape(str(record['created_at']))}</td>"
+        f"<td><code>{escape(str(record['proposed_growth_id']))}</code></td>"
+        f"<td>{escape(str(record['conflict_type']))}</td>"
+        f"<td>{escape(str(record['severity']))}</td>"
+        f"<td>{escape(str(record['reason']))}</td>"
+        "</tr>"
+        for record in data["growth_conflicts"]
+    ) or _empty_row(5, "No growth conflicts recorded.")
     memory_card_rows = "\n".join(
         "<tr>"
         f"<td><code>{escape(str(record['memory_id']))}</code></td>"
@@ -385,6 +395,7 @@ def render_dashboard_html(report: TraceReport) -> str:
       <div class="metric"><div class="label">Growth Records</div><div class="value">{escape(str(summary['growth_count']))}</div></div>
       <div class="metric"><div class="label">Active Growth</div><div class="value">{escape(str(summary['active_growth_count']))}</div></div>
       <div class="metric"><div class="label">Growth Reviews</div><div class="value">{escape(str(summary['growth_review_count']))}</div></div>
+      <div class="metric"><div class="label">Growth Conflicts</div><div class="value">{escape(str(summary['growth_conflict_count']))}</div></div>
       <div class="metric"><div class="label">Accepted Growth</div><div class="value">{escape(str(summary['accepted_growth_count']))}</div></div>
       <div class="metric"><div class="label">Memory Cards</div><div class="value">{escape(str(summary['memory_card_count']))}</div></div>
       <div class="metric"><div class="label">Chat Sessions</div><div class="value">{escape(str(summary['chat_session_count']))}</div></div>
@@ -437,6 +448,10 @@ def render_dashboard_html(report: TraceReport) -> str:
     <section>
       <h2>Growth Review History</h2>
       <table><thead><tr><th>Time</th><th>Growth ID</th><th>Decision</th><th>Reviewer</th><th>Status After</th><th>Claim</th><th>Reason</th></tr></thead><tbody>{growth_review_rows}</tbody></table>
+    </section>
+    <section>
+      <h2>Growth Conflicts</h2>
+      <table><thead><tr><th>Time</th><th>Growth ID</th><th>Type</th><th>Severity</th><th>Reason</th></tr></thead><tbody>{growth_conflict_rows}</tbody></table>
     </section>
     <section>
       <h2>Memory Cards</h2>

@@ -16,6 +16,7 @@ from .growth import (
     growth_records_from_events,
     growth_review_records_from_events,
 )
+from .growth_conflicts import growth_conflict_records_from_events
 from .ledger import ContinuityEvent, ContinuityLedger
 from .lineage import lineage_records
 from .manifest import IdentityManifest
@@ -36,6 +37,7 @@ IMPORTANT_EVENT_TYPES = {
     "lucien.growth_proposed",
     "lucien.growth_updated",
     "lucien.growth_reviewed",
+    "lucien.growth_conflict_detected",
     "lucien.chat_session_started",
     "lucien.chat_turn_recorded",
     "lucien.chat_session_closed",
@@ -67,6 +69,7 @@ class TraceReport:
     growth_records: list[dict[str, Any]]
     active_growth: list[dict[str, Any]]
     growth_reviews: list[dict[str, Any]]
+    growth_conflicts: list[dict[str, Any]]
     memory_cards: list[dict[str, Any]]
     chat_sessions: list[dict[str, Any]]
     chat_turns: list[dict[str, Any]]
@@ -89,6 +92,7 @@ class TraceReport:
             "growth_records": self.growth_records,
             "active_growth": self.active_growth,
             "growth_reviews": self.growth_reviews,
+            "growth_conflicts": self.growth_conflicts,
             "memory_cards": self.memory_cards,
             "chat_sessions": self.chat_sessions,
             "chat_turns": self.chat_turns,
@@ -150,6 +154,11 @@ def _event_summary(event: ContinuityEvent) -> str:
             f"growth={payload.get('growth_id')} decision={payload.get('decision')} "
             f"status_after={payload.get('growth_status_after')}"
         )
+    if event.event_type == "lucien.growth_conflict_detected":
+        return (
+            f"growth={payload.get('proposed_growth_id')} "
+            f"type={payload.get('conflict_type')} severity={payload.get('severity')}"
+        )
     if event.event_type == "lucien.chat_session_started":
         return f"session={payload.get('session_id')} status=open"
     if event.event_type == "lucien.chat_turn_recorded":
@@ -203,6 +212,7 @@ def build_trace_report(
     growth_records = growth_records_from_events(events)
     active_growth = active_growth_records(events)
     growth_reviews = growth_review_records_from_events(events)
+    growth_conflicts = growth_conflict_records_from_events(events)
     memory_cards = memory_cards_from_events(events, manifest.system_id)
     chat_sessions = chat_sessions_from_events(events)
     chat_turns = chat_turns_from_events(events)
@@ -236,6 +246,7 @@ def build_trace_report(
         "growth_count": len(growth_records),
         "active_growth_count": len(active_growth),
         "growth_review_count": len(growth_reviews),
+        "growth_conflict_count": len(growth_conflicts),
         "memory_card_count": len(memory_cards),
         "chat_session_count": len(chat_sessions),
         "chat_turn_count": len(chat_turns),
@@ -311,6 +322,7 @@ def build_trace_report(
         growth_records=[record.to_dict() for record in growth_records],
         active_growth=[record.to_dict() for record in active_growth],
         growth_reviews=[record.to_dict() for record in growth_reviews],
+        growth_conflicts=[record.to_dict() for record in growth_conflicts],
         memory_cards=[record.to_dict() for record in memory_cards],
         chat_sessions=[record.to_dict() for record in chat_sessions],
         chat_turns=[record.to_dict() for record in chat_turns],

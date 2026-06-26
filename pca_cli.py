@@ -46,6 +46,7 @@ from pca import (
     find_recovery,
     followups_from_events,
     growth_records_from_events,
+    growth_conflict_records_from_events,
     growth_review_records_from_events,
     lineage_records,
     accept_growth,
@@ -189,6 +190,8 @@ def main() -> int:
     growth_parser = subparsers.add_parser("growth")
     growth_parser.add_argument("--status")
     growth_parser.add_argument("--queue", action="store_true")
+
+    subparsers.add_parser("conflicts")
 
     propose_growth_parser = subparsers.add_parser("propose-growth")
     propose_growth_parser.add_argument("kind")
@@ -637,6 +640,17 @@ def main() -> int:
                     record.to_dict()
                     for record in growth_review_records_from_events(ledger.events())
                 ],
+            }
+        )
+        return 0
+
+    if args.command == "conflicts":
+        conflicts = growth_conflict_records_from_events(ledger.events())
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "count": len(conflicts),
+                "conflicts": [record.to_dict() for record in conflicts],
             }
         )
         return 0

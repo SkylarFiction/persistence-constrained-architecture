@@ -18,11 +18,13 @@ from pca import (
     derive_current_claim,
     derive_self_model,
     record_chat_turn,
+    record_growth_conflict,
     render_dashboard_html,
     start_chat_session,
     write_lucien_cockpit_html,
 )
 
+from .conflict_detector import detect_growth_conflict
 from .growth_classifier import ClassifiedGrowth, classify_growth
 from .llm_adapter import LocalLucienResponder
 from .memory import MemoryCard, memory_cards_from_self_model
@@ -38,6 +40,7 @@ class LucienChatResult:
     classified_growth: dict[str, Any] | None
     proposed_growth: dict[str, Any] | None
     accepted_growth: dict[str, Any] | None
+    conflict: dict[str, Any] | None
     growth_gate: dict[str, Any] | None
     session_id: str
     turn_id: str
@@ -53,6 +56,7 @@ class LucienChatResult:
             "classified_growth": self.classified_growth,
             "proposed_growth": self.proposed_growth,
             "accepted_growth": self.accepted_growth,
+            "conflict": self.conflict,
             "growth_gate": self.growth_gate,
             "session_id": self.session_id,
             "turn_id": self.turn_id,
@@ -162,8 +166,21 @@ class LucienChatShell:
         )
         proposed_growth = turn.growth_records[0] if turn.growth_records else None
         accepted_growth = None
+        conflict = None
         growth_gate = None
         if proposed_growth is not None:
+            detected_conflict = detect_growth_conflict(classified, self_model)
+            if detected_conflict is not None:
+                conflict_record = record_growth_conflict(
+                    self.ledger,
+                    self.manifest.system_id,
+                    proposed_growth.growth_id,
+                    detected_conflict.conflicting_growth_ids,
+                    detected_conflict.conflict_type,
+                    detected_conflict.severity,
+                    detected_conflict.reason,
+                )
+                conflict = conflict_record.to_dict()
             post_turn_claim, _, _ = derive_current_claim(self.ledger, self.manifest)
             growth_gate_decision = GrowthGate().evaluate(
                 post_turn_claim,
@@ -175,6 +192,7 @@ class LucienChatShell:
                 growth_gate_decision.allowed
                 and proposed_growth.status == GrowthStatus.PROPOSED
                 and proposed_growth.identity_impact == IdentityImpact.LOW
+                and conflict is None
             ):
                 accepted_growth = accept_growth(
                     self.ledger,
@@ -211,6 +229,7 @@ class LucienChatShell:
             classified_growth=classified.to_dict() if classified else None,
             proposed_growth=proposed_growth.to_dict() if proposed_growth else None,
             accepted_growth=accepted_growth.to_dict() if accepted_growth else None,
+            conflict=conflict,
             growth_gate=growth_gate,
             session_id=session_id,
             turn_id=turn_record.turn_id,

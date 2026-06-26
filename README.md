@@ -79,6 +79,8 @@ what move the claim to `continuity_break`.
   uncertified continuity cannot silently absorb identity-bearing learning.
 - `GrowthReviewRecord`: records human/operator review of pending growth, including
   accept/reject decision, reviewer, continuity claim, and resulting growth status.
+- `GrowthConflictRecord`: records when proposed growth may conflict with accepted
+  commitments, policies, or identity markers.
 - `SelfModel`: derives Lucien's accepted memories, commitments, skills,
   preferences, policies, and identity-impacting changes from accepted growth
   records.
@@ -190,6 +192,7 @@ python3 pca_cli.py propose-growth memory --summary "User prefers governed learni
 python3 pca_cli.py growth-gate accept --impact medium
 python3 pca_cli.py growth
 python3 pca_cli.py growth --queue
+python3 pca_cli.py conflicts
 python3 pca_cli.py review-growth GROWTH_ID --accept --reviewer steward --reason "aligned with identity policy"
 python3 pca_cli.py review-growth GROWTH_ID --reject --reviewer steward --reason "conflicts with continuity constraints"
 python3 pca_cli.py self-model

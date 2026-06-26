@@ -68,6 +68,7 @@
     "current_recovery_status": null,
     "event_count": 6,
     "followup_count": 0,
+    "growth_conflict_count": 0,
     "growth_count": 0,
     "growth_review_count": 0,
     "identity_state": "forked",
@@ -80,7 +81,7 @@
     "reasons": [
       "ledger contains an identity fork event"
     ],
-    "recorded_claim_id": "claim_d88bfda9-7ba2-402b-b6b9-258a41978e33",
+    "recorded_claim_id": "claim_6a28f4a6-12a6-4a08-82b7-459db2857821",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

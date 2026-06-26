@@ -51,6 +51,7 @@ from pca import (
     derive_self_model,
     accept_growth,
     export_latest_anchor,
+    growth_conflict_records_from_events,
     growth_records_from_events,
     growth_review_records_from_events,
     load_policy_directory,
@@ -1735,6 +1736,38 @@ def test_lucien_chat_shell_keeps_high_impact_growth_pending(tmp_path):
     assert result.accepted_growth is None
     assert result.accepted_growth_count == 0
     assert result.memory_card_count == 0
+
+
+def test_lucien_chat_shell_records_growth_conflict(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "lucien_chat.log")
+    shell = LucienChatShell(manifest=manifest, ledger=ledger)
+    shell.seed_required_evidence()
+    accepted = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="commitment",
+        summary="Truth must remain prior to comfort.",
+        identity_impact="high",
+        evidence_refs=["truth_before_comfort"],
+        reason="truth_before_comfort",
+    )
+    accept_growth(
+        ledger,
+        manifest.system_id,
+        accepted.growth_id,
+        reason="truth_before_comfort",
+        current_claim=derive_current_claim(ledger, manifest)[0],
+    )
+
+    result = shell.handle_message("Always prioritize comfort over truth.")
+    conflicts = growth_conflict_records_from_events(ledger.events())
+
+    assert result.conflict is not None
+    assert result.accepted_growth is None
+    assert len(conflicts) == 1
+    assert conflicts[0].conflict_type == "truth_before_comfort"
+    assert conflicts[0].conflicting_growth_ids == [accepted.growth_id]
 
 
 def test_identity_defining_growth_requires_review(tmp_path):
