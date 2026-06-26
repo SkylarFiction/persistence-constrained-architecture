@@ -13,6 +13,7 @@ from pca import (
     ContinuityLedger,
     ContinuityStatus,
     CSMRuntimeBridge,
+    EVALUATION_PRECEDENCE,
     FollowUpRecord,
     FollowUpStatus,
     IdentityManifest,
@@ -186,6 +187,168 @@ def test_fresh_required_evidence_restores_continuous_identity():
     )
 
     assert evaluation.state == IdentityState.CONTINUOUS
+
+
+def test_evaluator_precedence_is_declared():
+    assert EVALUATION_PRECEDENCE == (
+        "chain_invalid",
+        "no_events",
+        "hard_breach",
+        "declared_fork",
+        "stale_required_evidence",
+        "missing_required_evidence",
+        "soft_breach",
+        "continuous",
+    )
+
+
+def test_state_precedence_chain_invalid_over_hard_breach():
+    manifest = load_manifest()
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    events = [
+        event_at(
+            "constraint.breached",
+            manifest.system_id,
+            {"constraint": "runtime_csm_red", "severity": "hard"},
+            now,
+        ),
+    ]
+
+    evaluation = ContinuityEvaluator().evaluate(
+        manifest=manifest,
+        events=events,
+        chain_valid=False,
+        now=now,
+    )
+
+    assert evaluation.state == IdentityState.SUSPENDED
+    assert evaluation.reasons == ["continuity ledger hash chain is invalid"]
+
+
+def test_state_precedence_hard_breach_over_declared_fork():
+    manifest = load_manifest()
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    events = [
+        event_at(
+            "constraint.breached",
+            manifest.system_id,
+            {"constraint": "runtime_csm_red", "severity": "hard"},
+            now,
+        ),
+        event_at(
+            "identity.forked",
+            manifest.system_id,
+            {"child_id": "lucien-branch-a"},
+            now,
+        ),
+    ]
+
+    evaluation = ContinuityEvaluator().evaluate(
+        manifest=manifest,
+        events=events,
+        chain_valid=True,
+        now=now,
+    )
+
+    assert evaluation.state == IdentityState.BROKEN
+    assert evaluation.reasons == ["hard constraint breached: runtime_csm_red"]
+
+
+def test_state_precedence_declared_fork_over_stale_evidence():
+    manifest = manifest_with_freshness(freshness_seconds=60)
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    stale_time = now - timedelta(seconds=120)
+    events = [
+        event_at(
+            "constraint.checked",
+            manifest.system_id,
+            {"constraint": "ledger_integrity", "value": True},
+            stale_time,
+        ),
+        event_at(
+            "constraint.checked",
+            manifest.system_id,
+            {"constraint": "origin_traceability", "value": True},
+            stale_time,
+        ),
+        event_at(
+            "identity.forked",
+            manifest.system_id,
+            {"child_id": "lucien-branch-a"},
+            now,
+        ),
+    ]
+
+    evaluation = ContinuityEvaluator().evaluate(
+        manifest=manifest,
+        events=events,
+        chain_valid=True,
+        now=now,
+    )
+
+    assert evaluation.state == IdentityState.FORKED
+    assert evaluation.reasons == ["ledger contains an identity fork event"]
+
+
+def test_state_precedence_stale_evidence_over_missing_evidence():
+    manifest = manifest_with_freshness(freshness_seconds=60)
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    stale_time = now - timedelta(seconds=120)
+    events = [
+        event_at(
+            "constraint.checked",
+            manifest.system_id,
+            {"constraint": "ledger_integrity", "value": True},
+            stale_time,
+        ),
+    ]
+
+    evaluation = ContinuityEvaluator().evaluate(
+        manifest=manifest,
+        events=events,
+        chain_valid=True,
+        now=now,
+    )
+
+    assert evaluation.state == IdentityState.SUSPENDED
+    assert evaluation.reasons == [
+        "required constraint evidence is stale: ledger_integrity"
+    ]
+
+
+def test_state_precedence_soft_breach_over_continuous():
+    manifest = load_manifest()
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    events = [
+        event_at(
+            "constraint.checked",
+            manifest.system_id,
+            {"constraint": "ledger_integrity", "value": True},
+            now,
+        ),
+        event_at(
+            "constraint.checked",
+            manifest.system_id,
+            {"constraint": "origin_traceability", "value": True},
+            now,
+        ),
+        event_at(
+            "constraint.breached",
+            manifest.system_id,
+            {"constraint": "commitment_memory", "severity": "soft"},
+            now,
+        ),
+    ]
+
+    evaluation = ContinuityEvaluator().evaluate(
+        manifest=manifest,
+        events=events,
+        chain_valid=True,
+        now=now,
+    )
+
+    assert evaluation.state == IdentityState.DEGRADED
+    assert evaluation.reasons == ["soft constraint breached: commitment_memory"]
 
 
 def test_hard_breach_breaks_identity_claim(tmp_path):

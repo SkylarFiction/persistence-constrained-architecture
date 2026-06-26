@@ -21,7 +21,12 @@ from .claims import (
 )
 from .csm_bridge import CSMRuntimeBridge, PCAAuditLoggerAdapter
 from .dashboard import render_dashboard_html, write_dashboard_html
-from .evaluator import ContinuityEvaluation, ContinuityEvaluator, IdentityState
+from .evaluator import (
+    EVALUATION_PRECEDENCE,
+    ContinuityEvaluation,
+    ContinuityEvaluator,
+    IdentityState,
+)
 from .followups import (
     FollowUpRecord,
     FollowUpStatus,
@@ -98,6 +103,7 @@ __all__ = [
     "ContinuityClaimRecord",
     "ContinuityStatus",
     "CSMRuntimeBridge",
+    "EVALUATION_PRECEDENCE",
     "AuditEngine",
     "AuditOutcome",
     "AuditRecord",

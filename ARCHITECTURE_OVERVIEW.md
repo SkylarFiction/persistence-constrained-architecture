@@ -27,6 +27,19 @@ may declare `freshness_seconds`; if its latest evidence is older than that windo
 the identity is suspended until fresh evidence is recorded. PCA v0.1 still does not
 model full recovery time constants internally.
 
+Evaluator precedence is explicit and tested:
+
+```text
+chain_invalid
+-> no_events
+-> hard_breach
+-> declared_fork
+-> stale_required_evidence
+-> missing_required_evidence
+-> soft_breach
+-> continuous
+```
+
 ## Policy Packs
 
 Policy packs define modular governance rules for domains such as memory, substrate,
