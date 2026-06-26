@@ -210,6 +210,13 @@ governance timeline. Dashboard v2 also surfaces evidence freshness, evaluator
 precedence, anchor verification, active blockers, recovery timeline, lineage,
 authorization attempts, and policy errors.
 
+## Lucien Cockpit
+
+The Lucien cockpit is a focused operator page for the conversational shell. It
+summarizes the active continuity claim, output mode, chat sessions, recent turns,
+memory cards, growth awaiting review, and accepted self-model counts. It is meant
+to be the first human-readable interface for watching Lucien operate.
+
 ## Scenario Runner
 
 The scenario runner creates reproducible lifecycle demonstrations. Each scenario

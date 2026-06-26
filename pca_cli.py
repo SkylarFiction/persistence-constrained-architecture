@@ -58,6 +58,7 @@ from pca import (
     safe_load_policy_directory,
     safe_load_policy_pack,
     write_dashboard_html,
+    write_lucien_cockpit_html,
     write_trace_report_html,
     verify_latest_anchor,
 )
@@ -241,6 +242,13 @@ def main() -> int:
         "--html",
         default="reports/pca_dashboard.html",
         help="Write a standalone HTML dashboard to this path.",
+    )
+
+    cockpit_parser = subparsers.add_parser("cockpit")
+    cockpit_parser.add_argument(
+        "--html",
+        default="reports/lucien_cockpit.html",
+        help="Write the Lucien cockpit HTML to this path.",
     )
 
     gate_output_parser = subparsers.add_parser("gate-output")
@@ -720,6 +728,17 @@ def main() -> int:
     if args.command == "dashboard":
         report = build_trace_report(ledger, manifest, anchor_path=args.anchors)
         html_path = write_dashboard_html(report, args.html)
+        print_json(
+            {
+                "html_path": str(html_path),
+                "summary": report.summary,
+            }
+        )
+        return 0
+
+    if args.command == "cockpit":
+        report = build_trace_report(ledger, manifest, anchor_path=args.anchors)
+        html_path = write_lucien_cockpit_html(report, args.html)
         print_json(
             {
                 "html_path": str(html_path),

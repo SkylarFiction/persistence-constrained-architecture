@@ -60,6 +60,7 @@ from pca import (
     merge_policy_packs,
     required_evidence_for,
     render_dashboard_html,
+    render_lucien_cockpit_html,
     render_trace_report_html,
     recovery_records_from_events,
     safe_load_policy_pack,
@@ -1701,6 +1702,24 @@ def test_lucien_chat_shell_records_session_turn_and_close(tmp_path):
     assert turns[0].output_allowed is True
     assert turns[0].continuity_claim == "certified_continuity"
     assert "Remember that sessions are hashed" not in serialized_events
+
+
+def test_lucien_cockpit_renders_chat_and_memory_state(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "lucien_chat.log")
+    shell = LucienChatShell(manifest=manifest, ledger=ledger)
+    shell.seed_required_evidence()
+    shell.handle_message("Remember that cockpit state is visible.")
+    shell.close_session()
+
+    report = build_trace_report(ledger, manifest)
+    html = render_lucien_cockpit_html(report)
+
+    assert "Lucien Cockpit" in html
+    assert "Growth Review Queue" in html
+    assert "Memory Cards" in html
+    assert "Recent Sessions" in html
+    assert "certified_continuity" in html
 
 
 def test_lucien_chat_shell_keeps_high_impact_growth_pending(tmp_path):

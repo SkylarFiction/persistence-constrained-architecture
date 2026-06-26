@@ -88,6 +88,8 @@ what move the claim to `continuity_break`.
   growth id, summary hash, evidence refs, confidence, and acceptance context.
 - `ChatSessionRecord`: records chat session start, turn, and close lifecycle events
   without storing raw conversation text.
+- `LucienCockpit`: renders a focused operational view of continuity, sessions,
+  memory cards, growth queue, and accepted self-model state.
 - `LucienChatShell`: a tiny persistent conversational shell that loads continuity
   state, derives the self-model, classifies possible growth, sends growth through
   the Growth Gate, emits governed output, and refreshes a dashboard.
@@ -194,6 +196,8 @@ python3 pca_cli.py self-model
 python3 pca_cli.py self-model --compile --output reports/lucien_self_model.txt
 python3 pca_cli.py memories
 python3 pca_cli.py sessions
+python3 pca_cli.py cockpit --html reports/lucien_cockpit.html
+python3 scripts/lucien_cockpit_demo.py
 python3 lucien_chat.py --seed-required --message "Remember that PCA learning must be governed."
 ```
 

@@ -20,6 +20,7 @@ from pca import (
     record_chat_turn,
     render_dashboard_html,
     start_chat_session,
+    write_lucien_cockpit_html,
 )
 
 from .growth_classifier import ClassifiedGrowth, classify_growth
@@ -66,12 +67,14 @@ class LucienChatShell:
         ledger: ContinuityLedger,
         responder: LocalLucienResponder | None = None,
         dashboard_path: str | Path | None = None,
+        cockpit_path: str | Path | None = None,
         session_id: str | None = None,
     ):
         self.manifest = manifest
         self.ledger = ledger
         self.responder = responder or LocalLucienResponder()
         self.dashboard_path = Path(dashboard_path) if dashboard_path else None
+        self.cockpit_path = Path(cockpit_path) if cockpit_path else None
         self.session_id = session_id
 
     @classmethod
@@ -80,6 +83,7 @@ class LucienChatShell:
         manifest_path: str | Path,
         ledger_path: str | Path,
         dashboard_path: str | Path | None = None,
+        cockpit_path: str | Path | None = None,
     ) -> "LucienChatShell":
         manifest = IdentityManifest.from_dict(
             json.loads(Path(manifest_path).read_text(encoding="utf-8"))
@@ -88,6 +92,7 @@ class LucienChatShell:
             manifest=manifest,
             ledger=ContinuityLedger(ledger_path),
             dashboard_path=dashboard_path,
+            cockpit_path=cockpit_path,
         )
 
     def seed_required_evidence(self) -> None:
@@ -122,6 +127,7 @@ class LucienChatShell:
             reason=reason,
         )
         self._write_dashboard()
+        self._write_cockpit()
 
     def status_line(self) -> str:
         claim, _, _ = derive_current_claim(self.ledger, self.manifest)
@@ -193,6 +199,7 @@ class LucienChatShell:
             continuity_claim=current_claim,
         )
         dashboard_path = self._write_dashboard()
+        self._write_cockpit()
         final_self_model = derive_self_model(self.ledger.events(), self.manifest.system_id)
         final_cards = memory_cards_from_self_model(final_self_model)
         return LucienChatResult(
@@ -217,6 +224,12 @@ class LucienChatShell:
         self.dashboard_path.parent.mkdir(parents=True, exist_ok=True)
         self.dashboard_path.write_text(render_dashboard_html(report), encoding="utf-8")
         return self.dashboard_path
+
+    def _write_cockpit(self) -> Path | None:
+        if self.cockpit_path is None:
+            return None
+        report = build_trace_report(self.ledger, self.manifest)
+        return write_lucien_cockpit_html(report, self.cockpit_path)
 
 
 def _next_turn_index(events, session_id: str) -> int:

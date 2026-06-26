@@ -13,6 +13,7 @@ def main() -> int:
     parser.add_argument("--manifest", default="examples/minimal_identity.json")
     parser.add_argument("--ledger", default="data/lucien_chat.log")
     parser.add_argument("--dashboard", default="reports/lucien_chat_dashboard.html")
+    parser.add_argument("--cockpit", default="reports/lucien_cockpit.html")
     parser.add_argument("--message", help="Run a single governed chat turn.")
     parser.add_argument(
         "--seed-required",
@@ -30,6 +31,7 @@ def main() -> int:
         manifest_path=args.manifest,
         ledger_path=args.ledger,
         dashboard_path=args.dashboard,
+        cockpit_path=args.cockpit,
     )
     if args.seed_required:
         shell.seed_required_evidence()

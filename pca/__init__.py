@@ -77,6 +77,7 @@ from .growth import (
 from .ledger import ContinuityEvent, ContinuityLedger
 from .lineage import LineageRecord, lineage_records
 from .lucien import LucienGovernedRuntime, LucienTurnResult
+from .lucien_cockpit import render_lucien_cockpit_html, write_lucien_cockpit_html
 from .manifest import IdentityManifest, PersistenceConstraint
 from .memory_cards import MemoryCard, memory_cards_from_events
 from .override import OverrideEngine, OverrideRecord, OverrideRequest
@@ -251,6 +252,7 @@ __all__ = [
     "review_growth",
     "render_trace_report_html",
     "render_dashboard_html",
+    "render_lucien_cockpit_html",
     "report_scenario",
     "run_all_scenarios",
     "run_scenario",
@@ -265,5 +267,6 @@ __all__ = [
     "validate_policy_pack",
     "write_dashboard_html",
     "write_demo_index",
+    "write_lucien_cockpit_html",
     "write_trace_report_html",
 ]
