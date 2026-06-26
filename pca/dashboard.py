@@ -125,6 +125,18 @@ def render_dashboard_html(report: TraceReport) -> str:
         "</tr>"
         for record in data["growth_records"]
     ) or _empty_row(6, "No growth records.")
+    growth_review_rows = "\n".join(
+        "<tr>"
+        f"<td>{escape(str(record['created_at']))}</td>"
+        f"<td><code>{escape(str(record['growth_id']))}</code></td>"
+        f"<td>{escape(str(record['decision']))}</td>"
+        f"<td>{escape(str(record['reviewer']))}</td>"
+        f"<td>{escape(str(record['growth_status_after']))}</td>"
+        f"<td>{escape(str(record['continuity_claim']))}</td>"
+        f"<td>{escape(str(record['reason']))}</td>"
+        "</tr>"
+        for record in data["growth_reviews"]
+    ) or _empty_row(7, "No growth reviews recorded.")
     self_model_items = []
     for kind, records in data["self_model"]["by_kind"].items():
         for record in records:
@@ -339,6 +351,7 @@ def render_dashboard_html(report: TraceReport) -> str:
       <div class="metric"><div class="label">Policy Errors</div><div class="value">{escape(str(summary['policy_error_count']))}</div></div>
       <div class="metric"><div class="label">Growth Records</div><div class="value">{escape(str(summary['growth_count']))}</div></div>
       <div class="metric"><div class="label">Active Growth</div><div class="value">{escape(str(summary['active_growth_count']))}</div></div>
+      <div class="metric"><div class="label">Growth Reviews</div><div class="value">{escape(str(summary['growth_review_count']))}</div></div>
       <div class="metric"><div class="label">Accepted Growth</div><div class="value">{escape(str(summary['accepted_growth_count']))}</div></div>
     </section>
     <section class="grid">
@@ -384,6 +397,10 @@ def render_dashboard_html(report: TraceReport) -> str:
     <section>
       <h2>Growth Records</h2>
       <table><thead><tr><th>Growth ID</th><th>Kind</th><th>Status</th><th>Impact</th><th>Summary Hash</th><th>Reason</th></tr></thead><tbody>{growth_rows}</tbody></table>
+    </section>
+    <section>
+      <h2>Growth Review History</h2>
+      <table><thead><tr><th>Time</th><th>Growth ID</th><th>Decision</th><th>Reviewer</th><th>Status After</th><th>Claim</th><th>Reason</th></tr></thead><tbody>{growth_review_rows}</tbody></table>
     </section>
     <section>
       <h2>Lucien Self-Model</h2>

@@ -142,6 +142,16 @@ before learning is proposed or accepted. Certified continuity permits normal
 governed growth. Review and uncertified states constrain growth. A continuity break
 blocks identity-bearing growth from entering Lucien's accepted self-model.
 
+## Growth Review Queue
+
+Pending and review-required growth can be reviewed explicitly. A review records the
+growth id, accept/reject decision, reviewer, reason, active continuity claim, and
+resulting status. This completes the first learning lifecycle:
+
+```text
+conversation -> growth proposal -> review queue -> accept/reject -> self-model update
+```
+
 ## Self-Model
 
 Lucien's self-model is derived from accepted growth records. It is not a separate

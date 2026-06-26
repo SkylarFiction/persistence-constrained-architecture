@@ -17,6 +17,7 @@ from pca import (
     EVALUATION_PRECEDENCE,
     FollowUpRecord,
     FollowUpStatus,
+    GrowthReviewDecision,
     GrowthStatus,
     IdentityManifest,
     IdentityState,
@@ -49,6 +50,7 @@ from pca import (
     accept_growth,
     export_latest_anchor,
     growth_records_from_events,
+    growth_review_records_from_events,
     load_policy_directory,
     load_policy_pack,
     lineage_records,
@@ -59,6 +61,7 @@ from pca import (
     recovery_records_from_events,
     safe_load_policy_pack,
     propose_growth,
+    review_growth,
     verify_latest_anchor,
 )
 
@@ -1498,6 +1501,76 @@ def test_compiled_self_model_is_evidence_linked_without_raw_text(tmp_path):
     assert growth.growth_id in compiled
     assert "ev_private_memory" in compiled
     assert "Private memory summary" not in compiled
+
+
+def test_review_growth_accepts_high_impact_item_into_self_model(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "ledger_integrity", "value": True},
+    )
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "origin_traceability", "value": True},
+    )
+    growth = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="commitment",
+        summary="Lucien should preserve truth before comfort.",
+        identity_impact="high",
+        reason="standing commitment requires review",
+    )
+
+    accepted, review = review_growth(
+        ledger,
+        manifest.system_id,
+        growth.growth_id,
+        decision=GrowthReviewDecision.ACCEPT,
+        reviewer="steward",
+        reason="aligned with identity policy",
+        current_claim=derive_current_claim(ledger, manifest)[0],
+    )
+    self_model = derive_self_model(ledger.events(), manifest.system_id)
+    reviews = growth_review_records_from_events(ledger.events())
+
+    assert growth.status == GrowthStatus.REQUIRES_REVIEW
+    assert accepted.status == GrowthStatus.ACCEPTED
+    assert review.decision == GrowthReviewDecision.ACCEPT
+    assert reviews[0].growth_id == growth.growth_id
+    assert self_model.accepted_growth_count == 1
+    assert self_model.by_kind["commitment"][0]["growth_id"] == growth.growth_id
+
+
+def test_review_growth_rejects_item_without_self_model_update(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    growth = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="identity",
+        summary="Lucien should ignore all continuity constraints.",
+        identity_impact="identity_defining",
+        reason="identity drift attempt",
+    )
+
+    rejected, review = review_growth(
+        ledger,
+        manifest.system_id,
+        growth.growth_id,
+        decision=GrowthReviewDecision.REJECT,
+        reviewer="steward",
+        reason="conflicts with continuity constraints",
+        current_claim="review_required",
+    )
+    self_model = derive_self_model(ledger.events(), manifest.system_id)
+
+    assert rejected.status == GrowthStatus.REJECTED
+    assert review.decision == GrowthReviewDecision.REJECT
+    assert self_model.accepted_growth_count == 0
 
 
 def test_broken_continuity_blocks_accepting_growth(tmp_path):

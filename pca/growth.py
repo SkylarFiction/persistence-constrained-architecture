@@ -43,6 +43,11 @@ class GrowthGateAction(str, Enum):
     ACCEPT = "accept"
 
 
+class GrowthReviewDecision(str, Enum):
+    ACCEPT = "accept"
+    REJECT = "reject"
+
+
 class GrowthGateMode(str, Enum):
     NORMAL_GROWTH = "normal_growth"
     REVIEW_ONLY = "review_only"
@@ -142,6 +147,70 @@ class GrowthGate:
             mode=GrowthGateMode.BLOCKED,
             reason=f"unknown continuity claim blocks growth: {claim}",
         )
+
+
+@dataclass(frozen=True)
+class GrowthReviewRecord:
+    review_id: str
+    identity_id: str
+    growth_id: str
+    decision: GrowthReviewDecision
+    reviewer: str
+    reason: str
+    growth_status_after: GrowthStatus
+    continuity_claim: str
+    created_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+
+    @classmethod
+    def create(
+        cls,
+        identity_id: str,
+        growth_id: str,
+        decision: str | GrowthReviewDecision,
+        reviewer: str,
+        reason: str,
+        growth_status_after: GrowthStatus,
+        continuity_claim: str,
+    ) -> "GrowthReviewRecord":
+        return cls(
+            review_id=f"growth_review_{uuid.uuid4()}",
+            identity_id=identity_id,
+            growth_id=growth_id,
+            decision=_parse_review_decision(decision),
+            reviewer=reviewer,
+            reason=reason,
+            growth_status_after=growth_status_after,
+            continuity_claim=continuity_claim,
+        )
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "GrowthReviewRecord":
+        return cls(
+            review_id=str(data["review_id"]),
+            identity_id=str(data["identity_id"]),
+            growth_id=str(data["growth_id"]),
+            decision=_parse_review_decision(data["decision"]),
+            reviewer=str(data["reviewer"]),
+            reason=str(data.get("reason", "")),
+            growth_status_after=GrowthStatus(str(data["growth_status_after"])),
+            continuity_claim=str(data["continuity_claim"]),
+            created_at=str(data["created_at"]),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "review_id": self.review_id,
+            "identity_id": self.identity_id,
+            "growth_id": self.growth_id,
+            "decision": self.decision.value,
+            "reviewer": self.reviewer,
+            "reason": self.reason,
+            "growth_status_after": self.growth_status_after.value,
+            "continuity_claim": self.continuity_claim,
+            "created_at": self.created_at,
+        }
 
 
 @dataclass(frozen=True)
@@ -313,6 +382,44 @@ def reject_growth(
     return rejected
 
 
+def review_growth(
+    ledger: ContinuityLedger,
+    identity_id: str,
+    growth_id: str,
+    decision: str | GrowthReviewDecision,
+    reviewer: str = "operator",
+    reason: str = "",
+    current_claim: str | None = None,
+) -> tuple[GrowthRecord, GrowthReviewRecord]:
+    parsed_decision = _parse_review_decision(decision)
+    if parsed_decision == GrowthReviewDecision.ACCEPT:
+        growth = accept_growth(
+            ledger=ledger,
+            identity_id=identity_id,
+            growth_id=growth_id,
+            reason=reason,
+            current_claim=current_claim,
+        )
+    else:
+        growth = reject_growth(
+            ledger=ledger,
+            identity_id=identity_id,
+            growth_id=growth_id,
+            reason=reason,
+        )
+    review = GrowthReviewRecord.create(
+        identity_id=identity_id,
+        growth_id=growth_id,
+        decision=parsed_decision,
+        reviewer=reviewer,
+        reason=reason,
+        growth_status_after=growth.status,
+        continuity_claim=current_claim or "not_evaluated",
+    )
+    ledger.append("lucien.growth_reviewed", identity_id, review.to_dict())
+    return growth, review
+
+
 def growth_records_from_events(events: list[ContinuityEvent]) -> list[GrowthRecord]:
     records: dict[str, GrowthRecord] = {}
     for event in events:
@@ -327,6 +434,16 @@ def active_growth_records(events: list[ContinuityEvent]) -> list[GrowthRecord]:
         record
         for record in growth_records_from_events(events)
         if record.status in {GrowthStatus.PROPOSED, GrowthStatus.REQUIRES_REVIEW}
+    ]
+
+
+def growth_review_records_from_events(
+    events: list[ContinuityEvent],
+) -> list[GrowthReviewRecord]:
+    return [
+        GrowthReviewRecord.from_dict(event.payload)
+        for event in events
+        if event.event_type == "lucien.growth_reviewed"
     ]
 
 
@@ -356,3 +473,9 @@ def _parse_gate_action(value: str | GrowthGateAction) -> GrowthGateAction:
     if isinstance(value, GrowthGateAction):
         return value
     return GrowthGateAction(str(value))
+
+
+def _parse_review_decision(value: str | GrowthReviewDecision) -> GrowthReviewDecision:
+    if isinstance(value, GrowthReviewDecision):
+        return value
+    return GrowthReviewDecision(str(value))

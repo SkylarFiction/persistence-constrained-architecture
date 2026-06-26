@@ -75,6 +75,7 @@
     "event_count": 7,
     "followup_count": 0,
     "growth_count": 0,
+    "growth_review_count": 0,
     "identity_state": "broken",
     "ledger_path": "scenario_runs/csm_red_continuity_break/continuity.log",
     "name": "Lucien Persistence Kernel",
@@ -84,7 +85,7 @@
     "reasons": [
       "hard constraint breached: runtime_csm_red"
     ],
-    "recorded_claim_id": "claim_408c9092-2663-4f50-aeff-fa757fe28989",
+    "recorded_claim_id": "claim_ed9336d5-1351-4fc2-8856-c931b2d12079",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

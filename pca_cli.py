@@ -16,6 +16,8 @@ from pca import (
     FollowUpStatus,
     GrowthGate,
     GrowthGateAction,
+    GrowthReviewDecision,
+    GrowthStatus,
     IdentityManifest,
     OverrideEngine,
     OverrideRequest,
@@ -42,12 +44,14 @@ from pca import (
     find_recovery,
     followups_from_events,
     growth_records_from_events,
+    growth_review_records_from_events,
     lineage_records,
     accept_growth,
     propose_growth,
     record_claim_if_changed,
     recovery_records_from_events,
     reject_growth,
+    review_growth,
     safe_load_policy_directory,
     safe_load_policy_pack,
     write_dashboard_html,
@@ -178,6 +182,7 @@ def main() -> int:
 
     growth_parser = subparsers.add_parser("growth")
     growth_parser.add_argument("--status")
+    growth_parser.add_argument("--queue", action="store_true")
 
     propose_growth_parser = subparsers.add_parser("propose-growth")
     propose_growth_parser.add_argument("kind")
@@ -198,6 +203,14 @@ def main() -> int:
     reject_growth_parser = subparsers.add_parser("reject-growth")
     reject_growth_parser.add_argument("growth_id")
     reject_growth_parser.add_argument("--reason", default="")
+
+    review_growth_parser = subparsers.add_parser("review-growth")
+    review_growth_parser.add_argument("growth_id")
+    decision_group = review_growth_parser.add_mutually_exclusive_group(required=True)
+    decision_group.add_argument("--accept", action="store_true")
+    decision_group.add_argument("--reject", action="store_true")
+    review_growth_parser.add_argument("--reviewer", default="operator")
+    review_growth_parser.add_argument("--reason", default="")
 
     anchor_parser = subparsers.add_parser("anchor-head")
     anchor_parser.add_argument("--authority", default="local_operator")
@@ -563,6 +576,13 @@ def main() -> int:
 
     if args.command == "growth":
         records = growth_records_from_events(ledger.events())
+        if args.queue:
+            records = [
+                record
+                for record in records
+                if record.status
+                in {GrowthStatus.PROPOSED, GrowthStatus.REQUIRES_REVIEW}
+            ]
         if args.status:
             records = [record for record in records if record.status.value == args.status]
         print_json(
@@ -570,6 +590,10 @@ def main() -> int:
                 "system_id": manifest.system_id,
                 "count": len(records),
                 "growth": [record.to_dict() for record in records],
+                "reviews": [
+                    record.to_dict()
+                    for record in growth_review_records_from_events(ledger.events())
+                ],
             }
         )
         return 0
@@ -607,6 +631,33 @@ def main() -> int:
             reason=args.reason,
         )
         print_json({"growth": record.to_dict()})
+        return 0
+
+    if args.command == "review-growth":
+        decision = (
+            GrowthReviewDecision.ACCEPT
+            if args.accept
+            else GrowthReviewDecision.REJECT
+        )
+        growth, review = review_growth(
+            ledger=ledger,
+            identity_id=manifest.system_id,
+            growth_id=args.growth_id,
+            decision=decision,
+            reviewer=args.reviewer,
+            reason=args.reason,
+            current_claim=derive_current_claim(ledger, manifest)[0],
+        )
+        print_json(
+            {
+                "growth": growth.to_dict(),
+                "review": review.to_dict(),
+                "self_model": derive_self_model(
+                    ledger.events(),
+                    manifest.system_id,
+                ).to_dict(),
+            }
+        )
         return 0
 
     if args.command == "runtime-signal":

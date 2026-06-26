@@ -106,6 +106,7 @@
     "event_count": 10,
     "followup_count": 2,
     "growth_count": 0,
+    "growth_review_count": 0,
     "identity_state": "continuous",
     "ledger_path": "scenario_runs/substrate_migration_override/continuity.log",
     "name": "Lucien Persistence Kernel",
@@ -115,7 +116,7 @@
     "reasons": [
       "Lucien Persistence Kernel satisfies recorded persistence constraints"
     ],
-    "recorded_claim_id": "claim_07a5079d-39ef-474b-8ecf-e2be4718b2ed",
+    "recorded_claim_id": "claim_10bf5a75-9770-4958-a0ad-5f3106ff27ef",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

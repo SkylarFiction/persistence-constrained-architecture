@@ -58,6 +58,7 @@
     "event_count": 5,
     "followup_count": 0,
     "growth_count": 0,
+    "growth_review_count": 0,
     "identity_state": "continuous",
     "ledger_path": "scenario_runs/memory_compaction_review/continuity.log",
     "name": "Lucien Persistence Kernel",
@@ -67,7 +68,7 @@
     "reasons": [
       "Lucien Persistence Kernel satisfies recorded persistence constraints"
     ],
-    "recorded_claim_id": "claim_2644f782-6eb3-462a-b2f6-2f2cb465bd26",
+    "recorded_claim_id": "claim_d5945e5c-fc24-4ebd-9119-af3ae5d13cba",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

@@ -10,7 +10,11 @@ from .anchors import verify_latest_anchor
 from .claims import claims_from_events, current_claim_record
 from .evaluator import EVALUATION_PRECEDENCE, ContinuityEvaluator
 from .followups import active_followups, followups_from_events
-from .growth import active_growth_records, growth_records_from_events
+from .growth import (
+    active_growth_records,
+    growth_records_from_events,
+    growth_review_records_from_events,
+)
 from .ledger import ContinuityEvent, ContinuityLedger
 from .lineage import lineage_records
 from .manifest import IdentityManifest
@@ -29,6 +33,7 @@ IMPORTANT_EVENT_TYPES = {
     "lucien.tool_use",
     "lucien.growth_proposed",
     "lucien.growth_updated",
+    "lucien.growth_reviewed",
     "runtime.csm_state",
     "runtime.output_gate",
     "transform.evaluated",
@@ -56,6 +61,7 @@ class TraceReport:
     authorization_checks: list[dict[str, Any]]
     growth_records: list[dict[str, Any]]
     active_growth: list[dict[str, Any]]
+    growth_reviews: list[dict[str, Any]]
     self_model: dict[str, Any]
     policy_errors: list[str]
     anchor_verification: dict[str, Any] | None = None
@@ -74,6 +80,7 @@ class TraceReport:
             "authorization_checks": self.authorization_checks,
             "growth_records": self.growth_records,
             "active_growth": self.active_growth,
+            "growth_reviews": self.growth_reviews,
             "self_model": self.self_model,
             "policy_errors": self.policy_errors,
             "anchor_verification": self.anchor_verification,
@@ -127,6 +134,11 @@ def _event_summary(event: ContinuityEvent) -> str:
             f"kind={payload.get('kind')} status={payload.get('status')} "
             f"impact={payload.get('identity_impact')}"
         )
+    if event.event_type == "lucien.growth_reviewed":
+        return (
+            f"growth={payload.get('growth_id')} decision={payload.get('decision')} "
+            f"status_after={payload.get('growth_status_after')}"
+        )
     if event.event_type == "transform.evaluated":
         return (
             f"transform={payload.get('transform')} "
@@ -167,6 +179,7 @@ def build_trace_report(
     recoveries = recovery_records_from_events(events)
     growth_records = growth_records_from_events(events)
     active_growth = active_growth_records(events)
+    growth_reviews = growth_review_records_from_events(events)
     self_model = derive_self_model(events, manifest.system_id)
     active_followup_records = active_followups(events)
     anchor_verification = (
@@ -196,6 +209,7 @@ def build_trace_report(
         "recovery_count": len(recoveries),
         "growth_count": len(growth_records),
         "active_growth_count": len(active_growth),
+        "growth_review_count": len(growth_reviews),
         "accepted_growth_count": self_model.accepted_growth_count,
         "current_recovery_status": (
             current_recovery.status.value if current_recovery is not None else None
@@ -267,6 +281,7 @@ def build_trace_report(
         ],
         growth_records=[record.to_dict() for record in growth_records],
         active_growth=[record.to_dict() for record in active_growth],
+        growth_reviews=[record.to_dict() for record in growth_reviews],
         self_model=self_model.to_dict(),
         policy_errors=manifest.policy_errors,
         anchor_verification=anchor_verification,
