@@ -18,6 +18,7 @@ from .growth import (
 from .ledger import ContinuityEvent, ContinuityLedger
 from .lineage import lineage_records
 from .manifest import IdentityManifest
+from .memory_cards import memory_cards_from_events
 from .output_gate import OutputGate
 from .recovery import current_recovery_record, recovery_records_from_events
 from .self_model import derive_self_model
@@ -62,6 +63,7 @@ class TraceReport:
     growth_records: list[dict[str, Any]]
     active_growth: list[dict[str, Any]]
     growth_reviews: list[dict[str, Any]]
+    memory_cards: list[dict[str, Any]]
     self_model: dict[str, Any]
     policy_errors: list[str]
     anchor_verification: dict[str, Any] | None = None
@@ -81,6 +83,7 @@ class TraceReport:
             "growth_records": self.growth_records,
             "active_growth": self.active_growth,
             "growth_reviews": self.growth_reviews,
+            "memory_cards": self.memory_cards,
             "self_model": self.self_model,
             "policy_errors": self.policy_errors,
             "anchor_verification": self.anchor_verification,
@@ -180,6 +183,7 @@ def build_trace_report(
     growth_records = growth_records_from_events(events)
     active_growth = active_growth_records(events)
     growth_reviews = growth_review_records_from_events(events)
+    memory_cards = memory_cards_from_events(events, manifest.system_id)
     self_model = derive_self_model(events, manifest.system_id)
     active_followup_records = active_followups(events)
     anchor_verification = (
@@ -210,6 +214,7 @@ def build_trace_report(
         "growth_count": len(growth_records),
         "active_growth_count": len(active_growth),
         "growth_review_count": len(growth_reviews),
+        "memory_card_count": len(memory_cards),
         "accepted_growth_count": self_model.accepted_growth_count,
         "current_recovery_status": (
             current_recovery.status.value if current_recovery is not None else None
@@ -282,6 +287,7 @@ def build_trace_report(
         growth_records=[record.to_dict() for record in growth_records],
         active_growth=[record.to_dict() for record in active_growth],
         growth_reviews=[record.to_dict() for record in growth_reviews],
+        memory_cards=[record.to_dict() for record in memory_cards],
         self_model=self_model.to_dict(),
         policy_errors=manifest.policy_errors,
         anchor_verification=anchor_verification,

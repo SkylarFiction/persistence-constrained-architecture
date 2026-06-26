@@ -109,6 +109,7 @@
     "growth_review_count": 0,
     "identity_state": "broken",
     "ledger_path": "scenario_runs/recovery_audit_completed/continuity.log",
+    "memory_card_count": 0,
     "name": "Lucien Persistence Kernel",
     "output_allowed_scope": "May speak as the identity only with review-status disclosure.",
     "output_mode": "disclose_review",
@@ -116,7 +117,7 @@
     "reasons": [
       "hard constraint breached: runtime_csm_red"
     ],
-    "recorded_claim_id": "claim_298ede14-2a25-4233-b9f2-8143ceee68e0",
+    "recorded_claim_id": "claim_0adbf17d-0005-4327-9eea-e0e4b207cd4c",
     "recovery_count": 1,
     "state_precedence": [
       "chain_invalid",

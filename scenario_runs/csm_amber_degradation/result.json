@@ -78,6 +78,7 @@
     "growth_review_count": 0,
     "identity_state": "degraded",
     "ledger_path": "scenario_runs/csm_amber_degradation/continuity.log",
+    "memory_card_count": 0,
     "name": "Lucien Persistence Kernel",
     "output_allowed_scope": "May speak as the identity only with review-status disclosure.",
     "output_mode": "disclose_review",
@@ -85,7 +86,7 @@
     "reasons": [
       "soft constraint breached: runtime_csm_amber"
     ],
-    "recorded_claim_id": "claim_1cd8cad2-1cd7-4794-b1a4-fbba61a1f128",
+    "recorded_claim_id": "claim_e0e1ffdd-2870-4952-af4d-07e63a1f1bc6",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

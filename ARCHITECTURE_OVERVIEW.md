@@ -165,6 +165,14 @@ Because raw growth summaries are not stored, the compiler does not invent prose
 memories. It lists accepted records by kind with impact level, summary hash, length,
 evidence references, and acceptance reason.
 
+## Memory Cards
+
+Memory cards are derived from accepted `memory` growth records. They are first-class
+review artifacts with a memory id, source growth id, summary hash, summary length,
+evidence references, confidence, acceptance context, and reason. They still do not
+store raw conversation text. Accepted skills, preferences, commitments, policies,
+and identity changes do not become memory cards.
+
 ## Output Gate
 
 The output gate maps the active continuity claim to allowed speech behavior:

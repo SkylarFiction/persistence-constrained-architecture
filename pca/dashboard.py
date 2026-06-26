@@ -137,6 +137,17 @@ def render_dashboard_html(report: TraceReport) -> str:
         "</tr>"
         for record in data["growth_reviews"]
     ) or _empty_row(7, "No growth reviews recorded.")
+    memory_card_rows = "\n".join(
+        "<tr>"
+        f"<td><code>{escape(str(record['memory_id']))}</code></td>"
+        f"<td><code>{escape(str(record['source_growth_id']))}</code></td>"
+        f"<td>{escape(str(record['confidence']))}</td>"
+        f"<td>{escape(str(record['continuity_claim_at_acceptance']))}</td>"
+        f"<td><code>{escape(_short_hash(str(record['summary_sha256'])))}</code></td>"
+        f"<td>{escape(str(record['reason']))}</td>"
+        "</tr>"
+        for record in data["memory_cards"]
+    ) or _empty_row(6, "No memory cards.")
     self_model_items = []
     for kind, records in data["self_model"]["by_kind"].items():
         for record in records:
@@ -353,6 +364,7 @@ def render_dashboard_html(report: TraceReport) -> str:
       <div class="metric"><div class="label">Active Growth</div><div class="value">{escape(str(summary['active_growth_count']))}</div></div>
       <div class="metric"><div class="label">Growth Reviews</div><div class="value">{escape(str(summary['growth_review_count']))}</div></div>
       <div class="metric"><div class="label">Accepted Growth</div><div class="value">{escape(str(summary['accepted_growth_count']))}</div></div>
+      <div class="metric"><div class="label">Memory Cards</div><div class="value">{escape(str(summary['memory_card_count']))}</div></div>
     </section>
     <section class="grid">
       <div class="panel">
@@ -401,6 +413,10 @@ def render_dashboard_html(report: TraceReport) -> str:
     <section>
       <h2>Growth Review History</h2>
       <table><thead><tr><th>Time</th><th>Growth ID</th><th>Decision</th><th>Reviewer</th><th>Status After</th><th>Claim</th><th>Reason</th></tr></thead><tbody>{growth_review_rows}</tbody></table>
+    </section>
+    <section>
+      <h2>Memory Cards</h2>
+      <table><thead><tr><th>Memory ID</th><th>Growth ID</th><th>Confidence</th><th>Claim At Acceptance</th><th>Summary Hash</th><th>Reason</th></tr></thead><tbody>{memory_card_rows}</tbody></table>
     </section>
     <section>
       <h2>Lucien Self-Model</h2>

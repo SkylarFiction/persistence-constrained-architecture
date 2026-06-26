@@ -54,6 +54,7 @@ from pca import (
     load_policy_directory,
     load_policy_pack,
     lineage_records,
+    memory_cards_from_events,
     merge_policy_packs,
     required_evidence_for,
     render_dashboard_html,
@@ -1472,6 +1473,58 @@ def test_accepted_growth_updates_derived_self_model(tmp_path):
     assert "User prefers direct continuity status summaries" not in json.dumps(
         self_model.to_dict()
     )
+
+
+def test_accepted_memory_growth_creates_memory_card(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    growth = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="memory",
+        summary="Private memory card summary.",
+        identity_impact="low",
+        evidence_refs=["ev_memory_card"],
+        reason="memory card test",
+    )
+    accept_growth(
+        ledger,
+        manifest.system_id,
+        growth.growth_id,
+        reason="accepted as memory",
+    )
+    cards = memory_cards_from_events(ledger.events(), manifest.system_id)
+    serialized_cards = json.dumps([card.to_dict() for card in cards])
+
+    assert len(cards) == 1
+    assert cards[0].source_growth_id == growth.growth_id
+    assert cards[0].memory_id.startswith("mem_")
+    assert cards[0].evidence_refs == ["ev_memory_card"]
+    assert cards[0].confidence == 0.92
+    assert "Private memory card summary" not in serialized_cards
+
+
+def test_non_memory_growth_does_not_create_memory_card(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    growth = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="skill",
+        summary="Private skill summary.",
+        identity_impact="medium",
+        reason="skill growth test",
+    )
+    accept_growth(
+        ledger,
+        manifest.system_id,
+        growth.growth_id,
+        reason="accepted as skill",
+    )
+
+    assert memory_cards_from_events(ledger.events(), manifest.system_id) == []
 
 
 def test_compiled_self_model_is_evidence_linked_without_raw_text(tmp_path):

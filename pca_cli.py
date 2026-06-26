@@ -47,6 +47,7 @@ from pca import (
     growth_review_records_from_events,
     lineage_records,
     accept_growth,
+    memory_cards_from_events,
     propose_growth,
     record_claim_if_changed,
     recovery_records_from_events,
@@ -169,6 +170,7 @@ def main() -> int:
     subparsers.add_parser("speak-gate")
     subparsers.add_parser("seed-required")
     subparsers.add_parser("lineage")
+    subparsers.add_parser("memories")
     self_model_parser = subparsers.add_parser("self-model")
     self_model_parser.add_argument("--compile", action="store_true")
     self_model_parser.add_argument("--output")
@@ -540,6 +542,20 @@ def main() -> int:
                 "lineage": [
                     record.to_dict() for record in lineage_records(ledger.events())
                 ],
+            }
+        )
+        return 0
+
+    if args.command == "memories":
+        memory_cards = memory_cards_from_events(
+            ledger.events(),
+            manifest.system_id,
+        )
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "count": len(memory_cards),
+                "memory_cards": [record.to_dict() for record in memory_cards],
             }
         )
         return 0

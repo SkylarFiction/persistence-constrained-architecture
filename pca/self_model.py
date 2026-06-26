@@ -84,6 +84,7 @@ def _self_model_item(record: GrowthRecord) -> dict[str, Any]:
         "evidence_refs": record.evidence_refs,
         "source_event_ids": record.source_event_ids,
         "accepted_at": record.updated_at or record.created_at,
+        "acceptance_continuity_claim": record.acceptance_continuity_claim,
         "reason": record.reason,
     }
 

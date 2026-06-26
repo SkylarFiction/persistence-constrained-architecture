@@ -228,6 +228,7 @@ class GrowthRecord:
     updated_at: str | None = None
     reason: str = ""
     supersedes_growth_id: str | None = None
+    acceptance_continuity_claim: str | None = None
 
     @classmethod
     def propose(
@@ -275,6 +276,7 @@ class GrowthRecord:
             updated_at=data.get("updated_at"),
             reason=str(data.get("reason", "")),
             supersedes_growth_id=data.get("supersedes_growth_id"),
+            acceptance_continuity_claim=data.get("acceptance_continuity_claim"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -292,6 +294,7 @@ class GrowthRecord:
             "updated_at": self.updated_at,
             "reason": self.reason,
             "supersedes_growth_id": self.supersedes_growth_id,
+            "acceptance_continuity_claim": self.acceptance_continuity_claim,
         }
 
     def with_status(
@@ -299,6 +302,7 @@ class GrowthRecord:
         status: GrowthStatus,
         reason: str = "",
         supersedes_growth_id: str | None = None,
+        acceptance_continuity_claim: str | None = None,
     ) -> "GrowthRecord":
         return GrowthRecord(
             growth_id=self.growth_id,
@@ -314,6 +318,9 @@ class GrowthRecord:
             updated_at=datetime.now(timezone.utc).isoformat(),
             reason=reason or self.reason,
             supersedes_growth_id=supersedes_growth_id or self.supersedes_growth_id,
+            acceptance_continuity_claim=(
+                acceptance_continuity_claim or self.acceptance_continuity_claim
+            ),
         )
 
 
@@ -365,7 +372,11 @@ def accept_growth(
         )
         if not gate.allowed:
             raise ValueError(gate.reason)
-    accepted = record.with_status(GrowthStatus.ACCEPTED, reason=reason)
+    accepted = record.with_status(
+        GrowthStatus.ACCEPTED,
+        reason=reason,
+        acceptance_continuity_claim=current_claim,
+    )
     ledger.append("lucien.growth_updated", identity_id, accepted.to_dict())
     return accepted
 

@@ -69,6 +69,7 @@ from .ledger import ContinuityEvent, ContinuityLedger
 from .lineage import LineageRecord, lineage_records
 from .lucien import LucienGovernedRuntime, LucienTurnResult
 from .manifest import IdentityManifest, PersistenceConstraint
+from .memory_cards import MemoryCard, memory_cards_from_events
 from .override import OverrideEngine, OverrideRecord, OverrideRequest
 from .output_gate import OutputGate, OutputGateDecision, OutputMode
 from .output_wrapper import OutputEnvelope, PCAOutputWrapper
@@ -167,6 +168,7 @@ __all__ = [
     "LedgerAnchorRecord",
     "LucienGovernedRuntime",
     "LucienTurnResult",
+    "MemoryCard",
     "OverrideEngine",
     "OverrideRecord",
     "OverrideRequest",
@@ -222,6 +224,7 @@ __all__ = [
     "load_policy_pack",
     "load_scenario_definitions",
     "merge_policy_packs",
+    "memory_cards_from_events",
     "normalize_audit_type",
     "parse_authority",
     "propose_growth",
