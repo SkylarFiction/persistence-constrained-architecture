@@ -29,6 +29,15 @@ from .claims import (
     claims_from_events,
     current_claim_record,
 )
+from .chat_sessions import (
+    ChatSessionRecord,
+    ChatTurnRecord,
+    chat_sessions_from_events,
+    chat_turns_from_events,
+    close_chat_session,
+    record_chat_turn,
+    start_chat_session,
+)
 from .csm_bridge import CSMRuntimeBridge, PCAAuditLoggerAdapter
 from .dashboard import render_dashboard_html, write_dashboard_html
 from .evaluator import (
@@ -149,6 +158,8 @@ __all__ = [
     "AuthorityClass",
     "AuthorizationDecision",
     "AuthorizationPolicy",
+    "ChatSessionRecord",
+    "ChatTurnRecord",
     "FollowUpRecord",
     "FollowUpStatus",
     "GrowthKind",
@@ -205,6 +216,9 @@ __all__ = [
     "build_trace_report",
     "claim_reason",
     "claims_from_events",
+    "chat_sessions_from_events",
+    "chat_turns_from_events",
+    "close_chat_session",
     "compile_self_model",
     "continuity_claim_from_followups",
     "current_claim_record",
@@ -229,6 +243,7 @@ __all__ = [
     "parse_authority",
     "propose_growth",
     "record_claim_if_changed",
+    "record_chat_turn",
     "required_evidence_for",
     "required_checks_for_audit",
     "recovery_records_from_events",
@@ -242,6 +257,7 @@ __all__ = [
     "safe_load_policy_directory",
     "safe_load_policy_pack",
     "scenario_ids",
+    "start_chat_session",
     "verify_all_scenarios",
     "verify_anchor_chain",
     "verify_latest_anchor",

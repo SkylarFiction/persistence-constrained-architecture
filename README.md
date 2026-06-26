@@ -86,6 +86,8 @@ what move the claim to `continuity_break`.
   artifact without inventing raw memory prose.
 - `MemoryCard`: derives accepted memory growth into inspectable cards with source
   growth id, summary hash, evidence refs, confidence, and acceptance context.
+- `ChatSessionRecord`: records chat session start, turn, and close lifecycle events
+  without storing raw conversation text.
 - `LucienChatShell`: a tiny persistent conversational shell that loads continuity
   state, derives the self-model, classifies possible growth, sends growth through
   the Growth Gate, emits governed output, and refreshes a dashboard.
@@ -191,6 +193,7 @@ python3 pca_cli.py review-growth GROWTH_ID --reject --reviewer steward --reason 
 python3 pca_cli.py self-model
 python3 pca_cli.py self-model --compile --output reports/lucien_self_model.txt
 python3 pca_cli.py memories
+python3 pca_cli.py sessions
 python3 lucien_chat.py --seed-required --message "Remember that PCA learning must be governed."
 ```
 

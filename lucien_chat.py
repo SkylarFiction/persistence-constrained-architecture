@@ -37,6 +37,7 @@ def main() -> int:
     print(shell.status_line())
     if args.message:
         result = shell.handle_message(args.message)
+        shell.close_session()
         _print_result(result.to_dict(), as_json=args.json)
         return 0
 
@@ -45,9 +46,11 @@ def main() -> int:
         try:
             user_message = input("You: ").strip()
         except EOFError:
+            shell.close_session()
             print()
             return 0
         if user_message.lower() in {"exit", "quit"}:
+            shell.close_session()
             return 0
         if not user_message:
             continue

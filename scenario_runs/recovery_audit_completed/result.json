@@ -101,6 +101,8 @@
     "anchor_valid": null,
     "blocking_followups": 0,
     "chain_valid": true,
+    "chat_session_count": 0,
+    "chat_turn_count": 0,
     "current_continuity_claim": "review_required",
     "current_recovery_status": "recovery_certified",
     "event_count": 16,
@@ -117,7 +119,7 @@
     "reasons": [
       "hard constraint breached: runtime_csm_red"
     ],
-    "recorded_claim_id": "claim_0adbf17d-0005-4327-9eea-e0e4b207cd4c",
+    "recorded_claim_id": "claim_c7394103-5847-4899-8547-c6675bfbb17a",
     "recovery_count": 1,
     "state_precedence": [
       "chain_invalid",

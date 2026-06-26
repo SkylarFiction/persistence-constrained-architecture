@@ -129,6 +129,13 @@ user message, sends growth through the Growth Gate, writes ledger events, and
 refreshes a dashboard. It is intentionally not a consciousness claim or a trained
 model. PCA remains the law; the shell is a governed interface.
 
+## Chat Sessions
+
+Chat sessions group governed turns into lifecycle records. PCA records session
+start, each turn, and session close. Turn records point to input, output, and growth
+ledger events by hash and include output allow/block status plus the active
+continuity claim. Raw conversation text is still not stored.
+
 ## Governed Growth
 
 Lucien can learn through `GrowthRecord` events. Growth records can represent memory,

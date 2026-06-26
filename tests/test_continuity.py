@@ -42,6 +42,8 @@ from pca import (
     build_manifest_from_packs,
     build_manifest_from_policy_results,
     claims_from_events,
+    chat_sessions_from_events,
+    chat_turns_from_events,
     compile_self_model,
     continuity_claim_from_followups,
     current_claim_record,
@@ -1675,6 +1677,30 @@ def test_lucien_chat_shell_accepts_low_impact_memory_growth(tmp_path):
     assert result.memory_card_count == 1
     assert (tmp_path / "dashboard.html").exists()
     assert "Remember that PCA learning must be governed" not in serialized_events
+
+
+def test_lucien_chat_shell_records_session_turn_and_close(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "lucien_chat.log")
+    shell = LucienChatShell(manifest=manifest, ledger=ledger)
+    shell.seed_required_evidence()
+
+    result = shell.handle_message("Remember that sessions are hashed.")
+    shell.close_session()
+    sessions = chat_sessions_from_events(ledger.events())
+    turns = chat_turns_from_events(ledger.events())
+    serialized_events = json.dumps([event.to_dict() for event in ledger.events()])
+
+    assert len(sessions) == 1
+    assert sessions[0].status == "closed"
+    assert sessions[0].turn_count == 1
+    assert len(turns) == 1
+    assert turns[0].session_id == result.session_id
+    assert turns[0].turn_id == result.turn_id
+    assert turns[0].turn_index == 1
+    assert turns[0].output_allowed is True
+    assert turns[0].continuity_claim == "certified_continuity"
+    assert "Remember that sessions are hashed" not in serialized_events
 
 
 def test_lucien_chat_shell_keeps_high_impact_growth_pending(tmp_path):

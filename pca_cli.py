@@ -34,6 +34,8 @@ from pca import (
     build_manifest_from_policy_results,
     build_trace_report,
     claims_from_events,
+    chat_sessions_from_events,
+    chat_turns_from_events,
     compile_self_model,
     current_claim_record,
     current_recovery_record,
@@ -171,6 +173,7 @@ def main() -> int:
     subparsers.add_parser("seed-required")
     subparsers.add_parser("lineage")
     subparsers.add_parser("memories")
+    subparsers.add_parser("sessions")
     self_model_parser = subparsers.add_parser("self-model")
     self_model_parser.add_argument("--compile", action="store_true")
     self_model_parser.add_argument("--output")
@@ -556,6 +559,22 @@ def main() -> int:
                 "system_id": manifest.system_id,
                 "count": len(memory_cards),
                 "memory_cards": [record.to_dict() for record in memory_cards],
+            }
+        )
+        return 0
+
+    if args.command == "sessions":
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "sessions": [
+                    record.to_dict()
+                    for record in chat_sessions_from_events(ledger.events())
+                ],
+                "turns": [
+                    record.to_dict()
+                    for record in chat_turns_from_events(ledger.events())
+                ],
             }
         )
         return 0

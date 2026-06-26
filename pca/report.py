@@ -8,6 +8,7 @@ from typing import Any
 
 from .anchors import verify_latest_anchor
 from .claims import claims_from_events, current_claim_record
+from .chat_sessions import chat_sessions_from_events, chat_turns_from_events
 from .evaluator import EVALUATION_PRECEDENCE, ContinuityEvaluator
 from .followups import active_followups, followups_from_events
 from .growth import (
@@ -35,6 +36,9 @@ IMPORTANT_EVENT_TYPES = {
     "lucien.growth_proposed",
     "lucien.growth_updated",
     "lucien.growth_reviewed",
+    "lucien.chat_session_started",
+    "lucien.chat_turn_recorded",
+    "lucien.chat_session_closed",
     "runtime.csm_state",
     "runtime.output_gate",
     "transform.evaluated",
@@ -64,6 +68,8 @@ class TraceReport:
     active_growth: list[dict[str, Any]]
     growth_reviews: list[dict[str, Any]]
     memory_cards: list[dict[str, Any]]
+    chat_sessions: list[dict[str, Any]]
+    chat_turns: list[dict[str, Any]]
     self_model: dict[str, Any]
     policy_errors: list[str]
     anchor_verification: dict[str, Any] | None = None
@@ -84,6 +90,8 @@ class TraceReport:
             "active_growth": self.active_growth,
             "growth_reviews": self.growth_reviews,
             "memory_cards": self.memory_cards,
+            "chat_sessions": self.chat_sessions,
+            "chat_turns": self.chat_turns,
             "self_model": self.self_model,
             "policy_errors": self.policy_errors,
             "anchor_verification": self.anchor_verification,
@@ -142,6 +150,18 @@ def _event_summary(event: ContinuityEvent) -> str:
             f"growth={payload.get('growth_id')} decision={payload.get('decision')} "
             f"status_after={payload.get('growth_status_after')}"
         )
+    if event.event_type == "lucien.chat_session_started":
+        return f"session={payload.get('session_id')} status=open"
+    if event.event_type == "lucien.chat_turn_recorded":
+        return (
+            f"session={payload.get('session_id')} turn={payload.get('turn_index')} "
+            f"claim={payload.get('continuity_claim')}"
+        )
+    if event.event_type == "lucien.chat_session_closed":
+        return (
+            f"session={payload.get('session_id')} turns={payload.get('turn_count')} "
+            "status=closed"
+        )
     if event.event_type == "transform.evaluated":
         return (
             f"transform={payload.get('transform')} "
@@ -184,6 +204,8 @@ def build_trace_report(
     active_growth = active_growth_records(events)
     growth_reviews = growth_review_records_from_events(events)
     memory_cards = memory_cards_from_events(events, manifest.system_id)
+    chat_sessions = chat_sessions_from_events(events)
+    chat_turns = chat_turns_from_events(events)
     self_model = derive_self_model(events, manifest.system_id)
     active_followup_records = active_followups(events)
     anchor_verification = (
@@ -215,6 +237,8 @@ def build_trace_report(
         "active_growth_count": len(active_growth),
         "growth_review_count": len(growth_reviews),
         "memory_card_count": len(memory_cards),
+        "chat_session_count": len(chat_sessions),
+        "chat_turn_count": len(chat_turns),
         "accepted_growth_count": self_model.accepted_growth_count,
         "current_recovery_status": (
             current_recovery.status.value if current_recovery is not None else None
@@ -288,6 +312,8 @@ def build_trace_report(
         active_growth=[record.to_dict() for record in active_growth],
         growth_reviews=[record.to_dict() for record in growth_reviews],
         memory_cards=[record.to_dict() for record in memory_cards],
+        chat_sessions=[record.to_dict() for record in chat_sessions],
+        chat_turns=[record.to_dict() for record in chat_turns],
         self_model=self_model.to_dict(),
         policy_errors=manifest.policy_errors,
         anchor_verification=anchor_verification,

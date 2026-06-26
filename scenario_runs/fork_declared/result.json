@@ -62,6 +62,8 @@
     "anchor_valid": null,
     "blocking_followups": 0,
     "chain_valid": true,
+    "chat_session_count": 0,
+    "chat_turn_count": 0,
     "current_continuity_claim": "declared_fork",
     "current_recovery_status": null,
     "event_count": 6,
@@ -78,7 +80,7 @@
     "reasons": [
       "ledger contains an identity fork event"
     ],
-    "recorded_claim_id": "claim_e43694a9-bff9-4174-9ba6-3b29ad14df56",
+    "recorded_claim_id": "claim_54449dbb-2f6d-4857-92a5-8edc4be2e092",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

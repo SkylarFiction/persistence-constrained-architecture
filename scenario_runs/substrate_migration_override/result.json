@@ -101,6 +101,8 @@
     "anchor_valid": null,
     "blocking_followups": 2,
     "chain_valid": true,
+    "chat_session_count": 0,
+    "chat_turn_count": 0,
     "current_continuity_claim": "uncertified_continuity",
     "current_recovery_status": null,
     "event_count": 10,
@@ -117,7 +119,7 @@
     "reasons": [
       "Lucien Persistence Kernel satisfies recorded persistence constraints"
     ],
-    "recorded_claim_id": "claim_eb72d58e-7e7b-4c38-bc54-f8cc77cf92bd",
+    "recorded_claim_id": "claim_2e3ca64a-8237-4631-a5e4-fe403a4fb1b8",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

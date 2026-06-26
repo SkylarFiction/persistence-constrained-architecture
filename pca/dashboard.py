@@ -148,6 +148,28 @@ def render_dashboard_html(report: TraceReport) -> str:
         "</tr>"
         for record in data["memory_cards"]
     ) or _empty_row(6, "No memory cards.")
+    chat_session_rows = "\n".join(
+        "<tr>"
+        f"<td><code>{escape(str(record['session_id']))}</code></td>"
+        f"<td>{escape(str(record['status']))}</td>"
+        f"<td>{escape(str(record['turn_count']))}</td>"
+        f"<td>{escape(str(record['started_at']))}</td>"
+        f"<td>{escape(str(record['closed_at']))}</td>"
+        f"<td>{escape(str(record['reason']))}</td>"
+        "</tr>"
+        for record in data["chat_sessions"]
+    ) or _empty_row(6, "No chat sessions.")
+    chat_turn_rows = "\n".join(
+        "<tr>"
+        f"<td><code>{escape(str(record['turn_id']))}</code></td>"
+        f"<td><code>{escape(str(record['session_id']))}</code></td>"
+        f"<td>{escape(str(record['turn_index']))}</td>"
+        f"<td>{escape(str(record['output_allowed']))}</td>"
+        f"<td>{escape(str(record['continuity_claim']))}</td>"
+        f"<td>{escape(str(len(record['growth_event_ids'])))}</td>"
+        "</tr>"
+        for record in data["chat_turns"]
+    ) or _empty_row(6, "No chat turns.")
     self_model_items = []
     for kind, records in data["self_model"]["by_kind"].items():
         for record in records:
@@ -365,6 +387,8 @@ def render_dashboard_html(report: TraceReport) -> str:
       <div class="metric"><div class="label">Growth Reviews</div><div class="value">{escape(str(summary['growth_review_count']))}</div></div>
       <div class="metric"><div class="label">Accepted Growth</div><div class="value">{escape(str(summary['accepted_growth_count']))}</div></div>
       <div class="metric"><div class="label">Memory Cards</div><div class="value">{escape(str(summary['memory_card_count']))}</div></div>
+      <div class="metric"><div class="label">Chat Sessions</div><div class="value">{escape(str(summary['chat_session_count']))}</div></div>
+      <div class="metric"><div class="label">Chat Turns</div><div class="value">{escape(str(summary['chat_turn_count']))}</div></div>
     </section>
     <section class="grid">
       <div class="panel">
@@ -417,6 +441,14 @@ def render_dashboard_html(report: TraceReport) -> str:
     <section>
       <h2>Memory Cards</h2>
       <table><thead><tr><th>Memory ID</th><th>Growth ID</th><th>Confidence</th><th>Claim At Acceptance</th><th>Summary Hash</th><th>Reason</th></tr></thead><tbody>{memory_card_rows}</tbody></table>
+    </section>
+    <section>
+      <h2>Chat Sessions</h2>
+      <table><thead><tr><th>Session ID</th><th>Status</th><th>Turns</th><th>Started</th><th>Closed</th><th>Reason</th></tr></thead><tbody>{chat_session_rows}</tbody></table>
+    </section>
+    <section>
+      <h2>Chat Turns</h2>
+      <table><thead><tr><th>Turn ID</th><th>Session ID</th><th>Index</th><th>Output Allowed</th><th>Claim</th><th>Growth Events</th></tr></thead><tbody>{chat_turn_rows}</tbody></table>
     </section>
     <section>
       <h2>Lucien Self-Model</h2>
