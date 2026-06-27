@@ -68,6 +68,8 @@ from pca import (
     safe_load_policy_pack,
     propose_growth,
     record_memory_signal,
+    record_reflection,
+    reflection_records_from_events,
     review_growth,
     verify_latest_anchor,
 )
@@ -1854,6 +1856,41 @@ def test_memory_signals_adjust_effective_memory_confidence(tmp_path):
     assert updated_card["effective_confidence"] == 0.78
     assert "Effective Confidence" in html
     assert "score=-0.14" in html
+
+
+def test_reflection_records_pending_growth_agenda(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "ledger_integrity", "value": True},
+    )
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "origin_traceability", "value": True},
+    )
+    propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="preference",
+        summary="Prefer concise continuity updates.",
+        identity_impact="medium",
+        reason="operator preference",
+    )
+
+    reflection = record_reflection(ledger, manifest)
+    report = build_trace_report(ledger, manifest)
+    records = reflection_records_from_events(ledger.events())
+    html = render_lucien_cockpit_html(report)
+
+    assert reflection.focus == "growth_review"
+    assert reflection.severity == "watch"
+    assert "review pending growth records" in reflection.recommended_actions
+    assert len(records) == 1
+    assert report.summary["reflection_count"] == 1
+    assert "Reflection Ledger" in html
 
 
 def test_trace_report_summarizes_runtime_lifecycle(tmp_path):

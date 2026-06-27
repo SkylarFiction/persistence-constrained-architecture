@@ -110,8 +110,9 @@
     "reasons": [
       "hard constraint breached: runtime_csm_red"
     ],
-    "recorded_claim_id": "claim_63cc90ca-6d68-475e-8ecd-40d2d921ade5",
+    "recorded_claim_id": "claim_697d5a1a-2b47-4fd8-84e3-41060619c583",
     "recovery_count": 1,
+    "reflection_count": 0,
     "state_precedence": [
       "chain_invalid",
       "no_events",

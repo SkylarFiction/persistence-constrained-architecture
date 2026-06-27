@@ -200,6 +200,16 @@ context, Lucien writes a reinforcement signal. If the user contradicts it or mar
 it stale, Lucien writes the corresponding signal. The original accepted growth
 record remains intact.
 
+## Reflection Ledger
+
+Reflection records are ledger-backed maintenance snapshots. A reflection inspects
+the current continuity claim, pending growth records, growth conflicts, and memory
+cards with contradiction or low-confidence pressure. It records observations and
+recommended actions without mutating the self-model.
+
+This makes Lucien's learning loop inspectable: not only "what did Lucien learn?"
+but "what does Lucien think needs review before learning should advance?"
+
 ## Output Gate
 
 The output gate maps the active continuity claim to allowed speech behavior:

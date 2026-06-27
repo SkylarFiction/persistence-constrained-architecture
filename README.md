@@ -91,6 +91,8 @@ what move the claim to `continuity_break`.
   confidence, and acceptance context.
 - `MemorySignalRecord`: records reinforcement, contradiction, or staleness signals
   against memory cards so learned memory can strengthen or weaken through evidence.
+- `ReflectionRecord`: records Lucien's own maintenance agenda by inspecting
+  continuity state, pending growth, conflicts, and memory confidence pressure.
 - `ChatSessionRecord`: records chat session start, turn, and close lifecycle events
   without storing raw conversation text.
 - `LucienCockpit`: renders a focused operational view of continuity, sessions,
@@ -204,6 +206,8 @@ python3 pca_cli.py self-model --compile --output reports/lucien_self_model.txt
 python3 pca_cli.py memories
 python3 pca_cli.py memory-signal MEMORY_ID --type reinforced --reason "confirmed by later turn"
 python3 pca_cli.py memory-signals
+python3 pca_cli.py reflect
+python3 pca_cli.py reflections
 python3 pca_cli.py sessions
 python3 pca_cli.py cockpit --html reports/lucien_cockpit.html
 python3 scripts/lucien_cockpit_demo.py

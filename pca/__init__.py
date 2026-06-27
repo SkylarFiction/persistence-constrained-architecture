@@ -122,6 +122,12 @@ from .recovery import (
     find_recovery,
     recovery_records_from_events,
 )
+from .reflections import (
+    ReflectionRecord,
+    build_reflection,
+    record_reflection,
+    reflection_records_from_events,
+)
 from .report import (
     TraceReport,
     build_trace_report,
@@ -211,6 +217,7 @@ __all__ = [
     "PolicyPackLoadResult",
     "RecoveryRecord",
     "RecoveryStatus",
+    "ReflectionRecord",
     "RuntimeOutputDecision",
     "RuntimeSignalResult",
     "ScenarioDefinition",
@@ -229,6 +236,7 @@ __all__ = [
     "build_manifest_from_packs",
     "build_manifest_from_policy_results",
     "build_trace_report",
+    "build_reflection",
     "claim_reason",
     "claims_from_events",
     "chat_sessions_from_events",
@@ -263,9 +271,11 @@ __all__ = [
     "record_chat_turn",
     "record_growth_conflict",
     "record_memory_signal",
+    "record_reflection",
     "required_evidence_for",
     "required_checks_for_audit",
     "recovery_records_from_events",
+    "reflection_records_from_events",
     "reject_growth",
     "review_growth",
     "render_trace_report_html",

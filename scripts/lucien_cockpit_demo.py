@@ -19,6 +19,8 @@ from pca import (
     memory_signal_records_from_events,
     propose_growth,
     record_memory_signal,
+    record_reflection,
+    reflection_records_from_events,
     write_lucien_cockpit_html,
 )
 
@@ -74,6 +76,8 @@ def main() -> int:
                 reason="demo turn reinforced governed learning memory",
                 evidence_refs=["lucien_cockpit_demo"],
             )
+    if not reflection_records_from_events(ledger.events()):
+        record_reflection(ledger, manifest)
     report = build_trace_report(ledger, manifest)
     path = write_lucien_cockpit_html(report, "reports/lucien_cockpit.html")
     print(path)

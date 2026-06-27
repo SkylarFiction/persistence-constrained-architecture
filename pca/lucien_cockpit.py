@@ -53,6 +53,15 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         "</tr>"
         for conflict in data["growth_conflicts"][-8:]
     ) or _empty_row(4, "No growth conflicts detected.")
+    reflection_rows = "\n".join(
+        "<tr>"
+        f"<td>{escape(str(reflection['focus']))}</td>"
+        f"<td>{escape(str(reflection['severity']))}</td>"
+        f"<td>{escape(_joined(reflection['observations']))}</td>"
+        f"<td>{escape(_joined(reflection['recommended_actions']))}</td>"
+        "</tr>"
+        for reflection in data["reflections"][-5:]
+    ) or _empty_row(4, "No reflections recorded.")
     session_rows = "\n".join(
         "<tr>"
         f"<td><code>{escape(_short_hash(str(session['session_id'])))}</code></td>"
@@ -172,6 +181,7 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         <div><div class="label">Chain Valid</div><div class="value">{escape(str(summary['chain_valid']))}</div></div>
         <div><div class="label">Accepted Growth</div><div class="value">{escape(str(summary['accepted_growth_count']))}</div></div>
         <div><div class="label">Memory Signals</div><div class="value">{escape(str(summary['memory_signal_count']))}</div></div>
+        <div><div class="label">Reflections</div><div class="value">{escape(str(summary['reflection_count']))}</div></div>
       </div>
     </section>
     <div class="grid">
@@ -187,6 +197,10 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
     <section>
       <h2>Growth Conflicts</h2>
       <table><thead><tr><th>Growth</th><th>Type</th><th>Severity</th><th>Reason</th></tr></thead><tbody>{conflict_rows}</tbody></table>
+    </section>
+    <section>
+      <h2>Reflection Ledger</h2>
+      <table><thead><tr><th>Focus</th><th>Severity</th><th>Observations</th><th>Recommended Actions</th></tr></thead><tbody>{reflection_rows}</tbody></table>
     </section>
     <div class="grid">
       <section>
@@ -268,3 +282,7 @@ def _signal_text(card: dict) -> str:
         f"stale={card['stale_signal_count']} "
         f"score={card['signal_score']}"
     )
+
+
+def _joined(values: list[str]) -> str:
+    return "; ".join(str(value) for value in values)

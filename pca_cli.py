@@ -56,7 +56,9 @@ from pca import (
     record_memory_signal,
     record_claim_if_changed,
     recovery_records_from_events,
+    record_reflection,
     reject_growth,
+    reflection_records_from_events,
     review_growth,
     safe_load_policy_directory,
     safe_load_policy_pack,
@@ -179,6 +181,8 @@ def main() -> int:
     subparsers.add_parser("memories")
     subparsers.add_parser("memory-signals")
     subparsers.add_parser("sessions")
+    subparsers.add_parser("reflect")
+    subparsers.add_parser("reflections")
     self_model_parser = subparsers.add_parser("self-model")
     self_model_parser.add_argument("--compile", action="store_true")
     self_model_parser.add_argument("--output")
@@ -615,6 +619,22 @@ def main() -> int:
             confidence_delta=args.confidence_delta,
         )
         print_json({"memory_signal": record.to_dict()})
+        return 0
+
+    if args.command == "reflect":
+        record = record_reflection(ledger, manifest)
+        print_json({"reflection": record.to_dict()})
+        return 0
+
+    if args.command == "reflections":
+        records = reflection_records_from_events(ledger.events())
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "count": len(records),
+                "reflections": [record.to_dict() for record in records],
+            }
+        )
         return 0
 
     if args.command == "sessions":
