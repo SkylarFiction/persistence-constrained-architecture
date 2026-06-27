@@ -81,6 +81,8 @@ what move the claim to `continuity_break`.
   accept/reject decision, reviewer, continuity claim, and resulting growth status.
 - `GrowthConflictRecord`: records when proposed growth may conflict with accepted
   commitments, policies, or identity markers.
+- `GrowthConflictResolutionRecord`: records steward decisions to accept new growth,
+  keep existing growth, or fork when a conflict is resolved.
 - `SelfModel`: derives Lucien's accepted memories, commitments, skills,
   preferences, policies, and identity-impacting changes from accepted growth
   records.
@@ -202,6 +204,7 @@ python3 pca_cli.py growth-gate accept --impact medium
 python3 pca_cli.py growth
 python3 pca_cli.py growth --queue
 python3 pca_cli.py conflicts
+python3 pca_cli.py resolve-conflict CONFLICT_ID --keep-existing --reason "existing commitment remains active"
 python3 pca_cli.py review-growth GROWTH_ID --accept --reviewer steward --reason "aligned with identity policy"
 python3 pca_cli.py review-growth GROWTH_ID --reject --reviewer steward --reason "conflicts with continuity constraints"
 python3 pca_cli.py self-model

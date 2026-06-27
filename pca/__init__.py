@@ -75,9 +75,15 @@ from .growth import (
     review_growth,
 )
 from .growth_conflicts import (
+    GrowthConflictDecision,
     GrowthConflictRecord,
+    GrowthConflictResolutionRecord,
+    find_growth_conflict,
+    find_growth_conflict_resolution,
     growth_conflict_records_from_events,
+    growth_conflict_resolution_records_from_events,
     record_growth_conflict,
+    resolve_growth_conflict,
 )
 from .ledger import ContinuityEvent, ContinuityLedger
 from .lineage import LineageRecord, lineage_records
@@ -130,6 +136,7 @@ from .reflection_queue import (
     find_reflection_task,
     open_tasks_from_reflection,
     reflection_task_records_from_events,
+    resolve_matching_reflection_tasks,
     update_reflection_task,
 )
 from .reflections import (
@@ -196,7 +203,9 @@ __all__ = [
     "GrowthGateDecision",
     "GrowthGateMode",
     "GrowthRecord",
+    "GrowthConflictDecision",
     "GrowthConflictRecord",
+    "GrowthConflictResolutionRecord",
     "GrowthReviewDecision",
     "GrowthReviewRecord",
     "GrowthStatus",
@@ -265,12 +274,15 @@ __all__ = [
     "derive_self_model",
     "export_latest_anchor",
     "find_followup",
+    "find_growth_conflict",
+    "find_growth_conflict_resolution",
     "find_recovery",
     "find_reflection_task",
     "followups_from_events",
     "growth_records_from_events",
     "growth_review_records_from_events",
     "growth_conflict_records_from_events",
+    "growth_conflict_resolution_records_from_events",
     "lineage_records",
     "load_anchor_records",
     "load_policy_directory",
@@ -294,6 +306,8 @@ __all__ = [
     "reflection_records_from_events",
     "reflection_task_records_from_events",
     "reject_growth",
+    "resolve_matching_reflection_tasks",
+    "resolve_growth_conflict",
     "review_growth",
     "update_reflection_task",
     "render_trace_report_html",

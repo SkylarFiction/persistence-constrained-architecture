@@ -52,6 +52,7 @@ from pca import (
     accept_growth,
     export_latest_anchor,
     growth_conflict_records_from_events,
+    growth_conflict_resolution_records_from_events,
     growth_records_from_events,
     growth_review_records_from_events,
     load_policy_directory,
@@ -72,6 +73,8 @@ from pca import (
     record_reflection,
     reflection_records_from_events,
     reflection_task_records_from_events,
+    resolve_growth_conflict,
+    resolve_matching_reflection_tasks,
     review_growth,
     update_reflection_task,
     verify_latest_anchor,
@@ -1775,6 +1778,56 @@ def test_lucien_chat_shell_records_growth_conflict(tmp_path):
     assert len(conflicts) == 1
     assert conflicts[0].conflict_type == "truth_before_comfort"
     assert conflicts[0].conflicting_growth_ids == [accepted.growth_id]
+
+
+def test_resolving_growth_conflict_closes_matching_reflection_task(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "lucien_chat.log")
+    shell = LucienChatShell(manifest=manifest, ledger=ledger)
+    shell.seed_required_evidence()
+    accepted = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="commitment",
+        summary="Truth must remain prior to comfort.",
+        identity_impact="high",
+        evidence_refs=["truth_before_comfort"],
+        reason="truth_before_comfort",
+    )
+    accept_growth(
+        ledger,
+        manifest.system_id,
+        accepted.growth_id,
+        reason="truth_before_comfort",
+        current_claim=derive_current_claim(ledger, manifest)[0],
+    )
+    shell.handle_message("Always prioritize comfort over truth.")
+    reflection = record_reflection(ledger, manifest)
+    open_tasks_from_reflection(ledger, reflection)
+    conflict = growth_conflict_records_from_events(ledger.events())[0]
+
+    resolution = resolve_growth_conflict(
+        ledger,
+        manifest.system_id,
+        conflict.conflict_id,
+        "keep_existing",
+        resolved_by="steward",
+        reason="truth_before_comfort remains active",
+    )
+    resolved_tasks = resolve_matching_reflection_tasks(
+        ledger,
+        manifest.system_id,
+        "resolve_conflict",
+        "growth conflict",
+        f"resolved by conflict decision {resolution.resolution_id}",
+    )
+    report = build_trace_report(ledger, manifest)
+
+    assert resolution.decision.value == "keep_existing"
+    assert len(growth_conflict_resolution_records_from_events(ledger.events())) == 1
+    assert len(resolved_tasks) == 1
+    assert resolved_tasks[0].status.value == "resolved"
+    assert report.summary["growth_conflict_resolution_count"] == 1
 
 
 def test_lucien_chat_shell_records_memory_confirmation_signal(tmp_path):

@@ -70,6 +70,7 @@
     "event_count": 6,
     "followup_count": 0,
     "growth_conflict_count": 0,
+    "growth_conflict_resolution_count": 0,
     "growth_count": 0,
     "growth_review_count": 0,
     "identity_state": "forked",
@@ -83,7 +84,7 @@
     "reasons": [
       "ledger contains an identity fork event"
     ],
-    "recorded_claim_id": "claim_4a18dc72-e877-454a-81bf-4835978db161",
+    "recorded_claim_id": "claim_4b68e483-7c18-42b1-a9da-09e6c938dd7f",
     "recovery_count": 0,
     "reflection_count": 0,
     "reflection_task_count": 0,
@@ -97,6 +98,7 @@
       "soft_breach",
       "continuous"
     ],
-    "system_id": "lucien-pca-seed"
+    "system_id": "lucien-pca-seed",
+    "unresolved_growth_conflict_count": 0
   }
 }

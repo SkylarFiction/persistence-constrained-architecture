@@ -47,6 +47,7 @@ from pca import (
     followups_from_events,
     growth_records_from_events,
     growth_conflict_records_from_events,
+    growth_conflict_resolution_records_from_events,
     growth_review_records_from_events,
     lineage_records,
     accept_growth,
@@ -59,6 +60,8 @@ from pca import (
     recovery_records_from_events,
     record_reflection,
     reject_growth,
+    resolve_growth_conflict,
+    resolve_matching_reflection_tasks,
     reflection_task_records_from_events,
     reflection_records_from_events,
     review_growth,
@@ -213,6 +216,17 @@ def main() -> int:
     growth_parser.add_argument("--queue", action="store_true")
 
     subparsers.add_parser("conflicts")
+
+    resolve_conflict_parser = subparsers.add_parser("resolve-conflict")
+    resolve_conflict_parser.add_argument("conflict_id")
+    conflict_decision_group = resolve_conflict_parser.add_mutually_exclusive_group(
+        required=True
+    )
+    conflict_decision_group.add_argument("--accept-new", action="store_true")
+    conflict_decision_group.add_argument("--keep-existing", action="store_true")
+    conflict_decision_group.add_argument("--fork", action="store_true")
+    resolve_conflict_parser.add_argument("--resolved-by", default="steward")
+    resolve_conflict_parser.add_argument("--reason", required=True)
 
     propose_growth_parser = subparsers.add_parser("propose-growth")
     propose_growth_parser.add_argument("kind")
@@ -754,11 +768,43 @@ def main() -> int:
 
     if args.command == "conflicts":
         conflicts = growth_conflict_records_from_events(ledger.events())
+        resolutions = growth_conflict_resolution_records_from_events(ledger.events())
         print_json(
             {
                 "system_id": manifest.system_id,
                 "count": len(conflicts),
                 "conflicts": [record.to_dict() for record in conflicts],
+                "resolutions": [record.to_dict() for record in resolutions],
+            }
+        )
+        return 0
+
+    if args.command == "resolve-conflict":
+        if args.accept_new:
+            decision = "accept_new"
+        elif args.keep_existing:
+            decision = "keep_existing"
+        else:
+            decision = "fork"
+        resolution = resolve_growth_conflict(
+            ledger,
+            manifest.system_id,
+            args.conflict_id,
+            decision,
+            resolved_by=args.resolved_by,
+            reason=args.reason,
+        )
+        resolved_tasks = resolve_matching_reflection_tasks(
+            ledger,
+            manifest.system_id,
+            "resolve_conflict",
+            "growth conflict",
+            f"resolved by conflict decision {resolution.resolution_id}",
+        )
+        print_json(
+            {
+                "resolution": resolution.to_dict(),
+                "resolved_tasks": [task.to_dict() for task in resolved_tasks],
             }
         )
         return 0

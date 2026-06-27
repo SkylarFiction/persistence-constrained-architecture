@@ -98,6 +98,7 @@
     "event_count": 11,
     "followup_count": 1,
     "growth_conflict_count": 0,
+    "growth_conflict_resolution_count": 0,
     "growth_count": 0,
     "growth_review_count": 0,
     "identity_state": "broken",
@@ -111,7 +112,7 @@
     "reasons": [
       "hard constraint breached: runtime_csm_red"
     ],
-    "recorded_claim_id": "claim_769641ac-3b03-424d-a09f-25aa2a71aee9",
+    "recorded_claim_id": "claim_2156aaa0-97b1-48d2-a96c-d353d6437407",
     "recovery_count": 1,
     "reflection_count": 0,
     "reflection_task_count": 0,
@@ -125,6 +126,7 @@
       "soft_breach",
       "continuous"
     ],
-    "system_id": "lucien-pca-seed"
+    "system_id": "lucien-pca-seed",
+    "unresolved_growth_conflict_count": 0
   }
 }

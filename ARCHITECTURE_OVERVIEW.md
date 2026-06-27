@@ -226,6 +226,20 @@ The first queue kinds are intentionally small:
 Tasks can be resolved or dismissed, and those outcomes are written back to the
 ledger. This lets Lucien self-monitor without secretly self-authorizing.
 
+## Conflict Resolution
+
+Growth conflicts can be resolved by a steward decision. The first decisions are:
+
+- `accept_new`: permit steward-reviewed acceptance of the proposed growth.
+- `keep_existing`: preserve the existing accepted commitment, policy, or identity
+  marker and block the conflicting proposal.
+- `fork`: require fork-scoped treatment before the conflicting growth can proceed.
+
+Resolving a conflict writes a `lucien.growth_conflict_resolved` event. Matching
+open `resolve_conflict` reflection tasks are resolved as part of the same CLI
+workflow, so conflict handling closes the governance loop instead of only adding
+another note.
+
 ## Output Gate
 
 The output gate maps the active continuity claim to allowed speech behavior:

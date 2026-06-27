@@ -200,6 +200,32 @@ def active_reflection_tasks(events: list[ContinuityEvent]) -> list[ReflectionTas
     ]
 
 
+def resolve_matching_reflection_tasks(
+    ledger: ContinuityLedger,
+    identity_id: str,
+    kind: str | ReflectionTaskKind,
+    reason_contains: str,
+    resolution_reason: str,
+) -> list[ReflectionTaskRecord]:
+    parsed_kind = _parse_kind(kind)
+    resolved = []
+    for task in active_reflection_tasks(ledger.events()):
+        if task.kind != parsed_kind:
+            continue
+        if reason_contains and reason_contains not in task.reason:
+            continue
+        resolved.append(
+            update_reflection_task(
+                ledger,
+                identity_id,
+                task.task_id,
+                ReflectionTaskStatus.RESOLVED,
+                reason=resolution_reason,
+            )
+        )
+    return resolved
+
+
 def _task_specs(reflection: ReflectionRecord) -> list[dict[str, str]]:
     specs: list[dict[str, str]] = []
     observation_text = " ".join(reflection.observations)

@@ -109,6 +109,7 @@
     "event_count": 10,
     "followup_count": 2,
     "growth_conflict_count": 0,
+    "growth_conflict_resolution_count": 0,
     "growth_count": 0,
     "growth_review_count": 0,
     "identity_state": "continuous",
@@ -122,7 +123,7 @@
     "reasons": [
       "Lucien Persistence Kernel satisfies recorded persistence constraints"
     ],
-    "recorded_claim_id": "claim_a9b3fc48-18af-457f-9e2e-d05c1c275675",
+    "recorded_claim_id": "claim_39f5e021-f935-4b0e-89c1-5aa3f1a6640d",
     "recovery_count": 0,
     "reflection_count": 0,
     "reflection_task_count": 0,
@@ -136,6 +137,7 @@
       "soft_breach",
       "continuous"
     ],
-    "system_id": "lucien-pca-seed"
+    "system_id": "lucien-pca-seed",
+    "unresolved_growth_conflict_count": 0
   }
 }

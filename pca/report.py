@@ -16,7 +16,10 @@ from .growth import (
     growth_records_from_events,
     growth_review_records_from_events,
 )
-from .growth_conflicts import growth_conflict_records_from_events
+from .growth_conflicts import (
+    growth_conflict_records_from_events,
+    growth_conflict_resolution_records_from_events,
+)
 from .ledger import ContinuityEvent, ContinuityLedger
 from .lineage import lineage_records
 from .manifest import IdentityManifest
@@ -45,6 +48,7 @@ IMPORTANT_EVENT_TYPES = {
     "lucien.growth_updated",
     "lucien.growth_reviewed",
     "lucien.growth_conflict_detected",
+    "lucien.growth_conflict_resolved",
     "lucien.reflection_recorded",
     "reflection.task_opened",
     "reflection.task_resolved",
@@ -81,6 +85,7 @@ class TraceReport:
     active_growth: list[dict[str, Any]]
     growth_reviews: list[dict[str, Any]]
     growth_conflicts: list[dict[str, Any]]
+    growth_conflict_resolutions: list[dict[str, Any]]
     memory_cards: list[dict[str, Any]]
     memory_signals: list[dict[str, Any]]
     reflections: list[dict[str, Any]]
@@ -108,6 +113,7 @@ class TraceReport:
             "active_growth": self.active_growth,
             "growth_reviews": self.growth_reviews,
             "growth_conflicts": self.growth_conflicts,
+            "growth_conflict_resolutions": self.growth_conflict_resolutions,
             "memory_cards": self.memory_cards,
             "memory_signals": self.memory_signals,
             "reflections": self.reflections,
@@ -183,6 +189,11 @@ def _event_summary(event: ContinuityEvent) -> str:
             f"growth={payload.get('proposed_growth_id')} "
             f"type={payload.get('conflict_type')} severity={payload.get('severity')}"
         )
+    if event.event_type == "lucien.growth_conflict_resolved":
+        return (
+            f"conflict={payload.get('conflict_id')} "
+            f"decision={payload.get('decision')} by={payload.get('resolved_by')}"
+        )
     if event.event_type == "lucien.reflection_recorded":
         return (
             f"focus={payload.get('focus')} severity={payload.get('severity')} "
@@ -251,6 +262,15 @@ def build_trace_report(
     active_growth = active_growth_records(events)
     growth_reviews = growth_review_records_from_events(events)
     growth_conflicts = growth_conflict_records_from_events(events)
+    growth_conflict_resolutions = growth_conflict_resolution_records_from_events(events)
+    resolved_conflict_ids = {
+        record.conflict_id for record in growth_conflict_resolutions
+    }
+    unresolved_conflicts = [
+        record
+        for record in growth_conflicts
+        if record.conflict_id not in resolved_conflict_ids
+    ]
     memory_cards = memory_cards_from_events(events, manifest.system_id)
     memory_signals = memory_signal_records_from_events(events)
     reflections = reflection_records_from_events(events)
@@ -289,6 +309,8 @@ def build_trace_report(
         "active_growth_count": len(active_growth),
         "growth_review_count": len(growth_reviews),
         "growth_conflict_count": len(growth_conflicts),
+        "growth_conflict_resolution_count": len(growth_conflict_resolutions),
+        "unresolved_growth_conflict_count": len(unresolved_conflicts),
         "memory_card_count": len(memory_cards),
         "memory_signal_count": len(memory_signals),
         "reflection_count": len(reflections),
@@ -369,6 +391,9 @@ def build_trace_report(
         active_growth=[record.to_dict() for record in active_growth],
         growth_reviews=[record.to_dict() for record in growth_reviews],
         growth_conflicts=[record.to_dict() for record in growth_conflicts],
+        growth_conflict_resolutions=[
+            record.to_dict() for record in growth_conflict_resolutions
+        ],
         memory_cards=[record.to_dict() for record in memory_cards],
         memory_signals=[record.to_dict() for record in memory_signals],
         reflections=[record.to_dict() for record in reflections],

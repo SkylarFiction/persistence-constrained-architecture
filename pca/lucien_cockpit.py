@@ -53,6 +53,15 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         "</tr>"
         for conflict in data["growth_conflicts"][-8:]
     ) or _empty_row(4, "No growth conflicts detected.")
+    conflict_resolution_rows = "\n".join(
+        "<tr>"
+        f"<td><code>{escape(_short_hash(str(resolution['conflict_id'])))}</code></td>"
+        f"<td>{escape(str(resolution['decision']))}</td>"
+        f"<td>{escape(str(resolution['resolved_by']))}</td>"
+        f"<td>{escape(str(resolution['effect']))}</td>"
+        "</tr>"
+        for resolution in data["growth_conflict_resolutions"][-8:]
+    ) or _empty_row(4, "No conflict resolutions recorded.")
     reflection_rows = "\n".join(
         "<tr>"
         f"<td>{escape(str(reflection['focus']))}</td>"
@@ -194,6 +203,7 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         <div><div class="label">Memory Signals</div><div class="value">{escape(str(summary['memory_signal_count']))}</div></div>
         <div><div class="label">Reflections</div><div class="value">{escape(str(summary['reflection_count']))}</div></div>
         <div><div class="label">Open Tasks</div><div class="value">{escape(str(summary['active_reflection_task_count']))}</div></div>
+        <div><div class="label">Conflict Resolutions</div><div class="value">{escape(str(summary['growth_conflict_resolution_count']))}</div></div>
       </div>
     </section>
     <div class="grid">
@@ -209,6 +219,10 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
     <section>
       <h2>Growth Conflicts</h2>
       <table><thead><tr><th>Growth</th><th>Type</th><th>Severity</th><th>Reason</th></tr></thead><tbody>{conflict_rows}</tbody></table>
+    </section>
+    <section>
+      <h2>Conflict Resolutions</h2>
+      <table><thead><tr><th>Conflict</th><th>Decision</th><th>Resolved By</th><th>Effect</th></tr></thead><tbody>{conflict_resolution_rows}</tbody></table>
     </section>
     <section>
       <h2>Reflection Ledger</h2>
