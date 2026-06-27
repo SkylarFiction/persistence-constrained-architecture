@@ -44,6 +44,7 @@ from pca import (
     build_trace_report,
     build_manifest_from_packs,
     build_manifest_from_policy_results,
+    build_session_replay,
     claims_from_events,
     chat_sessions_from_events,
     chat_turns_from_events,
@@ -69,6 +70,7 @@ from pca import (
     render_dashboard_html,
     render_constitution_markdown,
     render_lucien_cockpit_html,
+    render_session_replay_html,
     render_trace_report_html,
     recovery_records_from_events,
     safe_load_policy_pack,
@@ -84,6 +86,7 @@ from pca import (
     update_reflection_task,
     verify_latest_anchor,
     write_constitution_markdown,
+    write_session_replay_html,
 )
 
 
@@ -1825,6 +1828,29 @@ def test_lucien_chat_shell_records_session_turn_and_close(tmp_path):
     assert turns[0].output_allowed is True
     assert turns[0].continuity_claim == "certified_continuity"
     assert "Remember that sessions are hashed" not in serialized_events
+
+
+def test_session_replay_renders_governed_timeline(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "lucien_chat.log")
+    shell = LucienChatShell(manifest=manifest, ledger=ledger)
+    shell.seed_required_evidence()
+    result = shell.handle_message("Remember that replay is auditable.")
+    shell.close_session()
+
+    replay = build_session_replay(ledger, manifest, result.session_id)
+    html = render_session_replay_html(replay)
+    output_path = write_session_replay_html(replay, tmp_path / "session_replay.html")
+    event_types = [entry.event_type for entry in replay.timeline]
+
+    assert replay.session.session_id == result.session_id
+    assert replay.turns[0]["turn_id"] == result.turn_id
+    assert "lucien.chat_session_started" in event_types
+    assert "runtime.output_gate" in event_types
+    assert "lucien.chat_session_closed" in event_types
+    assert replay.final_state["current_continuity_claim"] == "certified_continuity"
+    assert "PCA Session Replay" in html
+    assert output_path.exists()
 
 
 def test_lucien_cockpit_renders_chat_and_memory_state(tmp_path):

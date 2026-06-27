@@ -74,6 +74,9 @@ from pca import (
     write_lucien_cockpit_html,
     write_trace_report_html,
     verify_latest_anchor,
+    build_session_replay,
+    latest_session_id,
+    write_session_replay_html,
 )
 from pca.live_chat import chat_once, run_live_chat_server
 
@@ -209,6 +212,10 @@ def main() -> int:
     subparsers.add_parser("memories")
     subparsers.add_parser("memory-signals")
     subparsers.add_parser("sessions")
+    session_replay_parser = subparsers.add_parser("session-replay")
+    session_replay_parser.add_argument("session_id", nargs="?")
+    session_replay_parser.add_argument("--latest", action="store_true")
+    session_replay_parser.add_argument("--html")
     subparsers.add_parser("reflect")
     subparsers.add_parser("reflections")
     reflection_queue_parser = subparsers.add_parser("reflection-queue")
@@ -765,6 +772,19 @@ def main() -> int:
                 ],
             }
         )
+        return 0
+
+    if args.command == "session-replay":
+        session_id = args.session_id
+        if args.latest or not session_id:
+            session_id = latest_session_id(ledger)
+        if not session_id:
+            raise SystemExit("No chat sessions found.")
+        replay = build_session_replay(ledger, manifest, session_id)
+        payload = replay.to_dict()
+        if args.html:
+            payload["html_path"] = str(write_session_replay_html(replay, args.html))
+        print_json(payload)
         return 0
 
     if args.command == "self-model":

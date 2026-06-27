@@ -178,6 +178,14 @@ from .scenarios import (
     write_demo_index,
 )
 from .self_model import SelfModel, compile_self_model, derive_self_model
+from .session_replay import (
+    SessionReplay,
+    SessionTimelineEntry,
+    build_session_replay,
+    latest_session_id,
+    render_session_replay_html,
+    write_session_replay_html,
+)
 from .state import (
     default_claim_for_identity_state,
     derive_current_claim,
@@ -259,6 +267,8 @@ __all__ = [
     "ScenarioDefinition",
     "ScenarioRunResult",
     "SelfModel",
+    "SessionReplay",
+    "SessionTimelineEntry",
     "TraceReport",
     "TransformEvaluation",
     "TransformPolicy",
@@ -273,6 +283,7 @@ __all__ = [
     "authorize",
     "build_manifest_from_packs",
     "build_manifest_from_policy_results",
+    "build_session_replay",
     "build_trace_report",
     "build_reflection",
     "claim_reason",
@@ -299,6 +310,7 @@ __all__ = [
     "growth_conflict_records_from_events",
     "growth_conflict_resolution_records_from_events",
     "lineage_records",
+    "latest_session_id",
     "load_anchor_records",
     "load_policy_directory",
     "load_policy_pack",
@@ -329,6 +341,7 @@ __all__ = [
     "render_constitution_markdown",
     "render_dashboard_html",
     "render_lucien_cockpit_html",
+    "render_session_replay_html",
     "report_scenario",
     "run_all_scenarios",
     "run_scenario",
@@ -345,5 +358,6 @@ __all__ = [
     "write_constitution_markdown",
     "write_demo_index",
     "write_lucien_cockpit_html",
+    "write_session_replay_html",
     "write_trace_report_html",
 ]

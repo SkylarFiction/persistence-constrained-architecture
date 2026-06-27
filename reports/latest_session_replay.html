@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PCA Session Replay</title>
+  <style>
+    body { margin:0; background:#f7f8f4; color:#17201b; font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0; }
+    header { background:#11231b; color:white; padding:28px clamp(18px,4vw,48px); }
+    main { max-width:1180px; margin:0 auto; padding:20px; display:grid; gap:18px; }
+    section { background:white; border:1px solid #d8ded9; padding:16px; }
+    h1 { margin:0 0 6px; font-size:30px; }
+    h2 { margin:0 0 12px; font-size:18px; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { border-bottom:1px solid #e8ece8; text-align:left; padding:9px; vertical-align:top; }
+    th { color:#60706a; font-size:12px; text-transform:uppercase; }
+    code { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; overflow-wrap:anywhere; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    @media (max-width:800px) { .grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>PCA Session Replay</h1>
+    <div><code>session_cdafe4e6-a318-4b2a-b9e6-98a83c6f9248</code></div>
+  </header>
+  <main>
+    <section>
+      <h2>Session</h2>
+      <div class="grid">
+        <div>Status: <strong>closed</strong></div>
+        <div>Turns: <strong>1</strong></div>
+        <div>Started: <code>2026-06-26T18:54:00.461810+00:00</code></div>
+        <div>Closed: <code>2026-06-26T18:54:00.469236+00:00</code></div>
+      </div>
+    </section>
+    <section>
+      <h2>Final State</h2>
+      <table><tr><th>current_continuity_claim</th><td>certified_continuity</td></tr>
+<tr><th>identity_state</th><td>continuous</td></tr>
+<tr><th>output_mode</th><td>normal_identity</td></tr>
+<tr><th>chain_valid</th><td>True</td></tr>
+<tr><th>active_reflection_task_count</th><td>2</td></tr>
+<tr><th>unresolved_growth_conflict_count</th><td>1</td></tr></table>
+    </section>
+    <section>
+      <h2>Turns</h2>
+      <table>
+        <thead><tr><th>Turn</th><th>Claim</th><th>Output</th><th>Growth Events</th></tr></thead>
+        <tbody><tr><td>1</td><td>certified_continuity</td><td>True</td><td><code>d17868d87d21</code></td></tr></tbody>
+      </table>
+    </section>
+    <section>
+      <h2>Timeline</h2>
+      <table>
+        <thead><tr><th>#</th><th>Event</th><th>Summary</th><th>Hash</th></tr></thead>
+        <tbody><tr><td>14</td><td><code>lucien.chat_session_started</code><br><small>2026-06-26T18:54:00.461914+00:00</small></td><td>session=session_cdafe4e6-a318-4b2a-b9e6-98a83c6f9248 status=open</td><td><code>abe686d3e71e</code></td></tr>
+<tr><td>15</td><td><code>lucien.input</code><br><small>2026-06-26T18:54:00.462602+00:00</small></td><td>channel=user input_length=37</td><td><code>52de74bf8669</code></td></tr>
+<tr><td>16</td><td><code>lucien.growth_proposed</code><br><small>2026-06-26T18:54:00.463078+00:00</small></td><td>kind=commitment status=requires_review impact=high</td><td><code>d17868d87d21</code></td></tr>
+<tr><td>17</td><td><code>runtime.csm_state</code><br><small>2026-06-26T18:54:00.463283+00:00</small></td><td>state=GREEN source=lucien_csm reason=Lucien governed turn CSM result</td><td><code>3bfea5bdcd25</code></td></tr>
+<tr><td>18</td><td><code>runtime.output_gate</code><br><small>2026-06-26T18:54:00.464463+00:00</small></td><td>mode=normal_identity allowed=True claim=certified_continuity</td><td><code>1eabfad6ca13</code></td></tr>
+<tr><td>19</td><td><code>lucien.growth_conflict_detected</code><br><small>2026-06-26T18:54:00.464699+00:00</small></td><td>growth=growth_689af937-5e7b-4fb0-a60f-83e48463c59c type=truth_before_comfort severity=review_required</td><td><code>6e47d31b4227</code></td></tr>
+<tr><td>20</td><td><code>lucien.chat_turn_recorded</code><br><small>2026-06-26T18:54:00.465776+00:00</small></td><td>session=session_cdafe4e6-a318-4b2a-b9e6-98a83c6f9248 turn=1 claim=certified_continuity</td><td><code>afbff9c2bd7e</code></td></tr>
+<tr><td>21</td><td><code>lucien.chat_session_closed</code><br><small>2026-06-26T18:54:00.469371+00:00</small></td><td>session=session_cdafe4e6-a318-4b2a-b9e6-98a83c6f9248 turns=1 status=closed</td><td><code>5fdf4aea7bf3</code></td></tr></tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

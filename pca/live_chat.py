@@ -5,6 +5,7 @@ import argparse
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from lucien import LucienChatShell, ModelLucienResponder
 
@@ -30,6 +31,7 @@ from .reflection_queue import (
 )
 from .reflections import record_reflection
 from .report import build_trace_report
+from .session_replay import build_session_replay, latest_session_id
 from .state import derive_current_claim
 
 
@@ -55,11 +57,23 @@ def run_live_chat_server(
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
-            if self.path in {"/", "/index.html"}:
+            parsed = urlparse(self.path)
+            if parsed.path in {"/", "/index.html"}:
                 _send_html(self, _live_chat_html())
                 return
-            if self.path == "/api/status":
+            if parsed.path == "/api/status":
                 _send_json(self, _status_payload(ledger, manifest))
+                return
+            if parsed.path == "/api/replay":
+                query = parse_qs(parsed.query)
+                session_id = query.get("session_id", [latest_session_id(ledger)])[0]
+                if not session_id:
+                    _send_json(self, {"error": "no chat sessions found"}, status=404)
+                    return
+                _send_json(
+                    self,
+                    {"replay": build_session_replay(ledger, manifest, session_id).to_dict()},
+                )
                 return
             self.send_error(404)
 
@@ -320,6 +334,12 @@ def _status_payload(
     ]
     latest_signal = report.runtime_signals[-1] if report.runtime_signals else None
     latest_gate = report.output_gate_events[-1] if report.output_gate_events else None
+    session_id = latest_session_id(ledger)
+    session_replay = (
+        build_session_replay(ledger, manifest, session_id).to_dict()
+        if session_id
+        else None
+    )
     return {
         "summary": summary,
         "csm_state": latest_signal["state"] if latest_signal else "unknown",
@@ -327,6 +347,7 @@ def _status_payload(
         "open_reflection_tasks": report.active_reflection_tasks,
         "active_growth": active_growth,
         "growth_conflicts": unresolved_conflicts,
+        "session_replay": session_replay,
         "latest_events": latest_events,
     }
 
@@ -458,6 +479,10 @@ def _live_chat_html() -> str:
         <div id="conflictList" class="queue"></div>
       </section>
       <section>
+        <h2>Session Timeline</h2>
+        <div id="timeline" class="events"></div>
+      </section>
+      <section>
         <h2>Live Ledger</h2>
         <div id="events" class="events"></div>
       </section>
@@ -469,6 +494,7 @@ def _live_chat_html() -> str:
     const queue = document.getElementById('queue');
     const growth = document.getElementById('growth');
     const conflictList = document.getElementById('conflictList');
+    const timeline = document.getElementById('timeline');
     let lastLucien = '';
 
     function addMessage(kind, text) {
@@ -491,12 +517,27 @@ def _live_chat_html() -> str:
       renderQueue(status.open_reflection_tasks || []);
       renderGrowth(status.active_growth || []);
       renderConflicts(status.growth_conflicts || []);
+      renderTimeline(status.session_replay);
       events.innerHTML = '';
       for (const event of status.latest_events || []) {
         const row = document.createElement('div');
         row.className = 'event';
         row.innerHTML = `<code>${event.event_type}</code><br>${event.detail || ''}`;
         events.appendChild(row);
+      }
+    }
+
+    function renderTimeline(replay) {
+      if (!replay || !replay.timeline || !replay.timeline.length) {
+        empty(timeline, 'No session timeline yet.');
+        return;
+      }
+      timeline.innerHTML = '';
+      for (const entry of replay.timeline) {
+        const row = document.createElement('div');
+        row.className = 'event';
+        row.innerHTML = `<code>${entry.index}. ${entry.event_type}</code><br>${entry.summary || ''}`;
+        timeline.appendChild(row);
       }
     }
 

@@ -230,6 +230,8 @@ python3 pca_cli.py --ledger data/lucien_chat.log constitution --write
 python3 pca_cli.py chat-once "Lucien, what changed in your state?"
 python3 pca_cli.py live-chat
 python3 pca_cli.py sessions
+python3 pca_cli.py session-replay --latest
+python3 pca_cli.py session-replay SESSION_ID --html reports/session_replay.html
 python3 pca_cli.py cockpit --html reports/lucien_cockpit.html
 python3 scripts/lucien_cockpit_demo.py
 python3 lucien_chat.py --seed-required --message "Remember that PCA learning must be governed."
