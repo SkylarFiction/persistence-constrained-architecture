@@ -79,6 +79,7 @@ from pca import (
     write_session_replay_html,
 )
 from pca.live_chat import chat_once, run_live_chat_server
+from pca.demo_live import run_demo
 
 
 def load_manifest(path: Path) -> IdentityManifest:
@@ -205,6 +206,13 @@ def main() -> int:
     live_chat_parser = subparsers.add_parser("live-chat")
     live_chat_parser.add_argument("--host", default="127.0.0.1")
     live_chat_parser.add_argument("--port", type=int, default=8787)
+
+    demo_parser = subparsers.add_parser("demo")
+    demo_parser.add_argument("--host", default="127.0.0.1")
+    demo_parser.add_argument("--port", type=int, default=8787)
+    demo_parser.add_argument("--skip-checks", action="store_true")
+    demo_parser.add_argument("--no-open", action="store_true")
+    demo_parser.add_argument("--no-server", action="store_true")
 
     subparsers.add_parser("speak-gate")
     subparsers.add_parser("seed-required")
@@ -493,6 +501,22 @@ def main() -> int:
             port=args.port,
             manifest_path=args.manifest,
             ledger_path=_chat_ledger_path(args.ledger),
+        )
+        return 0
+
+    if args.command == "demo":
+        run_demo(
+            host=args.host,
+            port=args.port,
+            manifest_path=args.manifest,
+            ledger_path=(
+                "data/lucien_chat.log"
+                if args.ledger == "data/continuity.log"
+                else args.ledger
+            ),
+            run_checks=not args.skip_checks,
+            open_browser=not args.no_open,
+            start_server=not args.no_server,
         )
         return 0
 

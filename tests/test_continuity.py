@@ -1,7 +1,9 @@
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from lucien import LucienChatShell
+from pca.demo_live import prepare_demo_artifacts
 from pca.live_chat import _apply_steward_action, chat_once
 from pca import (
     AuditEngine,
@@ -1877,6 +1879,30 @@ def test_session_replay_renders_governed_timeline(tmp_path):
     assert replay.final_state["current_continuity_claim"] == "certified_continuity"
     assert "PCA Session Replay" in html
     assert output_path.exists()
+
+
+def test_demo_artifact_prep_writes_reviewable_outputs(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "lucien_chat.log")
+    shell = LucienChatShell(manifest=manifest, ledger=ledger)
+    shell.seed_required_evidence()
+    shell.handle_message("Remember that demo mode should be reviewable.")
+    shell.close_session()
+
+    artifacts = prepare_demo_artifacts(
+        manifest=manifest,
+        ledger=ledger,
+        constitution_path=tmp_path / "LUCIEN_CONSTITUTION.md",
+        cockpit_path=tmp_path / "lucien_cockpit.html",
+        replay_path=tmp_path / "latest_session_replay.html",
+    )
+
+    assert Path(artifacts["constitution_path"]).exists()
+    assert Path(artifacts["cockpit_path"]).exists()
+    assert Path(artifacts["replay_path"]).exists()
+    assert "PCA Session Replay" in Path(artifacts["replay_path"]).read_text(
+        encoding="utf-8"
+    )
 
 
 def test_lucien_cockpit_renders_chat_and_memory_state(tmp_path):

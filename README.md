@@ -168,6 +168,8 @@ as formal policies, invariants, metrics, and recovery protocols.
 ## Quick Start
 
 ```bash
+python3 pca_cli.py demo
+python3 scripts/demo_live.py
 python3 scripts/check_all.py
 python3 scripts/smoke_check.py
 python3 scripts/regression_check.py
@@ -242,6 +244,10 @@ reviewing pending growth, and resolving growth conflicts. These controls write
 the same ledger-backed events as the CLI workflows.
 It also exposes a live self-model panel and a manual reflection action so
 Lucien can surface new steward work while the conversation is running.
+
+For a public walkthrough, run `python3 pca_cli.py demo`. It runs the local
+checks, refreshes the cockpit and replay artifacts, prints reviewer steps, and
+starts the Lucien live cockpit.
 
 Scenario outputs are written to `scenario_runs/<scenario_id>/`:
 
