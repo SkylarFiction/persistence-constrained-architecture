@@ -65,6 +65,7 @@
     "identity_state": "continuous",
     "ledger_path": "scenario_runs/memory_compaction_review/continuity.log",
     "memory_card_count": 0,
+    "memory_signal_count": 0,
     "name": "Lucien Persistence Kernel",
     "output_allowed_scope": "May speak normally as the identity.",
     "output_mode": "normal_identity",
@@ -72,7 +73,7 @@
     "reasons": [
       "Lucien Persistence Kernel satisfies recorded persistence constraints"
     ],
-    "recorded_claim_id": "claim_b783a33a-7e8c-4469-a9cc-2d4fd9bc33e3",
+    "recorded_claim_id": "claim_8ef9365d-9215-4e07-9b77-74bbc168d896",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

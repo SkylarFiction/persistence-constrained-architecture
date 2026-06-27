@@ -58,6 +58,7 @@ from pca import (
     load_policy_pack,
     lineage_records,
     memory_cards_from_events,
+    memory_signal_records_from_events,
     merge_policy_packs,
     required_evidence_for,
     render_dashboard_html,
@@ -66,6 +67,7 @@ from pca import (
     recovery_records_from_events,
     safe_load_policy_pack,
     propose_growth,
+    record_memory_signal,
     review_growth,
     verify_latest_anchor,
 )
@@ -1784,6 +1786,56 @@ def test_identity_defining_growth_requires_review(tmp_path):
     )
 
     assert growth.status == GrowthStatus.REQUIRES_REVIEW
+
+
+def test_memory_signals_adjust_effective_memory_confidence(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    shell = LucienChatShell(manifest=manifest, ledger=ledger)
+    shell.seed_required_evidence()
+    growth = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="memory",
+        summary="Lucien should keep learning governed.",
+        identity_impact="low",
+        reason="governed learning memory",
+    )
+    accept_growth(
+        ledger,
+        manifest.system_id,
+        growth.growth_id,
+        reason="accepted test memory",
+        current_claim=derive_current_claim(ledger, manifest)[0],
+    )
+    card = memory_cards_from_events(ledger.events(), manifest.system_id)[0]
+
+    record_memory_signal(
+        ledger,
+        manifest.system_id,
+        card.memory_id,
+        "reinforced",
+        reason="confirmed by later turn",
+    )
+    record_memory_signal(
+        ledger,
+        manifest.system_id,
+        card.memory_id,
+        "contradicted",
+        reason="conflicting evidence appeared",
+    )
+    report = build_trace_report(ledger, manifest)
+    updated_card = report.memory_cards[0]
+    html = render_lucien_cockpit_html(report)
+
+    assert len(memory_signal_records_from_events(ledger.events())) == 2
+    assert report.summary["memory_signal_count"] == 2
+    assert updated_card["reinforcement_count"] == 1
+    assert updated_card["contradiction_count"] == 1
+    assert updated_card["signal_score"] == -0.14
+    assert updated_card["effective_confidence"] == 0.78
+    assert "Effective Confidence" in html
+    assert "score=-0.14" in html
 
 
 def test_trace_report_summarizes_runtime_lifecycle(tmp_path):

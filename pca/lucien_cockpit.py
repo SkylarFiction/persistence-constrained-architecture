@@ -25,13 +25,14 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
     memory_rows = "\n".join(
         "<tr>"
         f"<td><code>{escape(_short_hash(str(card['memory_id'])))}</code></td>"
-        f"<td>{escape(str(card['confidence']))}</td>"
+        f"<td>{escape(str(card['effective_confidence']))}</td>"
+        f"<td>{escape(_signal_text(card))}</td>"
         f"<td>{escape(str(card['continuity_claim_at_acceptance']))}</td>"
         f"<td><code>{escape(_short_hash(str(card['summary_sha256'])))}</code></td>"
         f"<td>{escape(str(card['reason']))}</td>"
         "</tr>"
         for card in data["memory_cards"]
-    ) or _empty_row(5, "No memory cards yet.")
+    ) or _empty_row(6, "No memory cards yet.")
     growth_rows = "\n".join(
         "<tr>"
         f"<td>{escape(str(record['kind']))}</td>"
@@ -170,6 +171,7 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         <div><div class="label">Latest Turn</div><div class="value">{escape(latest_turn_text)}</div></div>
         <div><div class="label">Chain Valid</div><div class="value">{escape(str(summary['chain_valid']))}</div></div>
         <div><div class="label">Accepted Growth</div><div class="value">{escape(str(summary['accepted_growth_count']))}</div></div>
+        <div><div class="label">Memory Signals</div><div class="value">{escape(str(summary['memory_signal_count']))}</div></div>
       </div>
     </section>
     <div class="grid">
@@ -179,7 +181,7 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
       </section>
       <section>
         <h2>Memory Cards</h2>
-        <table><thead><tr><th>ID</th><th>Confidence</th><th>Claim</th><th>Hash</th><th>Reason</th></tr></thead><tbody>{memory_rows}</tbody></table>
+        <table><thead><tr><th>ID</th><th>Effective Confidence</th><th>Signals</th><th>Claim</th><th>Hash</th><th>Reason</th></tr></thead><tbody>{memory_rows}</tbody></table>
       </section>
     </div>
     <section>
@@ -256,4 +258,13 @@ def _review_commands(growth_id: str) -> str:
             f"python3 pca_cli.py review-growth {growth_id} --accept --reviewer steward --reason \"reviewed\"",
             f"python3 pca_cli.py review-growth {growth_id} --reject --reviewer steward --reason \"conflict or drift\"",
         ]
+    )
+
+
+def _signal_text(card: dict) -> str:
+    return (
+        f"+{card['reinforcement_count']} "
+        f"-{card['contradiction_count']} "
+        f"stale={card['stale_signal_count']} "
+        f"score={card['signal_score']}"
     )

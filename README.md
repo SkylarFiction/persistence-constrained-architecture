@@ -87,7 +87,10 @@ what move the claim to `continuity_break`.
 - `SelfModelCompiler`: renders accepted growth into an evidence-linked review
   artifact without inventing raw memory prose.
 - `MemoryCard`: derives accepted memory growth into inspectable cards with source
-  growth id, summary hash, evidence refs, confidence, and acceptance context.
+  growth id, summary hash, evidence refs, confidence, signal-adjusted effective
+  confidence, and acceptance context.
+- `MemorySignalRecord`: records reinforcement, contradiction, or staleness signals
+  against memory cards so learned memory can strengthen or weaken through evidence.
 - `ChatSessionRecord`: records chat session start, turn, and close lifecycle events
   without storing raw conversation text.
 - `LucienCockpit`: renders a focused operational view of continuity, sessions,
@@ -198,6 +201,8 @@ python3 pca_cli.py review-growth GROWTH_ID --reject --reviewer steward --reason 
 python3 pca_cli.py self-model
 python3 pca_cli.py self-model --compile --output reports/lucien_self_model.txt
 python3 pca_cli.py memories
+python3 pca_cli.py memory-signal MEMORY_ID --type reinforced --reason "confirmed by later turn"
+python3 pca_cli.py memory-signals
 python3 pca_cli.py sessions
 python3 pca_cli.py cockpit --html reports/lucien_cockpit.html
 python3 scripts/lucien_cockpit_demo.py

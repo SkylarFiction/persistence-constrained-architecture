@@ -74,6 +74,7 @@
     "identity_state": "forked",
     "ledger_path": "scenario_runs/fork_declared/continuity.log",
     "memory_card_count": 0,
+    "memory_signal_count": 0,
     "name": "Lucien Persistence Kernel",
     "output_allowed_scope": "Must identify as a fork or descendant.",
     "output_mode": "fork_disclosure",
@@ -81,7 +82,7 @@
     "reasons": [
       "ledger contains an identity fork event"
     ],
-    "recorded_claim_id": "claim_6a28f4a6-12a6-4a08-82b7-459db2857821",
+    "recorded_claim_id": "claim_5567b5d4-13b0-4a77-9ef5-7d29b1d39c2a",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

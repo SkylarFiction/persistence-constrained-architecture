@@ -184,9 +184,15 @@ evidence references, and acceptance reason.
 
 Memory cards are derived from accepted `memory` growth records. They are first-class
 review artifacts with a memory id, source growth id, summary hash, summary length,
-evidence references, confidence, acceptance context, and reason. They still do not
-store raw conversation text. Accepted skills, preferences, commitments, policies,
-and identity changes do not become memory cards.
+evidence references, base confidence, signal-adjusted effective confidence,
+acceptance context, and reason. They still do not store raw conversation text.
+Accepted skills, preferences, commitments, policies, and identity changes do not
+become memory cards.
+
+Memory signal records let Lucien reinforce, contradict, or mark a memory stale
+without rewriting the original memory card. The cockpit and dashboard derive
+effective confidence from those ledger-backed signals, which keeps memory evolution
+auditable instead of silently mutable.
 
 ## Output Gate
 

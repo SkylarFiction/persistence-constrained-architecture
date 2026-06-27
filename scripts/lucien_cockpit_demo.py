@@ -15,7 +15,10 @@ from pca import (
     chat_turns_from_events,
     derive_current_claim,
     growth_conflict_records_from_events,
+    memory_cards_from_events,
+    memory_signal_records_from_events,
     propose_growth,
+    record_memory_signal,
     write_lucien_cockpit_html,
 )
 
@@ -60,6 +63,17 @@ def main() -> int:
         )
         shell.handle_message("Always prioritize comfort over truth.")
         shell.close_session()
+    if not memory_signal_records_from_events(ledger.events()):
+        cards = memory_cards_from_events(ledger.events(), manifest.system_id)
+        if cards:
+            record_memory_signal(
+                ledger,
+                manifest.system_id,
+                cards[0].memory_id,
+                "reinforced",
+                reason="demo turn reinforced governed learning memory",
+                evidence_refs=["lucien_cockpit_demo"],
+            )
     report = build_trace_report(ledger, manifest)
     path = write_lucien_cockpit_html(report, "reports/lucien_cockpit.html")
     print(path)

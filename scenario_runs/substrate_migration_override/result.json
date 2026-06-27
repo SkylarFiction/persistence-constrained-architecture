@@ -113,6 +113,7 @@
     "identity_state": "continuous",
     "ledger_path": "scenario_runs/substrate_migration_override/continuity.log",
     "memory_card_count": 0,
+    "memory_signal_count": 0,
     "name": "Lucien Persistence Kernel",
     "output_allowed_scope": "May answer operationally, but cannot claim stable identity.",
     "output_mode": "operational_only",
@@ -120,7 +121,7 @@
     "reasons": [
       "Lucien Persistence Kernel satisfies recorded persistence constraints"
     ],
-    "recorded_claim_id": "claim_583eb49b-1850-42f4-88ff-9442c11a1f45",
+    "recorded_claim_id": "claim_29dbac04-a861-4fd5-bf0e-731a043570d6",
     "recovery_count": 0,
     "state_precedence": [
       "chain_invalid",

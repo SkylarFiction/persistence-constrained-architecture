@@ -85,6 +85,12 @@ from .lucien import LucienGovernedRuntime, LucienTurnResult
 from .lucien_cockpit import render_lucien_cockpit_html, write_lucien_cockpit_html
 from .manifest import IdentityManifest, PersistenceConstraint
 from .memory_cards import MemoryCard, memory_cards_from_events
+from .memory_signals import (
+    MemorySignalRecord,
+    MemorySignalType,
+    memory_signal_records_from_events,
+    record_memory_signal,
+)
 from .override import OverrideEngine, OverrideRecord, OverrideRequest
 from .output_gate import OutputGate, OutputGateDecision, OutputMode
 from .output_wrapper import OutputEnvelope, PCAOutputWrapper
@@ -187,6 +193,8 @@ __all__ = [
     "LucienGovernedRuntime",
     "LucienTurnResult",
     "MemoryCard",
+    "MemorySignalRecord",
+    "MemorySignalType",
     "OverrideEngine",
     "OverrideRecord",
     "OverrideRequest",
@@ -247,12 +255,14 @@ __all__ = [
     "load_scenario_definitions",
     "merge_policy_packs",
     "memory_cards_from_events",
+    "memory_signal_records_from_events",
     "normalize_audit_type",
     "parse_authority",
     "propose_growth",
     "record_claim_if_changed",
     "record_chat_turn",
     "record_growth_conflict",
+    "record_memory_signal",
     "required_evidence_for",
     "required_checks_for_audit",
     "recovery_records_from_events",

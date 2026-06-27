@@ -21,6 +21,7 @@ from .ledger import ContinuityEvent, ContinuityLedger
 from .lineage import lineage_records
 from .manifest import IdentityManifest
 from .memory_cards import memory_cards_from_events
+from .memory_signals import memory_signal_records_from_events
 from .output_gate import OutputGate
 from .recovery import current_recovery_record, recovery_records_from_events
 from .self_model import derive_self_model
@@ -33,6 +34,7 @@ IMPORTANT_EVENT_TYPES = {
     "identity.forked",
     "lucien.input",
     "lucien.memory_digest",
+    "lucien.memory_signal_recorded",
     "lucien.tool_use",
     "lucien.growth_proposed",
     "lucien.growth_updated",
@@ -71,6 +73,7 @@ class TraceReport:
     growth_reviews: list[dict[str, Any]]
     growth_conflicts: list[dict[str, Any]]
     memory_cards: list[dict[str, Any]]
+    memory_signals: list[dict[str, Any]]
     chat_sessions: list[dict[str, Any]]
     chat_turns: list[dict[str, Any]]
     self_model: dict[str, Any]
@@ -94,6 +97,7 @@ class TraceReport:
             "growth_reviews": self.growth_reviews,
             "growth_conflicts": self.growth_conflicts,
             "memory_cards": self.memory_cards,
+            "memory_signals": self.memory_signals,
             "chat_sessions": self.chat_sessions,
             "chat_turns": self.chat_turns,
             "self_model": self.self_model,
@@ -138,6 +142,11 @@ def _event_summary(event: ContinuityEvent) -> str:
         return (
             f"digest_length={payload.get('digest_length')} "
             f"commitments={payload.get('commitment_count')}"
+        )
+    if event.event_type == "lucien.memory_signal_recorded":
+        return (
+            f"memory={payload.get('memory_id')} signal={payload.get('signal_type')} "
+            f"delta={payload.get('confidence_delta')}"
         )
     if event.event_type == "lucien.tool_use":
         return (
@@ -214,6 +223,7 @@ def build_trace_report(
     growth_reviews = growth_review_records_from_events(events)
     growth_conflicts = growth_conflict_records_from_events(events)
     memory_cards = memory_cards_from_events(events, manifest.system_id)
+    memory_signals = memory_signal_records_from_events(events)
     chat_sessions = chat_sessions_from_events(events)
     chat_turns = chat_turns_from_events(events)
     self_model = derive_self_model(events, manifest.system_id)
@@ -248,6 +258,7 @@ def build_trace_report(
         "growth_review_count": len(growth_reviews),
         "growth_conflict_count": len(growth_conflicts),
         "memory_card_count": len(memory_cards),
+        "memory_signal_count": len(memory_signals),
         "chat_session_count": len(chat_sessions),
         "chat_turn_count": len(chat_turns),
         "accepted_growth_count": self_model.accepted_growth_count,
@@ -324,6 +335,7 @@ def build_trace_report(
         growth_reviews=[record.to_dict() for record in growth_reviews],
         growth_conflicts=[record.to_dict() for record in growth_conflicts],
         memory_cards=[record.to_dict() for record in memory_cards],
+        memory_signals=[record.to_dict() for record in memory_signals],
         chat_sessions=[record.to_dict() for record in chat_sessions],
         chat_turns=[record.to_dict() for record in chat_turns],
         self_model=self_model.to_dict(),

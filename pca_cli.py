@@ -51,7 +51,9 @@ from pca import (
     lineage_records,
     accept_growth,
     memory_cards_from_events,
+    memory_signal_records_from_events,
     propose_growth,
+    record_memory_signal,
     record_claim_if_changed,
     recovery_records_from_events,
     reject_growth,
@@ -175,6 +177,7 @@ def main() -> int:
     subparsers.add_parser("seed-required")
     subparsers.add_parser("lineage")
     subparsers.add_parser("memories")
+    subparsers.add_parser("memory-signals")
     subparsers.add_parser("sessions")
     self_model_parser = subparsers.add_parser("self-model")
     self_model_parser.add_argument("--compile", action="store_true")
@@ -220,6 +223,22 @@ def main() -> int:
     decision_group.add_argument("--reject", action="store_true")
     review_growth_parser.add_argument("--reviewer", default="operator")
     review_growth_parser.add_argument("--reason", default="")
+
+    memory_signal_parser = subparsers.add_parser("memory-signal")
+    memory_signal_parser.add_argument("memory_id")
+    memory_signal_parser.add_argument(
+        "--type",
+        required=True,
+        choices=["reinforced", "contradicted", "stale"],
+    )
+    memory_signal_parser.add_argument("--reason", default="")
+    memory_signal_parser.add_argument("--confidence-delta", type=float)
+    memory_signal_parser.add_argument(
+        "--evidence-ref",
+        action="append",
+        default=[],
+        help="Evidence reference id or URI. May be repeated.",
+    )
 
     anchor_parser = subparsers.add_parser("anchor-head")
     anchor_parser.add_argument("--authority", default="local_operator")
@@ -572,6 +591,30 @@ def main() -> int:
                 "memory_cards": [record.to_dict() for record in memory_cards],
             }
         )
+        return 0
+
+    if args.command == "memory-signals":
+        records = memory_signal_records_from_events(ledger.events())
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "count": len(records),
+                "memory_signals": [record.to_dict() for record in records],
+            }
+        )
+        return 0
+
+    if args.command == "memory-signal":
+        record = record_memory_signal(
+            ledger=ledger,
+            identity_id=manifest.system_id,
+            memory_id=args.memory_id,
+            signal_type=args.type,
+            reason=args.reason,
+            evidence_refs=args.evidence_ref,
+            confidence_delta=args.confidence_delta,
+        )
+        print_json({"memory_signal": record.to_dict()})
         return 0
 
     if args.command == "sessions":

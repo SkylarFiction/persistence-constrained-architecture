@@ -151,13 +151,14 @@ def render_dashboard_html(report: TraceReport) -> str:
         "<tr>"
         f"<td><code>{escape(str(record['memory_id']))}</code></td>"
         f"<td><code>{escape(str(record['source_growth_id']))}</code></td>"
-        f"<td>{escape(str(record['confidence']))}</td>"
+        f"<td>{escape(str(record['effective_confidence']))}</td>"
+        f"<td>{escape(_memory_signal_summary(record))}</td>"
         f"<td>{escape(str(record['continuity_claim_at_acceptance']))}</td>"
         f"<td><code>{escape(_short_hash(str(record['summary_sha256'])))}</code></td>"
         f"<td>{escape(str(record['reason']))}</td>"
         "</tr>"
         for record in data["memory_cards"]
-    ) or _empty_row(6, "No memory cards.")
+    ) or _empty_row(7, "No memory cards.")
     chat_session_rows = "\n".join(
         "<tr>"
         f"<td><code>{escape(str(record['session_id']))}</code></td>"
@@ -398,6 +399,7 @@ def render_dashboard_html(report: TraceReport) -> str:
       <div class="metric"><div class="label">Growth Conflicts</div><div class="value">{escape(str(summary['growth_conflict_count']))}</div></div>
       <div class="metric"><div class="label">Accepted Growth</div><div class="value">{escape(str(summary['accepted_growth_count']))}</div></div>
       <div class="metric"><div class="label">Memory Cards</div><div class="value">{escape(str(summary['memory_card_count']))}</div></div>
+      <div class="metric"><div class="label">Memory Signals</div><div class="value">{escape(str(summary['memory_signal_count']))}</div></div>
       <div class="metric"><div class="label">Chat Sessions</div><div class="value">{escape(str(summary['chat_session_count']))}</div></div>
       <div class="metric"><div class="label">Chat Turns</div><div class="value">{escape(str(summary['chat_turn_count']))}</div></div>
     </section>
@@ -455,7 +457,7 @@ def render_dashboard_html(report: TraceReport) -> str:
     </section>
     <section>
       <h2>Memory Cards</h2>
-      <table><thead><tr><th>Memory ID</th><th>Growth ID</th><th>Confidence</th><th>Claim At Acceptance</th><th>Summary Hash</th><th>Reason</th></tr></thead><tbody>{memory_card_rows}</tbody></table>
+      <table><thead><tr><th>Memory ID</th><th>Growth ID</th><th>Effective Confidence</th><th>Signals</th><th>Claim At Acceptance</th><th>Summary Hash</th><th>Reason</th></tr></thead><tbody>{memory_card_rows}</tbody></table>
     </section>
     <section>
       <h2>Chat Sessions</h2>
@@ -522,3 +524,12 @@ def write_dashboard_html(report: TraceReport, path: str | Path) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(render_dashboard_html(report), encoding="utf-8")
     return output_path
+
+
+def _memory_signal_summary(record: dict) -> str:
+    return (
+        f"+{record['reinforcement_count']} "
+        f"-{record['contradiction_count']} "
+        f"stale={record['stale_signal_count']} "
+        f"score={record['signal_score']}"
+    )
