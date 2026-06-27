@@ -68,7 +68,9 @@ from pca import (
     safe_load_policy_directory,
     safe_load_policy_pack,
     update_reflection_task,
+    render_constitution_markdown,
     write_dashboard_html,
+    write_constitution_markdown,
     write_lucien_cockpit_html,
     write_trace_report_html,
     verify_latest_anchor,
@@ -179,6 +181,10 @@ def main() -> int:
     claims_parser = subparsers.add_parser("claims")
     claims_parser.add_argument("--current", action="store_true")
     claims_parser.add_argument("--history", action="store_true")
+
+    constitution_parser = subparsers.add_parser("constitution")
+    constitution_parser.add_argument("--write", action="store_true")
+    constitution_parser.add_argument("--output", default="LUCIEN_CONSTITUTION.md")
 
     subparsers.add_parser("status")
     subparsers.add_parser("speak-gate")
@@ -485,6 +491,20 @@ def main() -> int:
                 **export.to_dict(),
             }
         )
+        return 0
+
+    if args.command == "constitution":
+        report = build_trace_report(ledger, manifest, anchor_path=args.anchors)
+        if args.write:
+            output_path = write_constitution_markdown(report, manifest, args.output)
+            print_json(
+                {
+                    "output": str(output_path),
+                    "summary": report.summary,
+                }
+            )
+            return 0
+        print(render_constitution_markdown(report, manifest), end="")
         return 0
 
     if args.command == "check":

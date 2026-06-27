@@ -240,6 +240,19 @@ open `resolve_conflict` reflection tasks are resolved as part of the same CLI
 workflow, so conflict handling closes the governance loop instead of only adding
 another note.
 
+## Lucien Constitution
+
+The Lucien Constitution is a generated Markdown charter derived from the ledger and
+manifest. It is not a manual identity override. It summarizes the current identity
+baseline, accepted commitments, active policies, known limits, growth rules,
+conflict rules, recovery rules, fork rules, open steward tasks, and the latest
+reflection.
+
+The constitution intentionally references accepted growth by id, hash, evidence
+refs, and reason instead of expanding raw private memory text. It answers the
+public review question: what is Lucien currently allowed to become, what must
+remain stable, and what happens when growth conflicts with continuity?
+
 ## Output Gate
 
 The output gate maps the active continuity claim to allowed speech behavior:

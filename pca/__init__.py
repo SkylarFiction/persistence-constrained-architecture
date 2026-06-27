@@ -39,6 +39,7 @@ from .chat_sessions import (
     start_chat_session,
 )
 from .csm_bridge import CSMRuntimeBridge, PCAAuditLoggerAdapter
+from .constitution import render_constitution_markdown, write_constitution_markdown
 from .dashboard import render_dashboard_html, write_dashboard_html
 from .evaluator import (
     EVALUATION_PRECEDENCE,
@@ -311,6 +312,7 @@ __all__ = [
     "review_growth",
     "update_reflection_task",
     "render_trace_report_html",
+    "render_constitution_markdown",
     "render_dashboard_html",
     "render_lucien_cockpit_html",
     "report_scenario",
@@ -326,6 +328,7 @@ __all__ = [
     "verify_scenario",
     "validate_policy_pack",
     "write_dashboard_html",
+    "write_constitution_markdown",
     "write_demo_index",
     "write_lucien_cockpit_html",
     "write_trace_report_html",

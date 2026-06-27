@@ -23,6 +23,7 @@ from pca import (
     record_reflection,
     reflection_records_from_events,
     reflection_task_records_from_events,
+    write_constitution_markdown,
     write_lucien_cockpit_html,
 )
 
@@ -85,6 +86,7 @@ def main() -> int:
     elif not reflection_task_records_from_events(ledger.events()):
         open_tasks_from_reflection(ledger, reflections[-1])
     report = build_trace_report(ledger, manifest)
+    write_constitution_markdown(report, manifest, "LUCIEN_CONSTITUTION.md")
     path = write_lucien_cockpit_html(report, "reports/lucien_cockpit.html")
     print(path)
     return 0

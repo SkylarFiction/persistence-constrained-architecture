@@ -98,6 +98,9 @@ what move the claim to `continuity_break`.
 - `ReflectionTaskRecord`: turns reflection recommendations into ledger-backed
   steward queue items such as growth review, conflict resolution, memory audit,
   and recovery opening.
+- `Lucien Constitution`: generates a human-readable charter from the current
+  ledger-backed identity state, accepted commitments, policies, tasks, and latest
+  reflection.
 - `ChatSessionRecord`: records chat session start, turn, and close lifecycle events
   without storing raw conversation text.
 - `LucienCockpit`: renders a focused operational view of continuity, sessions,
@@ -217,6 +220,8 @@ python3 pca_cli.py reflections
 python3 pca_cli.py reflection-queue --open
 python3 pca_cli.py reflection-task TASK_ID --resolve --reason "reviewed by steward"
 python3 pca_cli.py reflection-task TASK_ID --dismiss --reason "not needed"
+python3 pca_cli.py constitution
+python3 pca_cli.py --ledger data/lucien_chat.log constitution --write
 python3 pca_cli.py sessions
 python3 pca_cli.py cockpit --html reports/lucien_cockpit.html
 python3 scripts/lucien_cockpit_demo.py

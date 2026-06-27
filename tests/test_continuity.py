@@ -64,6 +64,7 @@ from pca import (
     open_tasks_from_reflection,
     required_evidence_for,
     render_dashboard_html,
+    render_constitution_markdown,
     render_lucien_cockpit_html,
     render_trace_report_html,
     recovery_records_from_events,
@@ -78,6 +79,7 @@ from pca import (
     review_growth,
     update_reflection_task,
     verify_latest_anchor,
+    write_constitution_markdown,
 )
 
 
@@ -1966,6 +1968,50 @@ def test_reflection_records_pending_growth_agenda(tmp_path):
     assert updated.status.value == "resolved"
     assert len(final_tasks) == 1
     assert final_tasks[0].status.value == "resolved"
+
+
+def test_constitution_renders_identity_governance_charter(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "ledger_integrity", "value": True},
+    )
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "origin_traceability", "value": True},
+    )
+    propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="policy",
+        summary="Growth must remain governed.",
+        identity_impact="high",
+        evidence_refs=["governed_growth"],
+        reason="governed_growth",
+    )
+    reflection = record_reflection(ledger, manifest)
+    open_tasks_from_reflection(ledger, reflection)
+    report = build_trace_report(ledger, manifest)
+
+    markdown = render_constitution_markdown(report, manifest)
+    output_path = write_constitution_markdown(
+        report,
+        manifest,
+        tmp_path / "LUCIEN_CONSTITUTION.md",
+    )
+
+    assert "# Lucien Constitution" in markdown
+    assert "## Identity Baseline" in markdown
+    assert "## Growth Rules" in markdown
+    assert "## Conflict Rules" in markdown
+    assert "## Recovery Rules" in markdown
+    assert "## Fork Rules" in markdown
+    assert "## Current Steward Queue" in markdown
+    assert "review_growth" in markdown
+    assert output_path.exists()
 
 
 def test_trace_report_summarizes_runtime_lifecycle(tmp_path):
