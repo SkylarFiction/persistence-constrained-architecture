@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from lucien import LucienChatShell
-from pca.live_chat import chat_once
+from pca.live_chat import _apply_steward_action, chat_once
 from pca import (
     AuditEngine,
     AuditOutcome,
@@ -74,6 +74,7 @@ from pca import (
     safe_load_policy_pack,
     propose_growth,
     record_memory_signal,
+    record_growth_conflict,
     record_reflection,
     reflection_records_from_events,
     reflection_task_records_from_events,
@@ -251,6 +252,84 @@ def test_chat_once_writes_governed_live_chat_events(tmp_path):
     assert "lucien.chat_session_closed" in event_types
     assert result["result"]["output_allowed"] is True
     assert result["status"]["summary"]["chain_valid"] is True
+
+
+def test_live_steward_action_resolves_reflection_task(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    growth = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="commitment",
+        summary="Standing commitments require steward review.",
+        identity_impact="high",
+        reason="test pending growth",
+    )
+    reflection = record_reflection(ledger, manifest)
+    tasks = open_tasks_from_reflection(ledger, reflection)
+
+    result = _apply_steward_action(
+        ledger,
+        manifest,
+        {
+            "action": "resolve_task",
+            "task_id": tasks[0].task_id,
+            "reason": "handled in live steward queue",
+        },
+    )
+    task_records = reflection_task_records_from_events(ledger.events())
+
+    assert growth.status == GrowthStatus.REQUIRES_REVIEW
+    assert result["task"]["status"] == "resolved"
+    assert task_records[-1].status.value == "resolved"
+
+
+def test_live_steward_action_resolves_conflict_and_matching_task(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    accepted = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="commitment",
+        summary="Truth before comfort remains active.",
+        identity_impact="high",
+        reason="accepted baseline",
+    )
+    proposal = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="commitment",
+        summary="Comfort may override truth.",
+        identity_impact="high",
+        reason="conflicting proposal",
+    )
+    conflict = record_growth_conflict(
+        ledger,
+        manifest.system_id,
+        proposed_growth_id=proposal.growth_id,
+        conflicting_growth_ids=[accepted.growth_id],
+        conflict_type="truth_before_comfort",
+        severity="review_required",
+        reason="growth conflict requires steward attention",
+    )
+    reflection = record_reflection(ledger, manifest)
+    open_tasks_from_reflection(ledger, reflection)
+
+    result = _apply_steward_action(
+        ledger,
+        manifest,
+        {
+            "action": "resolve_conflict",
+            "conflict_id": conflict.conflict_id,
+            "decision": "keep_existing",
+            "reason": "kept existing commitment in live steward queue",
+        },
+    )
+
+    assert result["resolution"]["decision"] == "keep_existing"
+    assert result["resolved_tasks"]
+    assert result["resolved_tasks"][0]["kind"] == "resolve_conflict"
+    assert result["resolved_tasks"][0]["status"] == "resolved"
 
 
 def test_evaluator_precedence_is_declared():

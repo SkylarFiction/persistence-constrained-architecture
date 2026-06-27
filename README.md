@@ -235,6 +235,10 @@ python3 scripts/lucien_cockpit_demo.py
 python3 lucien_chat.py --seed-required --message "Remember that PCA learning must be governed."
 ```
 
+The live chat page includes steward controls for resolving reflection tasks,
+reviewing pending growth, and resolving growth conflicts. These controls write
+the same ledger-backed events as the CLI workflows.
+
 Scenario outputs are written to `scenario_runs/<scenario_id>/`:
 
 - `continuity.log`

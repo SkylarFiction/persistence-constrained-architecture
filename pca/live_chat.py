@@ -9,12 +9,28 @@ from typing import Any
 from lucien import LucienChatShell, ModelLucienResponder
 
 from .constitution import write_constitution_markdown
+from .growth import (
+    GrowthReviewDecision,
+    GrowthStatus,
+    growth_records_from_events,
+    review_growth,
+)
+from .growth_conflicts import (
+    growth_conflict_records_from_events,
+    growth_conflict_resolution_records_from_events,
+    resolve_growth_conflict,
+)
 from .ledger import ContinuityLedger
 from .manifest import IdentityManifest
 from .model_adapter import adapter_from_environment
-from .reflection_queue import open_tasks_from_reflection
+from .reflection_queue import (
+    open_tasks_from_reflection,
+    resolve_matching_reflection_tasks,
+    update_reflection_task,
+)
 from .reflections import record_reflection
 from .report import build_trace_report
+from .state import derive_current_claim
 
 
 def run_live_chat_server(
@@ -48,9 +64,15 @@ def run_live_chat_server(
             self.send_error(404)
 
         def do_POST(self) -> None:
-            if self.path != "/api/chat":
-                self.send_error(404)
+            if self.path == "/api/chat":
+                self._handle_chat()
                 return
+            if self.path == "/api/steward":
+                self._handle_steward()
+                return
+            self.send_error(404)
+
+        def _handle_chat(self) -> None:
             payload = _read_json(self)
             message = str(payload.get("message", "")).strip()
             if not message:
@@ -68,10 +90,7 @@ def run_live_chat_server(
             if _should_auto_reflect(result.to_dict()):
                 reflection = record_reflection(ledger, manifest)
                 opened_tasks = open_tasks_from_reflection(ledger, reflection)
-            report = build_trace_report(ledger, manifest)
-            write_constitution_markdown(report, manifest, "LUCIEN_CONSTITUTION.md")
-            shell._write_dashboard()
-            shell._write_cockpit()
+            _refresh_live_artifacts(ledger, manifest, shell)
             events = [event.to_dict() for event in ledger.events()[before_count:]]
             _send_json(
                 self,
@@ -85,12 +104,125 @@ def run_live_chat_server(
                 },
             )
 
+        def _handle_steward(self) -> None:
+            payload = _read_json(self)
+            before_count = len(ledger.events())
+            try:
+                result = _apply_steward_action(ledger, manifest, payload)
+            except ValueError as exc:
+                _send_json(self, {"error": str(exc)}, status=400)
+                return
+            _refresh_live_artifacts(ledger, manifest, shell)
+            _send_json(
+                self,
+                {
+                    "result": result,
+                    "events": [event.to_dict() for event in ledger.events()[before_count:]],
+                    "status": _status_payload(ledger, manifest),
+                },
+            )
+
         def log_message(self, format: str, *args: Any) -> None:
             return
 
     server = ThreadingHTTPServer((host, port), Handler)
     print(f"Lucien Live Chat v0.1: http://{host}:{port}")
     server.serve_forever()
+
+
+def _refresh_live_artifacts(
+    ledger: ContinuityLedger,
+    manifest: IdentityManifest,
+    shell: LucienChatShell,
+) -> None:
+    report = build_trace_report(ledger, manifest)
+    write_constitution_markdown(report, manifest, "LUCIEN_CONSTITUTION.md")
+    shell._write_dashboard()
+    shell._write_cockpit()
+
+
+def _apply_steward_action(
+    ledger: ContinuityLedger,
+    manifest: IdentityManifest,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    action = str(payload.get("action", "")).strip()
+    reason = str(payload.get("reason", "")).strip() or f"live steward action: {action}"
+    if action in {"resolve_task", "dismiss_task"}:
+        task_id = str(payload.get("task_id", "")).strip()
+        if not task_id:
+            raise ValueError("task_id is required")
+        status = "resolved" if action == "resolve_task" else "dismissed"
+        task = update_reflection_task(
+            ledger,
+            manifest.system_id,
+            task_id,
+            status,
+            reason=reason,
+        )
+        return {"task": task.to_dict()}
+
+    if action == "resolve_conflict":
+        conflict_id = str(payload.get("conflict_id", "")).strip()
+        decision = str(payload.get("decision", "")).strip()
+        if not conflict_id:
+            raise ValueError("conflict_id is required")
+        if decision not in {"accept_new", "keep_existing", "fork"}:
+            raise ValueError("decision must be accept_new, keep_existing, or fork")
+        resolution = resolve_growth_conflict(
+            ledger,
+            manifest.system_id,
+            conflict_id,
+            decision,
+            resolved_by=str(payload.get("resolved_by", "steward")),
+            reason=reason,
+        )
+        resolved_tasks = resolve_matching_reflection_tasks(
+            ledger,
+            manifest.system_id,
+            "resolve_conflict",
+            "growth conflict",
+            f"resolved by live steward action {resolution.resolution_id}",
+        )
+        return {
+            "resolution": resolution.to_dict(),
+            "resolved_tasks": [task.to_dict() for task in resolved_tasks],
+        }
+
+    if action == "review_growth":
+        growth_id = str(payload.get("growth_id", "")).strip()
+        decision = str(payload.get("decision", "")).strip()
+        if not growth_id:
+            raise ValueError("growth_id is required")
+        if decision not in {"accept", "reject"}:
+            raise ValueError("decision must be accept or reject")
+        growth, review = review_growth(
+            ledger=ledger,
+            identity_id=manifest.system_id,
+            growth_id=growth_id,
+            decision=(
+                GrowthReviewDecision.ACCEPT
+                if decision == "accept"
+                else GrowthReviewDecision.REJECT
+            ),
+            reviewer=str(payload.get("reviewer", "steward")),
+            reason=reason,
+            current_claim=derive_current_claim(ledger, manifest)[0],
+        )
+        resolved_tasks = resolve_matching_reflection_tasks(
+            ledger,
+            manifest.system_id,
+            "review_growth",
+            "growth record",
+            f"reviewed by live steward action {review.review_id}",
+        )
+        return {
+            "growth": growth.to_dict(),
+            "review": review.to_dict(),
+            "resolved_tasks": [task.to_dict() for task in resolved_tasks],
+        }
+
+    raise ValueError(f"unknown steward action: {action}")
 
 
 def main() -> int:
@@ -163,6 +295,20 @@ def _status_payload(
 ) -> dict[str, Any]:
     report = build_trace_report(ledger, manifest)
     summary = report.summary
+    resolved_conflict_ids = {
+        resolution.conflict_id
+        for resolution in growth_conflict_resolution_records_from_events(ledger.events())
+    }
+    active_growth = [
+        record.to_dict()
+        for record in growth_records_from_events(ledger.events())
+        if record.status in {GrowthStatus.PROPOSED, GrowthStatus.REQUIRES_REVIEW}
+    ]
+    unresolved_conflicts = [
+        record.to_dict()
+        for record in growth_conflict_records_from_events(ledger.events())
+        if record.conflict_id not in resolved_conflict_ids
+    ]
     latest_events = [
         {
             "event_type": event.event_type,
@@ -179,7 +325,8 @@ def _status_payload(
         "csm_state": latest_signal["state"] if latest_signal else "unknown",
         "output_gate": latest_gate or {},
         "open_reflection_tasks": report.active_reflection_tasks,
-        "growth_conflicts": report.growth_conflicts,
+        "active_growth": active_growth,
+        "growth_conflicts": unresolved_conflicts,
         "latest_events": latest_events,
     }
 
@@ -259,6 +406,12 @@ def _live_chat_html() -> str:
     .metric { border: 1px solid #e8ece8; padding: 10px; background: #fbfcf8; }
     .label { color: var(--muted); text-transform: uppercase; font-size: 11px; font-weight: 800; }
     .value { margin-top: 5px; font-size: 18px; font-weight: 800; overflow-wrap: anywhere; }
+    .queue { display: grid; gap: 10px; }
+    .item { border: 1px solid #e8ece8; background: #fbfcf8; padding: 10px; }
+    .item-title { font-weight: 800; overflow-wrap: anywhere; }
+    .item-meta { color: var(--muted); font-size: 12px; margin-top: 4px; overflow-wrap: anywhere; }
+    .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .actions button { min-height: 32px; font-size: 12px; padding: 0 10px; }
     .events { max-height: 360px; overflow-y: auto; }
     .event { border-bottom: 1px solid #e8ece8; padding: 8px 0; }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
@@ -293,6 +446,18 @@ def _live_chat_html() -> str:
         </div>
       </section>
       <section>
+        <h2>Steward Queue</h2>
+        <div id="queue" class="queue"></div>
+      </section>
+      <section>
+        <h2>Growth Review</h2>
+        <div id="growth" class="queue"></div>
+      </section>
+      <section>
+        <h2>Conflicts</h2>
+        <div id="conflictList" class="queue"></div>
+      </section>
+      <section>
         <h2>Live Ledger</h2>
         <div id="events" class="events"></div>
       </section>
@@ -301,6 +466,9 @@ def _live_chat_html() -> str:
   <script>
     const messages = document.getElementById('messages');
     const events = document.getElementById('events');
+    const queue = document.getElementById('queue');
+    const growth = document.getElementById('growth');
+    const conflictList = document.getElementById('conflictList');
     let lastLucien = '';
 
     function addMessage(kind, text) {
@@ -320,6 +488,9 @@ def _live_chat_html() -> str:
       document.getElementById('recovery').textContent = summary.current_recovery_status || 'none';
       document.getElementById('tasks').textContent = summary.active_reflection_task_count ?? 0;
       document.getElementById('conflicts').textContent = summary.unresolved_growth_conflict_count ?? 0;
+      renderQueue(status.open_reflection_tasks || []);
+      renderGrowth(status.active_growth || []);
+      renderConflicts(status.growth_conflicts || []);
       events.innerHTML = '';
       for (const event of status.latest_events || []) {
         const row = document.createElement('div');
@@ -329,9 +500,113 @@ def _live_chat_html() -> str:
       }
     }
 
+    function empty(container, text) {
+      container.innerHTML = '';
+      const node = document.createElement('div');
+      node.className = 'item-meta';
+      node.textContent = text;
+      container.appendChild(node);
+    }
+
+    function button(text, payload) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = payload.action.includes('dismiss') || payload.decision === 'reject' ? 'secondary' : '';
+      btn.textContent = text;
+      btn.addEventListener('click', () => steward(payload));
+      return btn;
+    }
+
+    function renderQueue(tasks) {
+      if (!tasks.length) {
+        empty(queue, 'No open steward tasks.');
+        return;
+      }
+      queue.innerHTML = '';
+      for (const task of tasks) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        const title = document.createElement('div');
+        title.className = 'item-title';
+        title.textContent = `${task.kind} / ${task.severity}`;
+        const meta = document.createElement('div');
+        meta.className = 'item-meta';
+        meta.textContent = task.reason;
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        actions.appendChild(button('Resolve', {action: 'resolve_task', task_id: task.task_id, reason: 'resolved in live steward queue'}));
+        actions.appendChild(button('Dismiss', {action: 'dismiss_task', task_id: task.task_id, reason: 'dismissed in live steward queue'}));
+        row.append(title, meta, actions);
+        queue.appendChild(row);
+      }
+    }
+
+    function renderGrowth(records) {
+      if (!records.length) {
+        empty(growth, 'No growth awaiting review.');
+        return;
+      }
+      growth.innerHTML = '';
+      for (const record of records) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        const title = document.createElement('div');
+        title.className = 'item-title';
+        title.textContent = `${record.kind} / ${record.identity_impact} / ${record.status}`;
+        const meta = document.createElement('div');
+        meta.className = 'item-meta';
+        meta.textContent = `${record.growth_id} / ${record.reason}`;
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        actions.appendChild(button('Accept', {action: 'review_growth', decision: 'accept', growth_id: record.growth_id, reason: 'accepted in live steward review'}));
+        actions.appendChild(button('Reject', {action: 'review_growth', decision: 'reject', growth_id: record.growth_id, reason: 'rejected in live steward review'}));
+        row.append(title, meta, actions);
+        growth.appendChild(row);
+      }
+    }
+
+    function renderConflicts(records) {
+      if (!records.length) {
+        empty(conflictList, 'No unresolved conflicts.');
+        return;
+      }
+      conflictList.innerHTML = '';
+      for (const record of records) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        const title = document.createElement('div');
+        title.className = 'item-title';
+        title.textContent = `${record.conflict_type} / ${record.severity}`;
+        const meta = document.createElement('div');
+        meta.className = 'item-meta';
+        meta.textContent = `${record.conflict_id} / proposed ${record.proposed_growth_id}`;
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        actions.appendChild(button('Accept New', {action: 'resolve_conflict', decision: 'accept_new', conflict_id: record.conflict_id, reason: 'accepted new growth in live steward conflict review'}));
+        actions.appendChild(button('Keep Existing', {action: 'resolve_conflict', decision: 'keep_existing', conflict_id: record.conflict_id, reason: 'kept existing growth in live steward conflict review'}));
+        actions.appendChild(button('Fork', {action: 'resolve_conflict', decision: 'fork', conflict_id: record.conflict_id, reason: 'forked conflict in live steward conflict review'}));
+        row.append(title, meta, actions);
+        conflictList.appendChild(row);
+      }
+    }
+
     async function refresh() {
       const res = await fetch('/api/status');
       renderStatus(await res.json());
+    }
+
+    async function steward(payload) {
+      const res = await fetch('/api/steward', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.error) {
+        addMessage('lucien', data.error);
+        return;
+      }
+      renderStatus(data.status);
     }
 
     document.getElementById('chatForm').addEventListener('submit', async (event) => {
