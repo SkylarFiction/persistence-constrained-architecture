@@ -52,16 +52,19 @@ from pca import (
     accept_growth,
     memory_cards_from_events,
     memory_signal_records_from_events,
+    open_tasks_from_reflection,
     propose_growth,
     record_memory_signal,
     record_claim_if_changed,
     recovery_records_from_events,
     record_reflection,
     reject_growth,
+    reflection_task_records_from_events,
     reflection_records_from_events,
     review_growth,
     safe_load_policy_directory,
     safe_load_policy_pack,
+    update_reflection_task,
     write_dashboard_html,
     write_lucien_cockpit_html,
     write_trace_report_html,
@@ -183,6 +186,17 @@ def main() -> int:
     subparsers.add_parser("sessions")
     subparsers.add_parser("reflect")
     subparsers.add_parser("reflections")
+    reflection_queue_parser = subparsers.add_parser("reflection-queue")
+    reflection_queue_parser.add_argument("--open", action="store_true")
+
+    reflection_task_parser = subparsers.add_parser("reflection-task")
+    reflection_task_parser.add_argument("task_id")
+    task_decision_group = reflection_task_parser.add_mutually_exclusive_group(
+        required=True
+    )
+    task_decision_group.add_argument("--resolve", action="store_true")
+    task_decision_group.add_argument("--dismiss", action="store_true")
+    reflection_task_parser.add_argument("--reason", default="")
     self_model_parser = subparsers.add_parser("self-model")
     self_model_parser.add_argument("--compile", action="store_true")
     self_model_parser.add_argument("--output")
@@ -623,7 +637,13 @@ def main() -> int:
 
     if args.command == "reflect":
         record = record_reflection(ledger, manifest)
-        print_json({"reflection": record.to_dict()})
+        tasks = open_tasks_from_reflection(ledger, record)
+        print_json(
+            {
+                "reflection": record.to_dict(),
+                "opened_tasks": [task.to_dict() for task in tasks],
+            }
+        )
         return 0
 
     if args.command == "reflections":
@@ -635,6 +655,31 @@ def main() -> int:
                 "reflections": [record.to_dict() for record in records],
             }
         )
+        return 0
+
+    if args.command == "reflection-queue":
+        tasks = reflection_task_records_from_events(ledger.events())
+        if args.open:
+            tasks = [task for task in tasks if task.status.value == "open"]
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "count": len(tasks),
+                "tasks": [task.to_dict() for task in tasks],
+            }
+        )
+        return 0
+
+    if args.command == "reflection-task":
+        status = "resolved" if args.resolve else "dismissed"
+        task = update_reflection_task(
+            ledger,
+            manifest.system_id,
+            args.task_id,
+            status,
+            reason=args.reason,
+        )
+        print_json({"task": task.to_dict()})
         return 0
 
     if args.command == "sessions":

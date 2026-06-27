@@ -60,6 +60,7 @@ from pca import (
     memory_cards_from_events,
     memory_signal_records_from_events,
     merge_policy_packs,
+    open_tasks_from_reflection,
     required_evidence_for,
     render_dashboard_html,
     render_lucien_cockpit_html,
@@ -70,7 +71,9 @@ from pca import (
     record_memory_signal,
     record_reflection,
     reflection_records_from_events,
+    reflection_task_records_from_events,
     review_growth,
+    update_reflection_task,
     verify_latest_anchor,
 )
 
@@ -1881,6 +1884,7 @@ def test_reflection_records_pending_growth_agenda(tmp_path):
     )
 
     reflection = record_reflection(ledger, manifest)
+    tasks = open_tasks_from_reflection(ledger, reflection)
     report = build_trace_report(ledger, manifest)
     records = reflection_records_from_events(ledger.events())
     html = render_lucien_cockpit_html(report)
@@ -1888,9 +1892,27 @@ def test_reflection_records_pending_growth_agenda(tmp_path):
     assert reflection.focus == "growth_review"
     assert reflection.severity == "watch"
     assert "review pending growth records" in reflection.recommended_actions
+    assert len(tasks) == 1
+    assert tasks[0].kind.value == "review_growth"
+    assert tasks[0].status.value == "open"
     assert len(records) == 1
     assert report.summary["reflection_count"] == 1
+    assert report.summary["active_reflection_task_count"] == 1
     assert "Reflection Ledger" in html
+    assert "Reflection Queue" in html
+
+    updated = update_reflection_task(
+        ledger,
+        manifest.system_id,
+        tasks[0].task_id,
+        "resolved",
+        reason="reviewed by steward",
+    )
+    final_tasks = reflection_task_records_from_events(ledger.events())
+
+    assert updated.status.value == "resolved"
+    assert len(final_tasks) == 1
+    assert final_tasks[0].status.value == "resolved"
 
 
 def test_trace_report_summarizes_runtime_lifecycle(tmp_path):

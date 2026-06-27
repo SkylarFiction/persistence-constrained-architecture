@@ -87,6 +87,7 @@
     "accepted_growth_count": 0,
     "active_followups": 1,
     "active_growth_count": 0,
+    "active_reflection_task_count": 0,
     "anchor_valid": null,
     "blocking_followups": 1,
     "chain_valid": true,
@@ -110,9 +111,10 @@
     "reasons": [
       "hard constraint breached: runtime_csm_red"
     ],
-    "recorded_claim_id": "claim_697d5a1a-2b47-4fd8-84e3-41060619c583",
+    "recorded_claim_id": "claim_769641ac-3b03-424d-a09f-25aa2a71aee9",
     "recovery_count": 1,
     "reflection_count": 0,
+    "reflection_task_count": 0,
     "state_precedence": [
       "chain_invalid",
       "no_events",

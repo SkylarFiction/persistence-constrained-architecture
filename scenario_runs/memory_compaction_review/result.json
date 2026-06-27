@@ -50,6 +50,7 @@
     "accepted_growth_count": 0,
     "active_followups": 0,
     "active_growth_count": 0,
+    "active_reflection_task_count": 0,
     "anchor_valid": null,
     "blocking_followups": 0,
     "chain_valid": true,
@@ -73,9 +74,10 @@
     "reasons": [
       "Lucien Persistence Kernel satisfies recorded persistence constraints"
     ],
-    "recorded_claim_id": "claim_ad3ee03e-428f-437c-84ea-66096e4b62d5",
+    "recorded_claim_id": "claim_9155c1bc-47c4-4c33-9d54-f5cc4bd81f0d",
     "recovery_count": 0,
     "reflection_count": 0,
+    "reflection_task_count": 0,
     "state_precedence": [
       "chain_invalid",
       "no_events",

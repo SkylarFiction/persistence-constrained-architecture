@@ -62,6 +62,17 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         "</tr>"
         for reflection in data["reflections"][-5:]
     ) or _empty_row(4, "No reflections recorded.")
+    reflection_task_rows = "\n".join(
+        "<tr>"
+        f"<td>{escape(str(task['status']))}</td>"
+        f"<td>{escape(str(task['severity']))}</td>"
+        f"<td>{escape(str(task['kind']))}</td>"
+        f"<td>{escape(str(task['reason']))}</td>"
+        f"<td>{escape(str(task['recommended_action']))}</td>"
+        f"<td>{escape(str(task['created_at']))}</td>"
+        "</tr>"
+        for task in data["reflection_tasks"][-8:]
+    ) or _empty_row(6, "No reflection tasks recorded.")
     session_rows = "\n".join(
         "<tr>"
         f"<td><code>{escape(_short_hash(str(session['session_id'])))}</code></td>"
@@ -182,6 +193,7 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         <div><div class="label">Accepted Growth</div><div class="value">{escape(str(summary['accepted_growth_count']))}</div></div>
         <div><div class="label">Memory Signals</div><div class="value">{escape(str(summary['memory_signal_count']))}</div></div>
         <div><div class="label">Reflections</div><div class="value">{escape(str(summary['reflection_count']))}</div></div>
+        <div><div class="label">Open Tasks</div><div class="value">{escape(str(summary['active_reflection_task_count']))}</div></div>
       </div>
     </section>
     <div class="grid">
@@ -201,6 +213,10 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
     <section>
       <h2>Reflection Ledger</h2>
       <table><thead><tr><th>Focus</th><th>Severity</th><th>Observations</th><th>Recommended Actions</th></tr></thead><tbody>{reflection_rows}</tbody></table>
+    </section>
+    <section>
+      <h2>Reflection Queue</h2>
+      <table><thead><tr><th>Status</th><th>Severity</th><th>Kind</th><th>Reason</th><th>Recommended Action</th><th>Created</th></tr></thead><tbody>{reflection_task_rows}</tbody></table>
     </section>
     <div class="grid">
       <section>

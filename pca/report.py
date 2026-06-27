@@ -24,6 +24,10 @@ from .memory_cards import memory_cards_from_events
 from .memory_signals import memory_signal_records_from_events
 from .output_gate import OutputGate
 from .recovery import current_recovery_record, recovery_records_from_events
+from .reflection_queue import (
+    active_reflection_tasks,
+    reflection_task_records_from_events,
+)
 from .reflections import reflection_records_from_events
 from .self_model import derive_self_model
 from .state import derive_current_claim
@@ -42,6 +46,9 @@ IMPORTANT_EVENT_TYPES = {
     "lucien.growth_reviewed",
     "lucien.growth_conflict_detected",
     "lucien.reflection_recorded",
+    "reflection.task_opened",
+    "reflection.task_resolved",
+    "reflection.task_dismissed",
     "lucien.chat_session_started",
     "lucien.chat_turn_recorded",
     "lucien.chat_session_closed",
@@ -77,6 +84,8 @@ class TraceReport:
     memory_cards: list[dict[str, Any]]
     memory_signals: list[dict[str, Any]]
     reflections: list[dict[str, Any]]
+    reflection_tasks: list[dict[str, Any]]
+    active_reflection_tasks: list[dict[str, Any]]
     chat_sessions: list[dict[str, Any]]
     chat_turns: list[dict[str, Any]]
     self_model: dict[str, Any]
@@ -102,6 +111,8 @@ class TraceReport:
             "memory_cards": self.memory_cards,
             "memory_signals": self.memory_signals,
             "reflections": self.reflections,
+            "reflection_tasks": self.reflection_tasks,
+            "active_reflection_tasks": self.active_reflection_tasks,
             "chat_sessions": self.chat_sessions,
             "chat_turns": self.chat_turns,
             "self_model": self.self_model,
@@ -177,6 +188,15 @@ def _event_summary(event: ContinuityEvent) -> str:
             f"focus={payload.get('focus')} severity={payload.get('severity')} "
             f"actions={len(payload.get('recommended_actions', []))}"
         )
+    if event.event_type in {
+        "reflection.task_opened",
+        "reflection.task_resolved",
+        "reflection.task_dismissed",
+    }:
+        return (
+            f"task={payload.get('task_id')} kind={payload.get('kind')} "
+            f"status={payload.get('status')} severity={payload.get('severity')}"
+        )
     if event.event_type == "lucien.chat_session_started":
         return f"session={payload.get('session_id')} status=open"
     if event.event_type == "lucien.chat_turn_recorded":
@@ -234,6 +254,8 @@ def build_trace_report(
     memory_cards = memory_cards_from_events(events, manifest.system_id)
     memory_signals = memory_signal_records_from_events(events)
     reflections = reflection_records_from_events(events)
+    reflection_tasks = reflection_task_records_from_events(events)
+    open_reflection_tasks = active_reflection_tasks(events)
     chat_sessions = chat_sessions_from_events(events)
     chat_turns = chat_turns_from_events(events)
     self_model = derive_self_model(events, manifest.system_id)
@@ -270,6 +292,8 @@ def build_trace_report(
         "memory_card_count": len(memory_cards),
         "memory_signal_count": len(memory_signals),
         "reflection_count": len(reflections),
+        "reflection_task_count": len(reflection_tasks),
+        "active_reflection_task_count": len(open_reflection_tasks),
         "chat_session_count": len(chat_sessions),
         "chat_turn_count": len(chat_turns),
         "accepted_growth_count": self_model.accepted_growth_count,
@@ -348,6 +372,10 @@ def build_trace_report(
         memory_cards=[record.to_dict() for record in memory_cards],
         memory_signals=[record.to_dict() for record in memory_signals],
         reflections=[record.to_dict() for record in reflections],
+        reflection_tasks=[record.to_dict() for record in reflection_tasks],
+        active_reflection_tasks=[
+            record.to_dict() for record in open_reflection_tasks
+        ],
         chat_sessions=[record.to_dict() for record in chat_sessions],
         chat_turns=[record.to_dict() for record in chat_turns],
         self_model=self_model.to_dict(),

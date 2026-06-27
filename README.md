@@ -93,6 +93,9 @@ what move the claim to `continuity_break`.
   against memory cards so learned memory can strengthen or weaken through evidence.
 - `ReflectionRecord`: records Lucien's own maintenance agenda by inspecting
   continuity state, pending growth, conflicts, and memory confidence pressure.
+- `ReflectionTaskRecord`: turns reflection recommendations into ledger-backed
+  steward queue items such as growth review, conflict resolution, memory audit,
+  and recovery opening.
 - `ChatSessionRecord`: records chat session start, turn, and close lifecycle events
   without storing raw conversation text.
 - `LucienCockpit`: renders a focused operational view of continuity, sessions,
@@ -208,6 +211,9 @@ python3 pca_cli.py memory-signal MEMORY_ID --type reinforced --reason "confirmed
 python3 pca_cli.py memory-signals
 python3 pca_cli.py reflect
 python3 pca_cli.py reflections
+python3 pca_cli.py reflection-queue --open
+python3 pca_cli.py reflection-task TASK_ID --resolve --reason "reviewed by steward"
+python3 pca_cli.py reflection-task TASK_ID --dismiss --reason "not needed"
 python3 pca_cli.py sessions
 python3 pca_cli.py cockpit --html reports/lucien_cockpit.html
 python3 scripts/lucien_cockpit_demo.py

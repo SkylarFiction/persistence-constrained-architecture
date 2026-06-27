@@ -210,6 +210,22 @@ recommended actions without mutating the self-model.
 This makes Lucien's learning loop inspectable: not only "what did Lucien learn?"
 but "what does Lucien think needs review before learning should advance?"
 
+## Reflection Queue
+
+The reflection queue converts reflection recommendations into steward work items.
+Tasks are ledger-backed records with a kind, severity, status, source reflection,
+reason, recommended action, and blocking effect.
+
+The first queue kinds are intentionally small:
+
+- `review_growth`: blocks identity/self-model acceptance for pending growth.
+- `resolve_conflict`: blocks related growth acceptance.
+- `audit_memory`: does not block output, but flags memory confidence for review.
+- `open_recovery`: blocks normal continuity claims when tied to a hard breach.
+
+Tasks can be resolved or dismissed, and those outcomes are written back to the
+ledger. This lets Lucien self-monitor without secretly self-authorizing.
+
 ## Output Gate
 
 The output gate maps the active continuity claim to allowed speech behavior:

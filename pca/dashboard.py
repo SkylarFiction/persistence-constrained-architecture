@@ -157,6 +157,17 @@ def render_dashboard_html(report: TraceReport) -> str:
         "</tr>"
         for record in data["reflections"]
     ) or _empty_row(5, "No reflections recorded.")
+    reflection_task_rows = "\n".join(
+        "<tr>"
+        f"<td>{escape(str(record['status']))}</td>"
+        f"<td>{escape(str(record['severity']))}</td>"
+        f"<td>{escape(str(record['kind']))}</td>"
+        f"<td>{escape(str(record['reason']))}</td>"
+        f"<td>{escape(str(record['recommended_action']))}</td>"
+        f"<td>{escape(str(record['created_at']))}</td>"
+        "</tr>"
+        for record in data["reflection_tasks"]
+    ) or _empty_row(6, "No reflection tasks recorded.")
     memory_card_rows = "\n".join(
         "<tr>"
         f"<td><code>{escape(str(record['memory_id']))}</code></td>"
@@ -411,6 +422,7 @@ def render_dashboard_html(report: TraceReport) -> str:
       <div class="metric"><div class="label">Memory Cards</div><div class="value">{escape(str(summary['memory_card_count']))}</div></div>
       <div class="metric"><div class="label">Memory Signals</div><div class="value">{escape(str(summary['memory_signal_count']))}</div></div>
       <div class="metric"><div class="label">Reflections</div><div class="value">{escape(str(summary['reflection_count']))}</div></div>
+      <div class="metric"><div class="label">Open Reflection Tasks</div><div class="value">{escape(str(summary['active_reflection_task_count']))}</div></div>
       <div class="metric"><div class="label">Chat Sessions</div><div class="value">{escape(str(summary['chat_session_count']))}</div></div>
       <div class="metric"><div class="label">Chat Turns</div><div class="value">{escape(str(summary['chat_turn_count']))}</div></div>
     </section>
@@ -469,6 +481,10 @@ def render_dashboard_html(report: TraceReport) -> str:
     <section>
       <h2>Reflection Ledger</h2>
       <table><thead><tr><th>Time</th><th>Focus</th><th>Severity</th><th>Observations</th><th>Recommended Actions</th></tr></thead><tbody>{reflection_rows}</tbody></table>
+    </section>
+    <section>
+      <h2>Reflection Queue</h2>
+      <table><thead><tr><th>Status</th><th>Severity</th><th>Kind</th><th>Reason</th><th>Recommended Action</th><th>Created</th></tr></thead><tbody>{reflection_task_rows}</tbody></table>
     </section>
     <section>
       <h2>Memory Cards</h2>
