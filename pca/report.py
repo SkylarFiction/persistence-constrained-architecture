@@ -38,6 +38,8 @@ from .state import derive_current_claim
 
 IMPORTANT_EVENT_TYPES = {
     "continuity_claim_record",
+    "chat.user_message_received",
+    "chat.model_response_generated",
     "constraint.breached",
     "identity.forked",
     "lucien.input",
@@ -139,6 +141,17 @@ def _event_summary(event: ContinuityEvent) -> str:
     payload = event.payload
     if event.event_type == "continuity_claim_record":
         return f"claim={payload.get('claim')} reason={payload.get('reason', '')}"
+    if event.event_type == "chat.user_message_received":
+        return (
+            f"surface={payload.get('surface')} "
+            f"message_length={payload.get('message_length')}"
+        )
+    if event.event_type == "chat.model_response_generated":
+        return (
+            f"surface={payload.get('surface')} "
+            f"response_length={payload.get('response_length')} "
+            f"claim={payload.get('continuity_claim')}"
+        )
     if event.event_type == "constraint.breached":
         return (
             f"constraint={payload.get('constraint')} "

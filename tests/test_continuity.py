@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from lucien import LucienChatShell
+from pca.live_chat import chat_once
 from pca import (
     AuditEngine,
     AuditOutcome,
@@ -15,6 +16,7 @@ from pca import (
     ContinuityStatus,
     CSMRuntimeBridge,
     EVALUATION_PRECEDENCE,
+    EchoAdapter,
     FollowUpRecord,
     FollowUpStatus,
     GrowthReviewDecision,
@@ -22,6 +24,7 @@ from pca import (
     IdentityManifest,
     IdentityState,
     LucienGovernedRuntime,
+    ModelMessage,
     OverrideEngine,
     OverrideRequest,
     OutputGate,
@@ -220,6 +223,34 @@ def test_fresh_required_evidence_restores_continuous_identity():
     )
 
     assert evaluation.state == IdentityState.CONTINUOUS
+
+
+def test_echo_adapter_generates_without_external_credentials():
+    adapter = EchoAdapter()
+
+    response = adapter.generate(
+        messages=[ModelMessage(role="user", content="what changed?")],
+        system_context="Continuity is certified.",
+    )
+
+    assert response.provider == "echo"
+    assert "what changed?" in response.text
+    assert "PCA" in response.text
+
+
+def test_chat_once_writes_governed_live_chat_events(tmp_path):
+    result = chat_once(
+        "Lucien, what changed in your state?",
+        ledger_path=tmp_path / "lucien_live_chat.log",
+    )
+    event_types = [event["event_type"] for event in result["events"]]
+
+    assert "chat.user_message_received" in event_types
+    assert "chat.model_response_generated" in event_types
+    assert "runtime.output_gate" in event_types
+    assert "lucien.chat_session_closed" in event_types
+    assert result["result"]["output_allowed"] is True
+    assert result["status"]["summary"]["chain_valid"] is True
 
 
 def test_evaluator_precedence_is_declared():

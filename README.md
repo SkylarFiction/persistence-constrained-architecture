@@ -109,6 +109,11 @@ what move the claim to `continuity_break`.
   state, derives the self-model, classifies possible growth, sends growth through
   the Growth Gate, records simple memory reinforcement/correction signals, emits
   governed output, and refreshes a dashboard.
+- `Lucien Live Chat`: serves a local three-panel chat page where messages are sent
+  through PCA, responses are output-gated, ledger events are shown live, and browser
+  text-to-speech can read Lucien's response.
+- `ModelAdapter`: provides an Echo fallback plus optional OpenAI-compatible model
+  calls through `OPENAI_API_KEY`, `LUCIEN_MODEL`, and `LUCIEN_MODEL_BASE_URL`.
 - `CSMRuntimeBridge`: connects Lucien-style CSM monitor results and hard-kill audit
   logs to PCA continuity events.
 - `PCAOutputWrapper`: gates outbound text and writes privacy-conscious audit events
@@ -222,6 +227,8 @@ python3 pca_cli.py reflection-task TASK_ID --resolve --reason "reviewed by stewa
 python3 pca_cli.py reflection-task TASK_ID --dismiss --reason "not needed"
 python3 pca_cli.py constitution
 python3 pca_cli.py --ledger data/lucien_chat.log constitution --write
+python3 pca_cli.py chat-once "Lucien, what changed in your state?"
+python3 pca_cli.py live-chat
 python3 pca_cli.py sessions
 python3 pca_cli.py cockpit --html reports/lucien_cockpit.html
 python3 scripts/lucien_cockpit_demo.py

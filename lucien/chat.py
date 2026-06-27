@@ -161,6 +161,15 @@ class LucienChatShell:
             memory_cards=memory_cards,
             accepted_growth_count=self_model.accepted_growth_count,
         )
+        self.ledger.append(
+            "chat.model_response_generated",
+            self.manifest.system_id,
+            {
+                "response_length": len(draft),
+                "surface": "lucien_chat_shell",
+                "continuity_claim": claim,
+            },
+        )
         runtime = LucienGovernedRuntime(self.manifest, self.ledger)
         turn = runtime.process_turn(
             user_text=user_message,

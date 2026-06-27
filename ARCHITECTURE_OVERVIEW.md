@@ -253,6 +253,21 @@ refs, and reason instead of expanding raw private memory text. It answers the
 public review question: what is Lucien currently allowed to become, what must
 remain stable, and what happens when growth conflicts with continuity?
 
+## Live Chat
+
+Lucien Live Chat is a local web surface for talking to Lucien through PCA. It has
+three panels: chat, governance status, and live ledger events. Each message is sent
+through a model adapter, then PCA records the turn, evaluates runtime/output state,
+updates reports, and returns the visible governance changes to the page.
+
+The model is not Lucien by itself. The model is a language engine. Lucien is the
+model plus PCA ledger, identity rules, memory governance, reflection queue, conflict
+resolution, recovery rules, and output gate.
+
+The first adapter is an `EchoAdapter` so the system works without external API
+credentials. If `OPENAI_API_KEY` is set, an OpenAI-compatible adapter can call a
+configured model via `LUCIEN_MODEL` and `LUCIEN_MODEL_BASE_URL`.
+
 ## Output Gate
 
 The output gate maps the active continuity claim to allowed speech behavior:

@@ -98,6 +98,14 @@ from .memory_signals import (
     memory_signal_records_from_events,
     record_memory_signal,
 )
+from .model_adapter import (
+    EchoAdapter,
+    ModelAdapter,
+    ModelMessage,
+    ModelResponse,
+    OpenAICompatibleAdapter,
+    adapter_from_environment,
+)
 from .override import OverrideEngine, OverrideRecord, OverrideRequest
 from .output_gate import OutputGate, OutputGateDecision, OutputMode
 from .output_wrapper import OutputEnvelope, PCAOutputWrapper
@@ -221,6 +229,11 @@ __all__ = [
     "MemoryCard",
     "MemorySignalRecord",
     "MemorySignalType",
+    "EchoAdapter",
+    "ModelAdapter",
+    "ModelMessage",
+    "ModelResponse",
+    "OpenAICompatibleAdapter",
     "OverrideEngine",
     "OverrideRecord",
     "OverrideRequest",
@@ -256,6 +269,7 @@ __all__ = [
     "accept_growth",
     "append_ledger_anchor",
     "authorization_policy_from_packs",
+    "adapter_from_environment",
     "authorize",
     "build_manifest_from_packs",
     "build_manifest_from_policy_results",

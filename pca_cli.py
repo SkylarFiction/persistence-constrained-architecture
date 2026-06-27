@@ -75,6 +75,7 @@ from pca import (
     write_trace_report_html,
     verify_latest_anchor,
 )
+from pca.live_chat import chat_once, run_live_chat_server
 
 
 def load_manifest(path: Path) -> IdentityManifest:
@@ -132,6 +133,14 @@ def create_followups_for_override(
         ledger.append("followup_created", identity_id, record.to_dict())
         records.append(record)
     return records
+
+
+def _chat_ledger_path(ledger_path: str) -> str:
+    if ledger_path == "data/continuity.log":
+        return "data/lucien_live_chat.log"
+    return ledger_path
+
+
 def log_authorization_check(
     ledger: ContinuityLedger,
     manifest: IdentityManifest,
@@ -187,6 +196,13 @@ def main() -> int:
     constitution_parser.add_argument("--output", default="LUCIEN_CONSTITUTION.md")
 
     subparsers.add_parser("status")
+    chat_once_parser = subparsers.add_parser("chat-once")
+    chat_once_parser.add_argument("message")
+
+    live_chat_parser = subparsers.add_parser("live-chat")
+    live_chat_parser.add_argument("--host", default="127.0.0.1")
+    live_chat_parser.add_argument("--port", type=int, default=8787)
+
     subparsers.add_parser("speak-gate")
     subparsers.add_parser("seed-required")
     subparsers.add_parser("lineage")
@@ -451,6 +467,25 @@ def main() -> int:
                 "ledger": str(ledger.path),
                 "claim_record": claim.to_dict() if claim else None,
             }
+        )
+        return 0
+
+    if args.command == "chat-once":
+        print_json(
+            chat_once(
+                args.message,
+                manifest_path=args.manifest,
+                ledger_path=_chat_ledger_path(args.ledger),
+            )
+        )
+        return 0
+
+    if args.command == "live-chat":
+        run_live_chat_server(
+            host=args.host,
+            port=args.port,
+            manifest_path=args.manifest,
+            ledger_path=_chat_ledger_path(args.ledger),
         )
         return 0
 

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pca.model_adapter import ModelAdapter, ModelMessage
+
 from .memory import MemoryCard
 
 
@@ -39,6 +41,29 @@ class LocalLucienResponder:
         )
 
 
+@dataclass(frozen=True)
+class ModelLucienResponder:
+    adapter: ModelAdapter
+    name: str = "Lucien"
+
+    def generate(
+        self,
+        user_message: str,
+        continuity_claim: str,
+        memory_cards: list[MemoryCard],
+        accepted_growth_count: int,
+    ) -> str:
+        response = self.adapter.generate(
+            messages=[ModelMessage(role="user", content=user_message)],
+            system_context=_system_context(
+                continuity_claim,
+                memory_cards,
+                accepted_growth_count,
+            ),
+        )
+        return response.text
+
+
 def _is_status_question(text: str) -> bool:
     lowered = text.lower()
     return any(
@@ -50,4 +75,22 @@ def _is_status_question(text: str) -> bool:
             "self-model",
             "continuity",
         )
+    )
+
+
+def _system_context(
+    continuity_claim: str,
+    memory_cards: list[MemoryCard],
+    accepted_growth_count: int,
+) -> str:
+    return "\n".join(
+        [
+            "You are Lucien's language engine inside PCA.",
+            "You are not allowed to directly rewrite memory, identity, commitments, or policy.",
+            "Any learning must be proposed through PCA growth records and steward review.",
+            f"Current continuity claim: {continuity_claim}",
+            f"Accepted memory cards: {len(memory_cards)}",
+            f"Accepted growth records: {accepted_growth_count}",
+            "Respond helpfully, briefly, and with appropriate continuity disclosure.",
+        ]
     )
