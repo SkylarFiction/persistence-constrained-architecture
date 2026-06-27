@@ -194,6 +194,12 @@ without rewriting the original memory card. The cockpit and dashboard derive
 effective confidence from those ledger-backed signals, which keeps memory evolution
 auditable instead of silently mutable.
 
+The chat shell can record simple confirmation and correction signals from ordinary
+conversation. If an accepted memory exists and the user confirms the active memory
+context, Lucien writes a reinforcement signal. If the user contradicts it or marks
+it stale, Lucien writes the corresponding signal. The original accepted growth
+record remains intact.
+
 ## Output Gate
 
 The output gate maps the active continuity claim to allowed speech behavior:

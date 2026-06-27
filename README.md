@@ -97,7 +97,8 @@ what move the claim to `continuity_break`.
   memory cards, growth queue, and accepted self-model state.
 - `LucienChatShell`: a tiny persistent conversational shell that loads continuity
   state, derives the self-model, classifies possible growth, sends growth through
-  the Growth Gate, emits governed output, and refreshes a dashboard.
+  the Growth Gate, records simple memory reinforcement/correction signals, emits
+  governed output, and refreshes a dashboard.
 - `CSMRuntimeBridge`: connects Lucien-style CSM monitor results and hard-kill audit
   logs to PCA continuity events.
 - `PCAOutputWrapper`: gates outbound text and writes privacy-conscious audit events

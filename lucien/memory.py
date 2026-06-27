@@ -16,6 +16,11 @@ def memory_cards_from_self_model(self_model: SelfModel) -> list[MemoryCard]:
                 evidence_refs=[str(ref) for ref in record["evidence_refs"]],
                 identity_impact=str(record["identity_impact"]),
                 confidence=_confidence_for_impact(str(record["identity_impact"])),
+                effective_confidence=_confidence_for_impact(str(record["identity_impact"])),
+                signal_score=0.0,
+                reinforcement_count=0,
+                contradiction_count=0,
+                stale_signal_count=0,
                 created_at=str(record["accepted_at"]),
                 last_confirmed=str(record["accepted_at"]),
                 continuity_claim_at_acceptance=str(

@@ -19,6 +19,7 @@ from pca import (
     derive_self_model,
     record_chat_turn,
     record_growth_conflict,
+    record_memory_signal,
     render_dashboard_html,
     start_chat_session,
     write_lucien_cockpit_html,
@@ -28,6 +29,7 @@ from .conflict_detector import detect_growth_conflict
 from .growth_classifier import ClassifiedGrowth, classify_growth
 from .llm_adapter import LocalLucienResponder
 from .memory import MemoryCard, memory_cards_from_self_model
+from .memory_signal_classifier import classify_memory_signal
 
 
 @dataclass(frozen=True)
@@ -41,6 +43,7 @@ class LucienChatResult:
     proposed_growth: dict[str, Any] | None
     accepted_growth: dict[str, Any] | None
     conflict: dict[str, Any] | None
+    memory_signal: dict[str, Any] | None
     growth_gate: dict[str, Any] | None
     session_id: str
     turn_id: str
@@ -57,6 +60,7 @@ class LucienChatResult:
             "proposed_growth": self.proposed_growth,
             "accepted_growth": self.accepted_growth,
             "conflict": self.conflict,
+            "memory_signal": self.memory_signal,
             "growth_gate": self.growth_gate,
             "session_id": self.session_id,
             "turn_id": self.turn_id,
@@ -167,6 +171,7 @@ class LucienChatShell:
         proposed_growth = turn.growth_records[0] if turn.growth_records else None
         accepted_growth = None
         conflict = None
+        memory_signal = None
         growth_gate = None
         if proposed_growth is not None:
             detected_conflict = detect_growth_conflict(classified, self_model)
@@ -201,6 +206,18 @@ class LucienChatShell:
                     reason="auto-accepted by Lucien chat shell",
                     current_claim=post_turn_claim,
                 )
+        classified_signal = classify_memory_signal(user_message)
+        signal_target = _latest_memory_card(memory_cards)
+        if classified_signal is not None and signal_target is not None:
+            signal_record = record_memory_signal(
+                self.ledger,
+                self.manifest.system_id,
+                signal_target.memory_id,
+                classified_signal.signal_type,
+                reason=classified_signal.reason,
+                evidence_refs=[turn.input_event.event_hash],
+            )
+            memory_signal = signal_record.to_dict()
         current_claim = derive_current_claim(self.ledger, self.manifest)[0]
         turn_record = record_chat_turn(
             self.ledger,
@@ -230,6 +247,7 @@ class LucienChatShell:
             proposed_growth=proposed_growth.to_dict() if proposed_growth else None,
             accepted_growth=accepted_growth.to_dict() if accepted_growth else None,
             conflict=conflict,
+            memory_signal=memory_signal,
             growth_gate=growth_gate,
             session_id=session_id,
             turn_id=turn_record.turn_id,
@@ -273,3 +291,9 @@ def _growth_event_hashes(events, growth_ids: list[str]) -> list[str]:
             if event.payload.get("growth_id") in wanted:
                 hashes.append(event.event_hash)
     return hashes
+
+
+def _latest_memory_card(cards: list[MemoryCard]) -> MemoryCard | None:
+    if not cards:
+        return None
+    return sorted(cards, key=lambda card: card.last_confirmed)[-1]

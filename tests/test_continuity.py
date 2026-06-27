@@ -1772,6 +1772,24 @@ def test_lucien_chat_shell_records_growth_conflict(tmp_path):
     assert conflicts[0].conflicting_growth_ids == [accepted.growth_id]
 
 
+def test_lucien_chat_shell_records_memory_confirmation_signal(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "lucien_chat.log")
+    shell = LucienChatShell(manifest=manifest, ledger=ledger)
+    shell.seed_required_evidence()
+    first = shell.handle_message("Remember that Lucien learning must stay governed.")
+
+    result = shell.handle_message("That's right, keep that memory.")
+    signals = memory_signal_records_from_events(ledger.events())
+
+    assert first.accepted_growth is not None
+    assert result.memory_signal is not None
+    assert len(signals) == 1
+    assert signals[0].signal_type.value == "reinforced"
+    assert signals[0].memory_id.startswith("mem_")
+    assert signals[0].evidence_refs
+
+
 def test_identity_defining_growth_requires_review(tmp_path):
     manifest = load_manifest()
     ledger = ContinuityLedger(tmp_path / "continuity.log")
