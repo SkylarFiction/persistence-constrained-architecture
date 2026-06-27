@@ -23,6 +23,7 @@ from .growth_conflicts import (
 )
 from .ledger import ContinuityLedger
 from .manifest import IdentityManifest
+from .memory_cards import memory_cards_from_events
 from .model_adapter import adapter_from_environment
 from .reflection_queue import (
     open_tasks_from_reflection,
@@ -32,6 +33,7 @@ from .reflection_queue import (
 from .reflections import record_reflection
 from .report import build_trace_report
 from .session_replay import build_session_replay, latest_session_id
+from .self_model import derive_self_model
 from .state import derive_current_claim
 
 
@@ -236,6 +238,14 @@ def _apply_steward_action(
             "resolved_tasks": [task.to_dict() for task in resolved_tasks],
         }
 
+    if action == "run_reflection":
+        reflection = record_reflection(ledger, manifest)
+        opened_tasks = open_tasks_from_reflection(ledger, reflection)
+        return {
+            "reflection": reflection.to_dict(),
+            "opened_tasks": [task.to_dict() for task in opened_tasks],
+        }
+
     raise ValueError(f"unknown steward action: {action}")
 
 
@@ -323,6 +333,11 @@ def _status_payload(
         for record in growth_conflict_records_from_events(ledger.events())
         if record.conflict_id not in resolved_conflict_ids
     ]
+    self_model = derive_self_model(ledger.events(), manifest.system_id)
+    memory_cards = [
+        card.to_dict()
+        for card in memory_cards_from_events(ledger.events(), manifest.system_id)
+    ]
     latest_events = [
         {
             "event_type": event.event_type,
@@ -347,6 +362,14 @@ def _status_payload(
         "open_reflection_tasks": report.active_reflection_tasks,
         "active_growth": active_growth,
         "growth_conflicts": unresolved_conflicts,
+        "self_model": {
+            "accepted_growth_count": self_model.accepted_growth_count,
+            "by_kind_counts": {
+                kind: len(records)
+                for kind, records in self_model.by_kind.items()
+            },
+            "memory_cards": memory_cards[-5:],
+        },
         "session_replay": session_replay,
         "latest_events": latest_events,
     }
@@ -468,7 +491,12 @@ def _live_chat_html() -> str:
       </section>
       <section>
         <h2>Steward Queue</h2>
+        <div class="actions"><button type="button" id="reflectNow">Reflect Now</button></div>
         <div id="queue" class="queue"></div>
+      </section>
+      <section>
+        <h2>Self-Model</h2>
+        <div id="selfModel" class="queue"></div>
       </section>
       <section>
         <h2>Growth Review</h2>
@@ -495,6 +523,7 @@ def _live_chat_html() -> str:
     const growth = document.getElementById('growth');
     const conflictList = document.getElementById('conflictList');
     const timeline = document.getElementById('timeline');
+    const selfModel = document.getElementById('selfModel');
     let lastLucien = '';
 
     function addMessage(kind, text) {
@@ -515,6 +544,7 @@ def _live_chat_html() -> str:
       document.getElementById('tasks').textContent = summary.active_reflection_task_count ?? 0;
       document.getElementById('conflicts').textContent = summary.unresolved_growth_conflict_count ?? 0;
       renderQueue(status.open_reflection_tasks || []);
+      renderSelfModel(status.self_model || {});
       renderGrowth(status.active_growth || []);
       renderConflicts(status.growth_conflicts || []);
       renderTimeline(status.session_replay);
@@ -524,6 +554,31 @@ def _live_chat_html() -> str:
         row.className = 'event';
         row.innerHTML = `<code>${event.event_type}</code><br>${event.detail || ''}`;
         events.appendChild(row);
+      }
+    }
+
+    function renderSelfModel(model) {
+      selfModel.innerHTML = '';
+      const counts = model.by_kind_counts || {};
+      const summary = document.createElement('div');
+      summary.className = 'item';
+      summary.innerHTML = `<div class="item-title">Accepted growth: ${model.accepted_growth_count || 0}</div>
+        <div class="item-meta">memory ${counts.memory || 0} / commitment ${counts.commitment || 0} / skill ${counts.skill || 0} / preference ${counts.preference || 0} / policy ${counts.policy || 0} / identity ${counts.identity || 0}</div>`;
+      selfModel.appendChild(summary);
+      const cards = model.memory_cards || [];
+      if (!cards.length) {
+        const emptyMemory = document.createElement('div');
+        emptyMemory.className = 'item-meta';
+        emptyMemory.textContent = 'No accepted memory cards yet.';
+        selfModel.appendChild(emptyMemory);
+        return;
+      }
+      for (const card of cards) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = `<div class="item-title">${card.memory_id}</div>
+          <div class="item-meta">confidence ${card.effective_confidence} / impact ${card.identity_impact} / hash ${card.summary_sha256.slice(0, 12)}</div>`;
+        selfModel.appendChild(row);
       }
     }
 
@@ -676,6 +731,10 @@ def _live_chat_html() -> str:
       if (!lastLucien || !window.speechSynthesis) return;
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(new SpeechSynthesisUtterance(lastLucien));
+    });
+
+    document.getElementById('reflectNow').addEventListener('click', () => {
+      steward({action: 'run_reflection', reason: 'manual live cockpit reflection'});
     });
 
     refresh();

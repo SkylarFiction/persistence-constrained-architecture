@@ -335,6 +335,32 @@ def test_live_steward_action_resolves_conflict_and_matching_task(tmp_path):
     assert result["resolved_tasks"][0]["status"] == "resolved"
 
 
+def test_live_steward_action_runs_reflection_and_opens_tasks(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="commitment",
+        summary="Identity-bearing commitments require review.",
+        identity_impact="high",
+        reason="test pending growth",
+    )
+
+    result = _apply_steward_action(
+        ledger,
+        manifest,
+        {"action": "run_reflection", "reason": "manual live cockpit reflection"},
+    )
+    reflections = reflection_records_from_events(ledger.events())
+    tasks = reflection_task_records_from_events(ledger.events())
+
+    assert result["reflection"]["focus"] == "growth_review"
+    assert result["opened_tasks"]
+    assert reflections[-1].reflection_id == result["reflection"]["reflection_id"]
+    assert tasks[-1].status.value == "open"
+
+
 def test_evaluator_precedence_is_declared():
     assert EVALUATION_PRECEDENCE == (
         "chain_invalid",

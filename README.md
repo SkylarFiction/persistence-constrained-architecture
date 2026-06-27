@@ -240,6 +240,8 @@ python3 lucien_chat.py --seed-required --message "Remember that PCA learning mus
 The live chat page includes steward controls for resolving reflection tasks,
 reviewing pending growth, and resolving growth conflicts. These controls write
 the same ledger-backed events as the CLI workflows.
+It also exposes a live self-model panel and a manual reflection action so
+Lucien can surface new steward work while the conversation is running.
 
 Scenario outputs are written to `scenario_runs/<scenario_id>/`:
 
