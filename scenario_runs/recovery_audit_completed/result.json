@@ -116,14 +116,16 @@
     "ledger_path": "scenario_runs/recovery_audit_completed/continuity.log",
     "memory_card_count": 0,
     "memory_signal_count": 0,
+    "mission_count": 0,
     "name": "Lucien Persistence Kernel",
+    "open_mission_count": 0,
     "output_allowed_scope": "May speak as the identity only with review-status disclosure.",
     "output_mode": "disclose_review",
     "policy_error_count": 0,
     "reasons": [
       "hard constraint breached: runtime_csm_red"
     ],
-    "recorded_claim_id": "claim_9f5e87a9-5c63-4243-bf8a-23496645c3fb",
+    "recorded_claim_id": "claim_1ac84abc-094a-4d59-b45a-10428c5c7ea9",
     "recovery_count": 1,
     "reflection_count": 0,
     "reflection_task_count": 0,

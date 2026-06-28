@@ -19,6 +19,8 @@ from pca import (
     GrowthReviewDecision,
     GrowthStatus,
     IdentityManifest,
+    MissionItemKind,
+    MissionStatus,
     OverrideEngine,
     OverrideRequest,
     OutputGate,
@@ -53,6 +55,9 @@ from pca import (
     accept_growth,
     memory_cards_from_events,
     memory_signal_records_from_events,
+    mission_briefs_from_events,
+    add_mission_item,
+    open_mission,
     open_tasks_from_reflection,
     propose_growth,
     record_memory_signal,
@@ -67,6 +72,7 @@ from pca import (
     review_growth,
     safe_load_policy_directory,
     safe_load_policy_pack,
+    update_mission_status,
     update_reflection_task,
     render_constitution_markdown,
     write_dashboard_html,
@@ -219,6 +225,35 @@ def main() -> int:
     subparsers.add_parser("lineage")
     subparsers.add_parser("memories")
     subparsers.add_parser("memory-signals")
+    missions_parser = subparsers.add_parser("missions")
+    missions_parser.add_argument("--open", action="store_true")
+
+    mission_open_parser = subparsers.add_parser("mission-open")
+    mission_open_parser.add_argument("title")
+    mission_open_parser.add_argument("--problem", required=True)
+    mission_open_parser.add_argument("--value", action="append", default=[])
+    mission_open_parser.add_argument("--reason", default="")
+
+    mission_add_parser = subparsers.add_parser("mission-add")
+    mission_add_parser.add_argument("mission_id")
+    mission_add_parser.add_argument(
+        "kind",
+        choices=[kind.value for kind in MissionItemKind],
+    )
+    mission_add_parser.add_argument("--summary", required=True)
+    mission_add_parser.add_argument("--status", default="proposed")
+    mission_add_parser.add_argument("--confidence", default="unknown")
+    mission_add_parser.add_argument("--evidence-ref", action="append", default=[])
+    mission_add_parser.add_argument("--reason", default="")
+
+    mission_status_parser = subparsers.add_parser("mission-status")
+    mission_status_parser.add_argument("mission_id")
+    mission_status_parser.add_argument(
+        "status",
+        choices=[status.value for status in MissionStatus],
+    )
+    mission_status_parser.add_argument("--reason", default="")
+
     subparsers.add_parser("sessions")
     session_replay_parser = subparsers.add_parser("session-replay")
     session_replay_parser.add_argument("session_id", nargs="?")
@@ -733,6 +768,61 @@ def main() -> int:
             confidence_delta=args.confidence_delta,
         )
         print_json({"memory_signal": record.to_dict()})
+        return 0
+
+    if args.command == "missions":
+        briefs = mission_briefs_from_events(ledger.events())
+        if args.open:
+            briefs = [
+                brief
+                for brief in briefs
+                if brief.mission.status == MissionStatus.OPEN
+            ]
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "count": len(briefs),
+                "missions": [brief.to_dict() for brief in briefs],
+            }
+        )
+        return 0
+
+    if args.command == "mission-open":
+        mission = open_mission(
+            ledger=ledger,
+            identity_id=manifest.system_id,
+            title=args.title,
+            problem_statement=args.problem,
+            values=args.value,
+            reason=args.reason,
+        )
+        print_json({"mission": mission.to_dict()})
+        return 0
+
+    if args.command == "mission-add":
+        item = add_mission_item(
+            ledger=ledger,
+            identity_id=manifest.system_id,
+            mission_id=args.mission_id,
+            kind=args.kind,
+            summary=args.summary,
+            status=args.status,
+            confidence=args.confidence,
+            evidence_refs=args.evidence_ref,
+            reason=args.reason,
+        )
+        print_json({"mission_item": item.to_dict()})
+        return 0
+
+    if args.command == "mission-status":
+        mission = update_mission_status(
+            ledger=ledger,
+            identity_id=manifest.system_id,
+            mission_id=args.mission_id,
+            status=args.status,
+            reason=args.reason,
+        )
+        print_json({"mission": mission.to_dict()})
         return 0
 
     if args.command == "reflect":

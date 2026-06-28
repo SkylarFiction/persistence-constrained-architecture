@@ -77,14 +77,16 @@
     "ledger_path": "scenario_runs/fork_declared/continuity.log",
     "memory_card_count": 0,
     "memory_signal_count": 0,
+    "mission_count": 0,
     "name": "Lucien Persistence Kernel",
+    "open_mission_count": 0,
     "output_allowed_scope": "Must identify as a fork or descendant.",
     "output_mode": "fork_disclosure",
     "policy_error_count": 0,
     "reasons": [
       "ledger contains an identity fork event"
     ],
-    "recorded_claim_id": "claim_1b839846-6596-45e7-8c10-72acfb1dc98b",
+    "recorded_claim_id": "claim_4bd3c8d6-468c-4b2f-b77d-59aa00ad5d51",
     "recovery_count": 0,
     "reflection_count": 0,
     "reflection_task_count": 0,

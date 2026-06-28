@@ -62,6 +62,16 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         "</tr>"
         for resolution in data["growth_conflict_resolutions"][-8:]
     ) or _empty_row(4, "No conflict resolutions recorded.")
+    mission_rows = "\n".join(
+        "<tr>"
+        f"<td>{escape(str(brief['mission']['title']))}</td>"
+        f"<td>{escape(str(brief['mission']['status']))}</td>"
+        f"<td><code>{escape(_short_hash(str(brief['mission']['mission_id'])))}</code></td>"
+        f"<td>{escape(_mission_counts(brief))}</td>"
+        f"<td>{escape(_joined(brief['mission'].get('values', [])))}</td>"
+        "</tr>"
+        for brief in data["missions"][-8:]
+    ) or _empty_row(5, "No missions opened yet.")
     reflection_rows = "\n".join(
         "<tr>"
         f"<td>{escape(str(reflection['focus']))}</td>"
@@ -191,7 +201,7 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
       </div>
       <div class="cell"><div class="label">Output Mode</div><div class="value">{escape(str(summary['output_mode']))}</div></div>
       <div class="cell"><div class="label">Memory Cards</div><div class="value">{escape(str(summary['memory_card_count']))}</div></div>
-      <div class="cell"><div class="label">Open Growth</div><div class="value">{escape(str(len(pending_growth)))}</div></div>
+      <div class="cell"><div class="label">Open Missions</div><div class="value">{escape(str(summary['open_mission_count']))}</div></div>
     </div>
     <section>
       <h2>Live Runtime Snapshot</h2>
@@ -204,6 +214,8 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         <div><div class="label">Reflections</div><div class="value">{escape(str(summary['reflection_count']))}</div></div>
         <div><div class="label">Open Tasks</div><div class="value">{escape(str(summary['active_reflection_task_count']))}</div></div>
         <div><div class="label">Conflict Resolutions</div><div class="value">{escape(str(summary['growth_conflict_resolution_count']))}</div></div>
+        <div><div class="label">Open Growth</div><div class="value">{escape(str(len(pending_growth)))}</div></div>
+        <div><div class="label">Missions</div><div class="value">{escape(str(summary['mission_count']))}</div></div>
       </div>
     </section>
     <div class="grid">
@@ -223,6 +235,10 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
     <section>
       <h2>Conflict Resolutions</h2>
       <table><thead><tr><th>Conflict</th><th>Decision</th><th>Resolved By</th><th>Effect</th></tr></thead><tbody>{conflict_resolution_rows}</tbody></table>
+    </section>
+    <section>
+      <h2>Mission Workspace</h2>
+      <table><thead><tr><th>Title</th><th>Status</th><th>ID</th><th>Items</th><th>Values</th></tr></thead><tbody>{mission_rows}</tbody></table>
     </section>
     <section>
       <h2>Reflection Ledger</h2>
@@ -303,6 +319,20 @@ def _review_commands(growth_id: str) -> str:
             f"python3 pca_cli.py review-growth {growth_id} --reject --reviewer steward --reason \"conflict or drift\"",
         ]
     )
+
+
+def _mission_counts(brief: dict) -> str:
+    counts = brief.get("counts", {})
+    labels = [
+        ("hypothesis", "H"),
+        ("evidence", "E"),
+        ("intervention", "I"),
+        ("plan_step", "P"),
+        ("risk", "R"),
+        ("outcome", "O"),
+        ("lesson", "L"),
+    ]
+    return " / ".join(f"{label} {counts.get(kind, 0)}" for kind, label in labels)
 
 
 def _signal_text(card: dict) -> str:

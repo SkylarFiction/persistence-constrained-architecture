@@ -26,6 +26,8 @@ from pca import (
     IdentityManifest,
     IdentityState,
     LucienGovernedRuntime,
+    MissionItemKind,
+    MissionStatus,
     ModelMessage,
     OverrideEngine,
     OverrideRequest,
@@ -56,6 +58,7 @@ from pca import (
     derive_current_claim,
     derive_self_model,
     accept_growth,
+    add_mission_item,
     export_latest_anchor,
     growth_conflict_records_from_events,
     growth_conflict_resolution_records_from_events,
@@ -66,7 +69,11 @@ from pca import (
     lineage_records,
     memory_cards_from_events,
     memory_signal_records_from_events,
+    mission_briefs_from_events,
+    mission_items_from_events,
+    mission_records_from_events,
     merge_policy_packs,
+    open_mission,
     open_tasks_from_reflection,
     required_evidence_for,
     render_dashboard_html,
@@ -85,6 +92,7 @@ from pca import (
     resolve_growth_conflict,
     resolve_matching_reflection_tasks,
     review_growth,
+    update_mission_status,
     update_reflection_task,
     verify_latest_anchor,
     write_constitution_markdown,
@@ -497,6 +505,118 @@ def test_stale_memory_auto_opens_audit_reflection_task(tmp_path):
     assert result["reflection"]["focus"] == "memory_confidence_review"
     assert result["opened_tasks"]
     assert result["opened_tasks"][0]["kind"] == "audit_memory"
+
+
+def test_mission_workspace_records_problem_solving_items(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    problem = "Reduce preventable isolation for elders without replacing human care."
+    hypothesis = "Trusted weekly calls may surface needs before crisis."
+
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Reduce elder isolation",
+        problem_statement=problem,
+        values=["dignity", "evidence", "human agency"],
+        reason="world-improvement mission",
+    )
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        MissionItemKind.HYPOTHESIS,
+        hypothesis,
+        confidence="uncertain",
+        reason="first intervention hypothesis",
+    )
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "risk",
+        "Automation could crowd out local human responsibility.",
+        confidence="medium",
+        reason="harm review",
+    )
+
+    briefs = mission_briefs_from_events(ledger.events())
+    counts = briefs[0].to_dict()["counts"]
+    event_payload = "\n".join(json.dumps(event.payload) for event in ledger.events())
+
+    assert len(briefs) == 1
+    assert briefs[0].mission.title == "Reduce elder isolation"
+    assert counts["hypothesis"] == 1
+    assert counts["risk"] == 1
+    assert problem not in event_payload
+    assert hypothesis not in event_payload
+    assert mission_records_from_events(ledger.events())[0].status == MissionStatus.OPEN
+    assert (
+        mission_items_from_events(ledger.events(), mission.mission_id)[0].kind
+        == MissionItemKind.HYPOTHESIS
+    )
+
+
+def test_mission_status_updates_and_trace_report_counts(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Safer local food access",
+        problem_statement="Find low-risk food access interventions.",
+    )
+
+    updated = update_mission_status(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "completed",
+        reason="pilot complete",
+    )
+    report = build_trace_report(ledger, manifest)
+
+    assert updated.status == MissionStatus.COMPLETED
+    assert report.summary["mission_count"] == 1
+    assert report.summary["open_mission_count"] == 0
+    assert report.missions[0]["mission"]["status"] == "completed"
+
+
+def test_live_steward_action_opens_mission_and_adds_item(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    opened = _apply_steward_action(
+        ledger,
+        manifest,
+        {
+            "action": "open_mission",
+            "title": "Clean water planning",
+            "problem": "Identify evidence-backed ways to improve local water resilience.",
+            "values": ["safety", "evidence"],
+            "reason": "opened from test cockpit",
+        },
+    )
+    mission_id = opened["mission"]["mission_id"]
+    added = _apply_steward_action(
+        ledger,
+        manifest,
+        {
+            "action": "add_mission_item",
+            "mission_id": mission_id,
+            "kind": "evidence",
+            "summary": "Start with publicly inspectable local water quality reports.",
+            "confidence": "medium",
+            "reason": "added from test cockpit",
+        },
+    )
+
+    briefs = mission_briefs_from_events(ledger.events())
+    counts = briefs[0].to_dict()["counts"]
+
+    assert opened["mission"]["status"] == "open"
+    assert added["mission_item"]["kind"] == "evidence"
+    assert counts["evidence"] == 1
 
 
 def test_evaluator_precedence_is_declared():

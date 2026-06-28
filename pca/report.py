@@ -25,6 +25,7 @@ from .lineage import lineage_records
 from .manifest import IdentityManifest
 from .memory_cards import memory_cards_from_events
 from .memory_signals import memory_signal_records_from_events
+from .missions import mission_briefs_from_events
 from .output_gate import OutputGate
 from .recovery import current_recovery_record, recovery_records_from_events
 from .reflection_queue import (
@@ -59,6 +60,9 @@ IMPORTANT_EVENT_TYPES = {
     "lucien.chat_session_started",
     "lucien.chat_turn_recorded",
     "lucien.chat_session_closed",
+    "mission.opened",
+    "mission.item_added",
+    "mission.status_updated",
     "runtime.csm_state",
     "runtime.output_gate",
     "transform.evaluated",
@@ -96,6 +100,7 @@ class TraceReport:
     active_reflection_tasks: list[dict[str, Any]]
     chat_sessions: list[dict[str, Any]]
     chat_turns: list[dict[str, Any]]
+    missions: list[dict[str, Any]]
     self_model: dict[str, Any]
     policy_errors: list[str]
     anchor_verification: dict[str, Any] | None = None
@@ -124,6 +129,7 @@ class TraceReport:
             "active_reflection_tasks": self.active_reflection_tasks,
             "chat_sessions": self.chat_sessions,
             "chat_turns": self.chat_turns,
+            "missions": self.missions,
             "self_model": self.self_model,
             "policy_errors": self.policy_errors,
             "anchor_verification": self.anchor_verification,
@@ -239,6 +245,21 @@ def _event_summary(event: ContinuityEvent) -> str:
             f"session={payload.get('session_id')} turns={payload.get('turn_count')} "
             "status=closed"
         )
+    if event.event_type == "mission.opened":
+        return (
+            f"mission={payload.get('mission_id')} title={payload.get('title')} "
+            f"status={payload.get('status')}"
+        )
+    if event.event_type == "mission.item_added":
+        return (
+            f"mission={payload.get('mission_id')} kind={payload.get('kind')} "
+            f"status={payload.get('status')} confidence={payload.get('confidence')}"
+        )
+    if event.event_type == "mission.status_updated":
+        return (
+            f"mission={payload.get('mission_id')} status={payload.get('status')} "
+            f"reason={payload.get('reason', '')}"
+        )
     if event.event_type == "transform.evaluated":
         return (
             f"transform={payload.get('transform')} "
@@ -297,6 +318,10 @@ def build_trace_report(
     open_reflection_tasks = active_reflection_tasks(events)
     chat_sessions = chat_sessions_from_events(events)
     chat_turns = chat_turns_from_events(events)
+    missions = mission_briefs_from_events(events)
+    open_missions = [
+        brief for brief in missions if brief.mission.status.value == "open"
+    ]
     self_model = derive_self_model(events, manifest.system_id)
     active_followup_records = active_followups(events)
     anchor_verification = (
@@ -337,6 +362,8 @@ def build_trace_report(
         "active_reflection_task_count": len(open_reflection_tasks),
         "chat_session_count": len(chat_sessions),
         "chat_turn_count": len(chat_turns),
+        "mission_count": len(missions),
+        "open_mission_count": len(open_missions),
         "accepted_growth_count": self_model.accepted_growth_count,
         "current_recovery_status": (
             current_recovery.status.value if current_recovery is not None else None
@@ -422,6 +449,7 @@ def build_trace_report(
         ],
         chat_sessions=[record.to_dict() for record in chat_sessions],
         chat_turns=[record.to_dict() for record in chat_turns],
+        missions=[brief.to_dict() for brief in missions],
         self_model=self_model.to_dict(),
         policy_errors=manifest.policy_errors,
         anchor_verification=anchor_verification,

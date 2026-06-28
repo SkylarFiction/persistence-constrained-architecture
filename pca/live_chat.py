@@ -25,6 +25,14 @@ from .ledger import ContinuityLedger
 from .manifest import IdentityManifest
 from .memory_cards import memory_cards_from_events
 from .memory_signals import record_memory_signal
+from .missions import (
+    MissionItemKind,
+    MissionStatus,
+    add_mission_item,
+    mission_briefs_from_events,
+    open_mission,
+    update_mission_status,
+)
 from .model_adapter import adapter_from_environment
 from .reflection_queue import (
     open_tasks_from_reflection,
@@ -280,6 +288,67 @@ def _apply_steward_action(
         )
         return {"event": event.to_dict()}
 
+    if action == "open_mission":
+        title = str(payload.get("title", "")).strip()
+        problem = str(payload.get("problem", "")).strip()
+        values = [str(value).strip() for value in payload.get("values", []) if str(value).strip()]
+        if not title:
+            raise ValueError("title is required")
+        if not problem:
+            raise ValueError("problem is required")
+        mission = open_mission(
+            ledger,
+            manifest.system_id,
+            title=title,
+            problem_statement=problem,
+            values=values,
+            reason=reason,
+        )
+        return {"mission": mission.to_dict()}
+
+    if action == "add_mission_item":
+        mission_id = str(payload.get("mission_id", "")).strip()
+        kind = str(payload.get("kind", "")).strip()
+        summary = str(payload.get("summary", "")).strip()
+        if not mission_id:
+            raise ValueError("mission_id is required")
+        if kind not in {item_kind.value for item_kind in MissionItemKind}:
+            raise ValueError("kind is not a valid mission item kind")
+        if not summary:
+            raise ValueError("summary is required")
+        item = add_mission_item(
+            ledger,
+            manifest.system_id,
+            mission_id=mission_id,
+            kind=kind,
+            summary=summary,
+            status=str(payload.get("status", "proposed")),
+            confidence=str(payload.get("confidence", "unknown")),
+            evidence_refs=[
+                str(ref).strip()
+                for ref in payload.get("evidence_refs", [])
+                if str(ref).strip()
+            ],
+            reason=reason,
+        )
+        return {"mission_item": item.to_dict()}
+
+    if action == "update_mission_status":
+        mission_id = str(payload.get("mission_id", "")).strip()
+        status = str(payload.get("status", "")).strip()
+        if not mission_id:
+            raise ValueError("mission_id is required")
+        if status not in {mission_status.value for mission_status in MissionStatus}:
+            raise ValueError("status is not a valid mission status")
+        mission = update_mission_status(
+            ledger,
+            manifest.system_id,
+            mission_id=mission_id,
+            status=status,
+            reason=reason,
+        )
+        return {"mission": mission.to_dict()}
+
     if action == "run_reflection":
         reflection = record_reflection(ledger, manifest)
         opened_tasks = open_tasks_from_reflection(ledger, reflection)
@@ -385,6 +454,10 @@ def _status_payload(
         card.to_dict()
         for card in memory_cards_from_events(ledger.events(), manifest.system_id)
     ]
+    missions = [
+        brief.to_dict()
+        for brief in mission_briefs_from_events(ledger.events())
+    ]
     latest_events = [
         {
             "event_type": event.event_type,
@@ -410,6 +483,7 @@ def _status_payload(
         "active_growth": active_growth,
         "memory_inbox": memory_inbox,
         "growth_conflicts": unresolved_conflicts,
+        "missions": missions,
         "self_model": {
             "accepted_growth_count": self_model.accepted_growth_count,
             "by_kind_counts": {
@@ -490,7 +564,8 @@ def _live_chat_html() -> str:
     .msg.user { border-left-color: var(--amber); }
     .msg.lucien { border-left-color: var(--green); }
     form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; margin-top: 12px; }
-    textarea { min-height: 72px; resize: vertical; padding: 10px; font: inherit; border: 1px solid var(--line); }
+    input, select, textarea { padding: 10px; font: inherit; border: 1px solid var(--line); background: white; color: var(--ink); min-width: 0; }
+    textarea { min-height: 72px; resize: vertical; }
     button { min-height: 40px; border: 1px solid var(--deep); background: var(--deep); color: white; padding: 0 14px; font-weight: 700; cursor: pointer; }
     button.secondary { background: white; color: var(--deep); }
     .side { display: grid; gap: 18px; }
@@ -555,6 +630,16 @@ def _live_chat_html() -> str:
         <div id="recall" class="queue"></div>
       </section>
       <section>
+        <h2>Mission Workspace</h2>
+        <form id="missionForm">
+          <input id="missionTitle" placeholder="Mission title">
+          <textarea id="missionProblem" placeholder="Problem Lucien should work on"></textarea>
+          <input id="missionValues" placeholder="values, comma separated">
+          <button type="submit">Open Mission</button>
+        </form>
+        <div id="missions" class="queue"></div>
+      </section>
+      <section>
         <h2>Growth Review</h2>
         <div id="growth" class="queue"></div>
       </section>
@@ -582,6 +667,7 @@ def _live_chat_html() -> str:
     const selfModel = document.getElementById('selfModel');
     const memoryInbox = document.getElementById('memoryInbox');
     const recall = document.getElementById('recall');
+    const missions = document.getElementById('missions');
     let lastLucien = '';
 
     function addMessage(kind, text) {
@@ -605,6 +691,7 @@ def _live_chat_html() -> str:
       renderSelfModel(status.self_model || {});
       renderMemoryInbox(status.memory_inbox || []);
       renderRecall((status.self_model || {}).memory_cards || []);
+      renderMissions(status.missions || []);
       renderGrowth(status.active_growth || []);
       renderConflicts(status.growth_conflicts || []);
       renderTimeline(status.session_replay);
@@ -689,6 +776,72 @@ def _live_chat_html() -> str:
         actions.appendChild(button('Mark Stale', {action: 'memory_signal', signal_type: 'stale', memory_id: card.memory_id, reason: 'marked stale from live recall panel'}));
         row.append(title, meta, actions);
         recall.appendChild(row);
+      }
+    }
+
+    function renderMissions(records) {
+      if (!records.length) {
+        empty(missions, 'No missions opened yet.');
+        return;
+      }
+      missions.innerHTML = '';
+      for (const brief of records) {
+        const mission = brief.mission || {};
+        const counts = brief.counts || {};
+        const row = document.createElement('div');
+        row.className = 'item';
+        const title = document.createElement('div');
+        title.className = 'item-title';
+        title.textContent = `${mission.title || 'Untitled mission'} / ${mission.status}`;
+        const meta = document.createElement('div');
+        meta.className = 'item-meta';
+        meta.textContent = `${mission.mission_id} / problem hash ${(mission.problem_sha256 || '').slice(0, 12)} / H ${counts.hypothesis || 0} E ${counts.evidence || 0} R ${counts.risk || 0} P ${counts.plan_step || 0} O ${counts.outcome || 0} L ${counts.lesson || 0}`;
+
+        const itemForm = document.createElement('form');
+        itemForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const kind = itemForm.querySelector('select').value;
+          const summary = itemForm.querySelector('textarea').value.trim();
+          const confidence = itemForm.querySelector('input').value.trim() || 'unknown';
+          if (!summary) return;
+          itemForm.querySelector('textarea').value = '';
+          steward({
+            action: 'add_mission_item',
+            mission_id: mission.mission_id,
+            kind,
+            summary,
+            confidence,
+            reason: `added ${kind} from live mission workspace`
+          });
+        });
+        const kind = document.createElement('select');
+        for (const value of ['hypothesis', 'evidence', 'intervention', 'plan_step', 'risk', 'outcome', 'lesson']) {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = value;
+          kind.appendChild(option);
+        }
+        const summary = document.createElement('textarea');
+        summary.placeholder = 'Add governed mission note';
+        const confidence = document.createElement('input');
+        confidence.placeholder = 'confidence';
+        const add = document.createElement('button');
+        add.type = 'submit';
+        add.textContent = 'Add';
+        itemForm.append(kind, summary, confidence, add);
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        if (mission.status === 'open') {
+          actions.appendChild(button('Pause', {action: 'update_mission_status', mission_id: mission.mission_id, status: 'paused', reason: 'paused in live mission workspace'}));
+          actions.appendChild(button('Complete', {action: 'update_mission_status', mission_id: mission.mission_id, status: 'completed', reason: 'completed in live mission workspace'}));
+        } else if (mission.status === 'paused') {
+          actions.appendChild(button('Reopen', {action: 'update_mission_status', mission_id: mission.mission_id, status: 'open', reason: 'reopened in live mission workspace'}));
+        }
+        actions.appendChild(button('Archive', {action: 'update_mission_status', mission_id: mission.mission_id, status: 'archived', reason: 'archived in live mission workspace'}));
+
+        row.append(title, meta, itemForm, actions);
+        missions.appendChild(row);
       }
     }
 
@@ -835,6 +988,27 @@ def _live_chat_html() -> str:
       lastLucien = data.result.response_text;
       addMessage('lucien', lastLucien);
       renderStatus(data.status);
+    });
+
+    document.getElementById('missionForm').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const title = document.getElementById('missionTitle').value.trim();
+      const problem = document.getElementById('missionProblem').value.trim();
+      const values = document.getElementById('missionValues').value
+        .split(',')
+        .map(value => value.trim())
+        .filter(Boolean);
+      if (!title || !problem) return;
+      document.getElementById('missionTitle').value = '';
+      document.getElementById('missionProblem').value = '';
+      document.getElementById('missionValues').value = '';
+      steward({
+        action: 'open_mission',
+        title,
+        problem,
+        values,
+        reason: 'opened from live mission workspace'
+      });
     });
 
     document.getElementById('speak').addEventListener('click', () => {

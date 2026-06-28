@@ -222,6 +222,12 @@ python3 pca_cli.py self-model --compile --output reports/lucien_self_model.txt
 python3 pca_cli.py memories
 python3 pca_cli.py memory-signal MEMORY_ID --type reinforced --reason "confirmed by later turn"
 python3 pca_cli.py memory-signals
+python3 pca_cli.py mission-open "Reduce preventable isolation" --problem "Find evidence-backed ways to reduce local isolation without replacing human care." --value dignity --value evidence
+python3 pca_cli.py mission-add MISSION_ID hypothesis --summary "Trusted weekly check-ins may surface needs before crisis." --confidence uncertain
+python3 pca_cli.py mission-add MISSION_ID risk --summary "Automation could crowd out local human responsibility." --confidence medium
+python3 pca_cli.py mission-status MISSION_ID completed --reason "pilot review complete"
+python3 pca_cli.py missions
+python3 pca_cli.py missions --open
 python3 pca_cli.py reflect
 python3 pca_cli.py reflections
 python3 pca_cli.py reflection-queue --open
@@ -247,6 +253,11 @@ Lucien can surface new steward work while the conversation is running.
 The Memory Inbox and Recall panels let stewards accept or reject memory
 candidates, request evidence, and mark accepted memories as reinforced,
 contradicted, or stale.
+The Mission Workspace lets Lucien open governed problem-solving missions and
+separate hypotheses, evidence, interventions, risks, plan steps, outcomes, and
+lessons into ledger-backed records. Mission text is stored by hash and length so
+the audit trail can prove that work happened without turning the ledger into a
+raw scratchpad.
 
 For a public walkthrough, run `python3 pca_cli.py demo`. It runs the local
 checks, refreshes the cockpit and replay artifacts, prints reviewer steps, and
