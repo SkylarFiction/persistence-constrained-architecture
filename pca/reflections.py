@@ -109,11 +109,16 @@ def build_reflection(
     weak_cards = [
         card
         for card in memory_cards
-        if card.effective_confidence < 0.75 or card.contradiction_count > 0
+        if (
+            card.effective_confidence < 0.75
+            or card.contradiction_count > 0
+            or card.stale_signal_count > 0
+        )
     ]
     if weak_cards:
         observations.append(f"{len(weak_cards)} memory card(s) need confidence review")
         recommended_actions.append("review contradicted or low-confidence memory cards")
+        source_event_ids.extend(_event_hashes(events, "lucien.memory_signal_recorded"))
 
     if not observations:
         observations.append("no active continuity, growth, or memory review pressure detected")

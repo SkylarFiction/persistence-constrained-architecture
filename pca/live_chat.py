@@ -254,7 +254,16 @@ def _apply_steward_action(
             reason=reason,
             evidence_refs=["live_cockpit"],
         )
-        return {"memory_signal": signal.to_dict()}
+        reflection = None
+        opened_tasks = []
+        if signal_type in {"contradicted", "stale"}:
+            reflection = record_reflection(ledger, manifest)
+            opened_tasks = open_tasks_from_reflection(ledger, reflection)
+        return {
+            "memory_signal": signal.to_dict(),
+            "reflection": reflection.to_dict() if reflection else None,
+            "opened_tasks": [task.to_dict() for task in opened_tasks],
+        }
 
     if action == "request_memory_evidence":
         growth_id = str(payload.get("growth_id", "")).strip()

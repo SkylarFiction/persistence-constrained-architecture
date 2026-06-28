@@ -426,6 +426,79 @@ def test_live_steward_action_records_memory_signal(tmp_path):
     assert signals[-1].confidence_delta > 0
 
 
+def test_contradicted_memory_auto_opens_audit_reflection_task(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    growth = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="memory",
+        summary="Accepted memory can later be contradicted.",
+        identity_impact="low",
+        reason="test contradicted memory",
+    )
+    accepted = accept_growth(
+        ledger,
+        manifest.system_id,
+        growth.growth_id,
+        reason="accepted test memory",
+        current_claim="certified_continuity",
+    )
+    memory_id = f"mem_{accepted.growth_id.removeprefix('growth_')}"
+
+    result = _apply_steward_action(
+        ledger,
+        manifest,
+        {
+            "action": "memory_signal",
+            "memory_id": memory_id,
+            "signal_type": "contradicted",
+            "reason": "contradicted in live recall",
+        },
+    )
+
+    assert result["reflection"]["focus"] == "memory_confidence_review"
+    assert result["opened_tasks"]
+    assert result["opened_tasks"][0]["kind"] == "audit_memory"
+    assert result["opened_tasks"][0]["status"] == "open"
+
+
+def test_stale_memory_auto_opens_audit_reflection_task(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    growth = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="memory",
+        summary="Accepted memory can become stale.",
+        identity_impact="low",
+        reason="test stale memory",
+    )
+    accepted = accept_growth(
+        ledger,
+        manifest.system_id,
+        growth.growth_id,
+        reason="accepted test memory",
+        current_claim="certified_continuity",
+    )
+    memory_id = f"mem_{accepted.growth_id.removeprefix('growth_')}"
+
+    result = _apply_steward_action(
+        ledger,
+        manifest,
+        {
+            "action": "memory_signal",
+            "memory_id": memory_id,
+            "signal_type": "stale",
+            "reason": "marked stale in live recall",
+        },
+    )
+
+    assert result["reflection"]["focus"] == "memory_confidence_review"
+    assert result["opened_tasks"]
+    assert result["opened_tasks"][0]["kind"] == "audit_memory"
+
+
 def test_evaluator_precedence_is_declared():
     assert EVALUATION_PRECEDENCE == (
         "chain_invalid",
