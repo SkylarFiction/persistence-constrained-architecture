@@ -7,7 +7,10 @@ import hashlib
 from typing import Any
 import uuid
 
+from .growth import GrowthRecord, propose_growth
 from .ledger import ContinuityEvent, ContinuityLedger
+from .reflection_queue import ReflectionTaskRecord, open_tasks_from_reflection
+from .reflections import ReflectionRecord
 
 
 def _text_hash(text: str) -> str:
@@ -199,6 +202,20 @@ class MissionBrief:
         }
 
 
+@dataclass(frozen=True)
+class MissionPressureResult:
+    reflection: ReflectionRecord | None = None
+    opened_tasks: list[ReflectionTaskRecord] = field(default_factory=list)
+    growth: GrowthRecord | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "reflection": self.reflection.to_dict() if self.reflection else None,
+            "opened_tasks": [task.to_dict() for task in self.opened_tasks],
+            "growth": self.growth.to_dict() if self.growth else None,
+        }
+
+
 def open_mission(
     ledger: ContinuityLedger,
     identity_id: str,
@@ -241,6 +258,7 @@ def add_mission_item(
     confidence: str = "unknown",
     evidence_refs: list[str] | None = None,
     reason: str = "",
+    bridge_reflection: bool = True,
 ) -> MissionItemRecord:
     require_mission(ledger.events(), mission_id)
     record = MissionItemRecord.create(
@@ -253,8 +271,60 @@ def add_mission_item(
         evidence_refs=evidence_refs,
         reason=reason,
     )
-    ledger.append("mission.item_added", identity_id, record.to_dict())
+    event = ledger.append("mission.item_added", identity_id, record.to_dict())
+    if bridge_reflection:
+        route_mission_pressure(
+            ledger,
+            identity_id,
+            record,
+            source_event_id=event.event_hash,
+            raw_summary=summary,
+        )
     return record
+
+
+def route_mission_pressure(
+    ledger: ContinuityLedger,
+    identity_id: str,
+    item: MissionItemRecord,
+    source_event_id: str,
+    raw_summary: str = "",
+) -> MissionPressureResult:
+    observations, actions, severity, focus = _mission_pressure(item)
+    reflection = None
+    opened_tasks: list[ReflectionTaskRecord] = []
+    growth = None
+
+    if observations:
+        reflection = ReflectionRecord.create(
+            identity_id=identity_id,
+            continuity_claim="mission_scoped_review",
+            focus=focus,
+            severity=severity,
+            observations=observations,
+            recommended_actions=actions,
+            source_event_ids=[source_event_id],
+        )
+        ledger.append("lucien.reflection_recorded", identity_id, reflection.to_dict())
+        opened_tasks = open_tasks_from_reflection(ledger, reflection)
+
+    if item.kind == MissionItemKind.LESSON:
+        growth = propose_growth(
+            ledger=ledger,
+            identity_id=identity_id,
+            kind="memory",
+            summary=raw_summary,
+            identity_impact="low",
+            evidence_refs=[item.item_id, *item.evidence_refs],
+            source_event_ids=[source_event_id],
+            reason=f"mission lesson from {item.mission_id}",
+        )
+
+    return MissionPressureResult(
+        reflection=reflection,
+        opened_tasks=opened_tasks,
+        growth=growth,
+    )
 
 
 def mission_records_from_events(events: list[ContinuityEvent]) -> list[MissionRecord]:
@@ -301,3 +371,36 @@ def _parse_item_kind(value: str | MissionItemKind) -> MissionItemKind:
     if isinstance(value, MissionItemKind):
         return value
     return MissionItemKind(str(value))
+
+
+def _mission_pressure(
+    item: MissionItemRecord,
+) -> tuple[list[str], list[str], str, str]:
+    if item.kind == MissionItemKind.RISK:
+        return (
+            [f"mission risk requires steward review: {item.mission_id}"],
+            ["review mission risk before approving related interventions"],
+            "review_required",
+            "mission_risk_review",
+        )
+    if item.kind == MissionItemKind.EVIDENCE and (
+        item.status in {"requested", "unresolved", "missing"}
+        or item.confidence in {"unknown", "low", "uncertain"}
+    ):
+        return (
+            [f"mission evidence remains unresolved: {item.mission_id}"],
+            ["verify mission evidence before strengthening conclusions"],
+            "watch",
+            "mission_evidence_review",
+        )
+    if item.kind == MissionItemKind.OUTCOME and (
+        item.status in {"failed", "negative", "blocked"}
+        or "fail" in item.reason.lower()
+    ):
+        return (
+            [f"mission outcome signals failed intervention: {item.mission_id}"],
+            ["review failed mission outcome before continuing intervention"],
+            "review_required",
+            "mission_outcome_review",
+        )
+    return ([], [], "stable", "mission_review")

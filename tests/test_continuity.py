@@ -619,6 +619,114 @@ def test_live_steward_action_opens_mission_and_adds_item(tmp_path):
     assert counts["evidence"] == 1
 
 
+def test_mission_risk_opens_mission_review_task(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Neighborhood heat resilience",
+        problem_statement="Reduce heat risk without displacing residents.",
+    )
+
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "risk",
+        "Cooling intervention could prioritize visible neighborhoods over isolated residents.",
+        confidence="medium",
+        reason="equity risk",
+    )
+    reflections = reflection_records_from_events(ledger.events())
+    tasks = reflection_task_records_from_events(ledger.events())
+
+    assert reflections[-1].focus == "mission_risk_review"
+    assert tasks[-1].kind.value == "review_mission"
+    assert tasks[-1].status.value == "open"
+
+
+def test_unresolved_mission_evidence_opens_review_task(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Food access evidence",
+        problem_statement="Separate food access evidence from assumptions.",
+    )
+
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "evidence",
+        "Claim needs source confirmation before guiding intervention.",
+        status="unresolved",
+        confidence="unknown",
+        reason="source not verified",
+    )
+    reflections = reflection_records_from_events(ledger.events())
+    tasks = reflection_task_records_from_events(ledger.events())
+
+    assert reflections[-1].focus == "mission_evidence_review"
+    assert tasks[-1].kind.value == "review_mission"
+
+
+def test_failed_mission_outcome_opens_review_task(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Pilot intervention review",
+        problem_statement="Track whether an intervention helped or harmed.",
+    )
+
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "outcome",
+        "The first pilot failed to reach the target group.",
+        status="failed",
+        confidence="medium",
+        reason="failed pilot outcome",
+    )
+    reflections = reflection_records_from_events(ledger.events())
+    tasks = reflection_task_records_from_events(ledger.events())
+
+    assert reflections[-1].focus == "mission_outcome_review"
+    assert "failed intervention" in reflections[-1].observations[0]
+    assert tasks[-1].kind.value == "review_mission"
+
+
+def test_mission_lesson_becomes_growth_candidate(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Learning from pilot",
+        problem_statement="Preserve lessons without silently changing identity.",
+    )
+
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "lesson",
+        "Successful missions need explicit evidence review before intervention.",
+        confidence="medium",
+        reason="pilot lesson",
+    )
+    growth = growth_records_from_events(ledger.events())
+
+    assert growth[-1].kind.value == "memory"
+    assert growth[-1].status.value == "proposed"
+    assert growth[-1].reason == f"mission lesson from {mission.mission_id}"
+
+
 def test_evaluator_precedence_is_declared():
     assert EVALUATION_PRECEDENCE == (
         "chain_invalid",

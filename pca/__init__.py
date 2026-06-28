@@ -102,6 +102,7 @@ from .missions import (
     MissionBrief,
     MissionItemKind,
     MissionItemRecord,
+    MissionPressureResult,
     MissionRecord,
     MissionStatus,
     add_mission_item,
@@ -110,6 +111,7 @@ from .missions import (
     mission_records_from_events,
     open_mission,
     require_mission,
+    route_mission_pressure,
     update_mission_status,
 )
 from .model_adapter import (
@@ -254,6 +256,7 @@ __all__ = [
     "MissionBrief",
     "MissionItemKind",
     "MissionItemRecord",
+    "MissionPressureResult",
     "MissionRecord",
     "MissionStatus",
     "EchoAdapter",
@@ -354,6 +357,7 @@ __all__ = [
     "required_evidence_for",
     "required_checks_for_audit",
     "require_mission",
+    "route_mission_pressure",
     "recovery_records_from_events",
     "reflection_records_from_events",
     "reflection_task_records_from_events",

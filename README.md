@@ -258,6 +258,9 @@ separate hypotheses, evidence, interventions, risks, plan steps, outcomes, and
 lessons into ledger-backed records. Mission text is stored by hash and length so
 the audit trail can prove that work happened without turning the ledger into a
 raw scratchpad.
+Mission pressure is routed back into governance: risk items, unresolved evidence,
+and failed outcomes create mission-review reflection tasks, while mission lessons
+become governed growth candidates that still require the normal review path.
 
 For a public walkthrough, run `python3 pca_cli.py demo`. It runs the local
 checks, refreshes the cockpit and replay artifacts, prints reviewer steps, and

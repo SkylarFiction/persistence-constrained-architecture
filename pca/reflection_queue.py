@@ -14,6 +14,7 @@ class ReflectionTaskKind(str, Enum):
     REVIEW_GROWTH = "review_growth"
     RESOLVE_CONFLICT = "resolve_conflict"
     AUDIT_MEMORY = "audit_memory"
+    REVIEW_MISSION = "review_mission"
     OPEN_RECOVERY = "open_recovery"
 
 
@@ -269,6 +270,19 @@ def _task_specs(reflection: ReflectionRecord) -> list[dict[str, str]]:
                 "recommended_action": "Audit contradicted or low-confidence memory cards.",
             }
         )
+    if "mission" in observation_text or "mission" in action_text:
+        specs.append(
+            {
+                "kind": ReflectionTaskKind.REVIEW_MISSION.value,
+                "severity": "medium",
+                "reason": _matching_observation(
+                    reflection,
+                    "mission",
+                    "mission pressure requires steward review",
+                ),
+                "recommended_action": "Review mission risk, evidence, outcome, or lesson before proceeding.",
+            }
+        )
     if reflection.continuity_claim == "continuity_break":
         specs.append(
             {
@@ -309,6 +323,7 @@ def _blocking_effect(kind: ReflectionTaskKind) -> str:
         ReflectionTaskKind.REVIEW_GROWTH: "blocks identity/self-model acceptance for pending growth",
         ReflectionTaskKind.RESOLVE_CONFLICT: "blocks related growth acceptance",
         ReflectionTaskKind.AUDIT_MEMORY: "does not block output but lowers confidence until reviewed",
+        ReflectionTaskKind.REVIEW_MISSION: "does not block output but requires steward review before mission work proceeds",
         ReflectionTaskKind.OPEN_RECOVERY: "blocks normal continuity claims when tied to hard breach",
     }
     return values[kind]
