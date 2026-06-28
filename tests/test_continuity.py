@@ -363,6 +363,69 @@ def test_live_steward_action_runs_reflection_and_opens_tasks(tmp_path):
     assert tasks[-1].status.value == "open"
 
 
+def test_live_steward_action_requests_memory_evidence(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    growth = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="memory",
+        summary="A candidate memory needs evidence.",
+        identity_impact="medium",
+        reason="test memory candidate",
+    )
+
+    result = _apply_steward_action(
+        ledger,
+        manifest,
+        {
+            "action": "request_memory_evidence",
+            "growth_id": growth.growth_id,
+            "reason": "needs source confirmation",
+        },
+    )
+
+    assert result["event"]["event_type"] == "lucien.memory_evidence_requested"
+    assert result["event"]["payload"]["growth_id"] == growth.growth_id
+
+
+def test_live_steward_action_records_memory_signal(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    growth = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="memory",
+        summary="Accepted memory can be reinforced.",
+        identity_impact="low",
+        reason="test memory signal",
+    )
+    accepted = accept_growth(
+        ledger,
+        manifest.system_id,
+        growth.growth_id,
+        reason="accepted test memory",
+        current_claim="certified_continuity",
+    )
+    memory_id = f"mem_{accepted.growth_id.removeprefix('growth_')}"
+
+    result = _apply_steward_action(
+        ledger,
+        manifest,
+        {
+            "action": "memory_signal",
+            "memory_id": memory_id,
+            "signal_type": "reinforced",
+            "reason": "confirmed in live recall",
+        },
+    )
+    signals = memory_signal_records_from_events(ledger.events())
+
+    assert result["memory_signal"]["memory_id"] == memory_id
+    assert result["memory_signal"]["signal_type"] == "reinforced"
+    assert signals[-1].confidence_delta > 0
+
+
 def test_evaluator_precedence_is_declared():
     assert EVALUATION_PRECEDENCE == (
         "chain_invalid",

@@ -2,7 +2,7 @@
 
 > Generated from PCA ledger evidence. This file is a review artifact, not a manual identity override.
 
-Generated at: 2026-06-27T12:46:38.177764+00:00
+Generated at: 2026-06-28T01:26:57.118242+00:00
 Ledger: `data/lucien_chat.log`
 
 ## Identity Baseline
@@ -10,9 +10,9 @@ Ledger: `data/lucien_chat.log`
 - Name: Lucien Persistence Kernel
 - System ID: `lucien-pca-seed`
 - Version: 0.1.0
-- Current continuity claim: `certified_continuity`
-- Identity state: `continuous`
-- Output mode: `normal_identity`
+- Current continuity claim: `review_required`
+- Identity state: `suspended`
+- Output mode: `disclose_review`
 - Chain valid: `True`
 - Origin: created_by=Nick Whitehead, purpose=Prototype identity persistence under operational constraint
 

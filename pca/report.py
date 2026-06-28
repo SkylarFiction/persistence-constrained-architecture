@@ -44,6 +44,7 @@ IMPORTANT_EVENT_TYPES = {
     "identity.forked",
     "lucien.input",
     "lucien.memory_digest",
+    "lucien.memory_evidence_requested",
     "lucien.memory_signal_recorded",
     "lucien.tool_use",
     "lucien.growth_proposed",
@@ -181,6 +182,11 @@ def _event_summary(event: ContinuityEvent) -> str:
         return (
             f"memory={payload.get('memory_id')} signal={payload.get('signal_type')} "
             f"delta={payload.get('confidence_delta')}"
+        )
+    if event.event_type == "lucien.memory_evidence_requested":
+        return (
+            f"growth={payload.get('growth_id')} "
+            f"requested_by={payload.get('requested_by')} reason={payload.get('reason', '')}"
         )
     if event.event_type == "lucien.tool_use":
         return (

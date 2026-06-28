@@ -24,6 +24,7 @@ from .growth_conflicts import (
 from .ledger import ContinuityLedger
 from .manifest import IdentityManifest
 from .memory_cards import memory_cards_from_events
+from .memory_signals import record_memory_signal
 from .model_adapter import adapter_from_environment
 from .reflection_queue import (
     open_tasks_from_reflection,
@@ -238,6 +239,38 @@ def _apply_steward_action(
             "resolved_tasks": [task.to_dict() for task in resolved_tasks],
         }
 
+    if action == "memory_signal":
+        memory_id = str(payload.get("memory_id", "")).strip()
+        signal_type = str(payload.get("signal_type", "")).strip()
+        if not memory_id:
+            raise ValueError("memory_id is required")
+        if signal_type not in {"reinforced", "contradicted", "stale"}:
+            raise ValueError("signal_type must be reinforced, contradicted, or stale")
+        signal = record_memory_signal(
+            ledger,
+            manifest.system_id,
+            memory_id,
+            signal_type,
+            reason=reason,
+            evidence_refs=["live_cockpit"],
+        )
+        return {"memory_signal": signal.to_dict()}
+
+    if action == "request_memory_evidence":
+        growth_id = str(payload.get("growth_id", "")).strip()
+        if not growth_id:
+            raise ValueError("growth_id is required")
+        event = ledger.append(
+            "lucien.memory_evidence_requested",
+            manifest.system_id,
+            {
+                "growth_id": growth_id,
+                "reason": reason,
+                "requested_by": str(payload.get("requested_by", "steward")),
+            },
+        )
+        return {"event": event.to_dict()}
+
     if action == "run_reflection":
         reflection = record_reflection(ledger, manifest)
         opened_tasks = open_tasks_from_reflection(ledger, reflection)
@@ -328,6 +361,11 @@ def _status_payload(
         for record in growth_records_from_events(ledger.events())
         if record.status in {GrowthStatus.PROPOSED, GrowthStatus.REQUIRES_REVIEW}
     ]
+    memory_inbox = [
+        record
+        for record in active_growth
+        if record.get("kind") == "memory"
+    ]
     unresolved_conflicts = [
         record.to_dict()
         for record in growth_conflict_records_from_events(ledger.events())
@@ -361,6 +399,7 @@ def _status_payload(
         "output_gate": latest_gate or {},
         "open_reflection_tasks": report.active_reflection_tasks,
         "active_growth": active_growth,
+        "memory_inbox": memory_inbox,
         "growth_conflicts": unresolved_conflicts,
         "self_model": {
             "accepted_growth_count": self_model.accepted_growth_count,
@@ -499,6 +538,14 @@ def _live_chat_html() -> str:
         <div id="selfModel" class="queue"></div>
       </section>
       <section>
+        <h2>Memory Inbox</h2>
+        <div id="memoryInbox" class="queue"></div>
+      </section>
+      <section>
+        <h2>Recall</h2>
+        <div id="recall" class="queue"></div>
+      </section>
+      <section>
         <h2>Growth Review</h2>
         <div id="growth" class="queue"></div>
       </section>
@@ -524,6 +571,8 @@ def _live_chat_html() -> str:
     const conflictList = document.getElementById('conflictList');
     const timeline = document.getElementById('timeline');
     const selfModel = document.getElementById('selfModel');
+    const memoryInbox = document.getElementById('memoryInbox');
+    const recall = document.getElementById('recall');
     let lastLucien = '';
 
     function addMessage(kind, text) {
@@ -545,6 +594,8 @@ def _live_chat_html() -> str:
       document.getElementById('conflicts').textContent = summary.unresolved_growth_conflict_count ?? 0;
       renderQueue(status.open_reflection_tasks || []);
       renderSelfModel(status.self_model || {});
+      renderMemoryInbox(status.memory_inbox || []);
+      renderRecall((status.self_model || {}).memory_cards || []);
       renderGrowth(status.active_growth || []);
       renderConflicts(status.growth_conflicts || []);
       renderTimeline(status.session_replay);
@@ -579,6 +630,56 @@ def _live_chat_html() -> str:
         row.innerHTML = `<div class="item-title">${card.memory_id}</div>
           <div class="item-meta">confidence ${card.effective_confidence} / impact ${card.identity_impact} / hash ${card.summary_sha256.slice(0, 12)}</div>`;
         selfModel.appendChild(row);
+      }
+    }
+
+    function renderMemoryInbox(records) {
+      if (!records.length) {
+        empty(memoryInbox, 'No memory candidates awaiting review.');
+        return;
+      }
+      memoryInbox.innerHTML = '';
+      for (const record of records) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        const title = document.createElement('div');
+        title.className = 'item-title';
+        title.textContent = `${record.status} / ${record.identity_impact}`;
+        const meta = document.createElement('div');
+        meta.className = 'item-meta';
+        meta.textContent = `${record.growth_id} / hash ${record.summary_sha256.slice(0, 12)} / ${record.reason}`;
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        actions.appendChild(button('Accept Memory', {action: 'review_growth', decision: 'accept', growth_id: record.growth_id, reason: 'accepted memory in live memory inbox'}));
+        actions.appendChild(button('Reject', {action: 'review_growth', decision: 'reject', growth_id: record.growth_id, reason: 'rejected memory in live memory inbox'}));
+        actions.appendChild(button('Request Evidence', {action: 'request_memory_evidence', growth_id: record.growth_id, reason: 'memory needs more evidence before acceptance'}));
+        row.append(title, meta, actions);
+        memoryInbox.appendChild(row);
+      }
+    }
+
+    function renderRecall(cards) {
+      if (!cards.length) {
+        empty(recall, 'No accepted memories available for recall.');
+        return;
+      }
+      recall.innerHTML = '';
+      for (const card of cards) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        const title = document.createElement('div');
+        title.className = 'item-title';
+        title.textContent = `${card.memory_id} / confidence ${card.effective_confidence}`;
+        const meta = document.createElement('div');
+        meta.className = 'item-meta';
+        meta.textContent = `signals +${card.reinforcement_count} / -${card.contradiction_count} / stale ${card.stale_signal_count} / hash ${card.summary_sha256.slice(0, 12)}`;
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        actions.appendChild(button('Reinforce', {action: 'memory_signal', signal_type: 'reinforced', memory_id: card.memory_id, reason: 'reinforced from live recall panel'}));
+        actions.appendChild(button('Contradict', {action: 'memory_signal', signal_type: 'contradicted', memory_id: card.memory_id, reason: 'contradicted from live recall panel'}));
+        actions.appendChild(button('Mark Stale', {action: 'memory_signal', signal_type: 'stale', memory_id: card.memory_id, reason: 'marked stale from live recall panel'}));
+        row.append(title, meta, actions);
+        recall.appendChild(row);
       }
     }
 
