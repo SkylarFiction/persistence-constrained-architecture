@@ -70,6 +70,7 @@
     "memory_card_count": 0,
     "memory_signal_count": 0,
     "mission_count": 0,
+    "mission_step_count": 0,
     "name": "Lucien Persistence Kernel",
     "open_mission_count": 0,
     "output_allowed_scope": "May speak normally as the identity.",
@@ -78,7 +79,7 @@
     "reasons": [
       "Lucien Persistence Kernel satisfies recorded persistence constraints"
     ],
-    "recorded_claim_id": "claim_a394c443-ae28-4d96-9a88-947b84668511",
+    "recorded_claim_id": "claim_f9dd3511-0aa3-4aa6-83c3-1f2298d0adbc",
     "recovery_count": 0,
     "reflection_count": 0,
     "reflection_task_count": 0,

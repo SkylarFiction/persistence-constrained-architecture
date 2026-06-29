@@ -87,6 +87,7 @@
     "memory_card_count": 0,
     "memory_signal_count": 0,
     "mission_count": 0,
+    "mission_step_count": 0,
     "name": "Lucien Persistence Kernel",
     "open_mission_count": 0,
     "output_allowed_scope": "May speak as the identity only with review-status disclosure.",
@@ -95,7 +96,7 @@
     "reasons": [
       "soft constraint breached: runtime_csm_amber"
     ],
-    "recorded_claim_id": "claim_ffb9cb8d-1b49-4aad-b502-fcda5c1cdcf6",
+    "recorded_claim_id": "claim_ad86b5dc-a96b-4389-a802-fdaa7801a5b7",
     "recovery_count": 0,
     "reflection_count": 0,
     "reflection_task_count": 0,

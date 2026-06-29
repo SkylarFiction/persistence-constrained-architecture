@@ -20,6 +20,7 @@ from pca import (
     GrowthStatus,
     IdentityManifest,
     MissionItemKind,
+    MissionStepRisk,
     MissionStatus,
     OverrideEngine,
     OverrideRequest,
@@ -53,15 +54,21 @@ from pca import (
     growth_review_records_from_events,
     lineage_records,
     accept_growth,
+    approve_mission_step,
+    block_mission_step,
+    complete_mission_step,
+    fail_mission_step,
     memory_cards_from_events,
     memory_signal_records_from_events,
     mission_briefs_from_events,
     mission_flow,
     mission_flows_from_events,
+    mission_step_records_from_events,
     add_mission_item,
     open_mission,
     open_tasks_from_reflection,
     propose_growth,
+    propose_mission_step,
     record_memory_signal,
     record_claim_if_changed,
     recovery_records_from_events,
@@ -76,6 +83,7 @@ from pca import (
     safe_load_policy_pack,
     update_mission_status,
     update_reflection_task,
+    start_mission_step,
     render_constitution_markdown,
     write_dashboard_html,
     write_constitution_markdown,
@@ -262,6 +270,43 @@ def main() -> int:
 
     mission_advance_parser = subparsers.add_parser("mission-advance")
     mission_advance_parser.add_argument("mission_id")
+
+    mission_steps_parser = subparsers.add_parser("mission-steps")
+    mission_steps_parser.add_argument("--mission")
+
+    step_propose_parser = subparsers.add_parser("mission-step-propose")
+    step_propose_parser.add_argument("mission_id")
+    step_propose_parser.add_argument("--description", required=True)
+    step_propose_parser.add_argument(
+        "--risk",
+        required=True,
+        choices=[risk.value for risk in MissionStepRisk],
+    )
+    step_propose_parser.add_argument("--tool", required=True)
+    step_propose_parser.add_argument("--expected-outcome", default="")
+    step_propose_parser.add_argument("--reason", default="")
+
+    step_approve_parser = subparsers.add_parser("mission-step-approve")
+    step_approve_parser.add_argument("step_id")
+    step_approve_parser.add_argument("--reason", default="")
+
+    step_start_parser = subparsers.add_parser("mission-step-start")
+    step_start_parser.add_argument("step_id")
+    step_start_parser.add_argument("--reason", default="")
+
+    step_complete_parser = subparsers.add_parser("mission-step-complete")
+    step_complete_parser.add_argument("step_id")
+    step_complete_parser.add_argument("--actual-outcome", required=True)
+    step_complete_parser.add_argument("--reason", default="")
+
+    step_fail_parser = subparsers.add_parser("mission-step-fail")
+    step_fail_parser.add_argument("step_id")
+    step_fail_parser.add_argument("--failure-note", required=True)
+    step_fail_parser.add_argument("--reason", default="")
+
+    step_block_parser = subparsers.add_parser("mission-step-block")
+    step_block_parser.add_argument("step_id")
+    step_block_parser.add_argument("--reason", required=True)
 
     subparsers.add_parser("sessions")
     session_replay_parser = subparsers.add_parser("session-replay")
@@ -862,6 +907,98 @@ def main() -> int:
                 "next_action": flow.next_action,
             }
         )
+        return 0
+
+    if args.command == "mission-steps":
+        steps = mission_step_records_from_events(ledger.events(), args.mission)
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "count": len(steps),
+                "steps": [step.to_dict() for step in steps],
+            }
+        )
+        return 0
+
+    if args.command == "mission-step-propose":
+        step = propose_mission_step(
+            ledger=ledger,
+            identity_id=manifest.system_id,
+            mission_id=args.mission_id,
+            description=args.description,
+            risk_level=args.risk,
+            required_tool=args.tool,
+            expected_outcome=args.expected_outcome,
+            reason=args.reason,
+        )
+        print_json({"mission_step": step.to_dict()})
+        return 0
+
+    if args.command == "mission-step-approve":
+        try:
+            step = approve_mission_step(
+                ledger,
+                manifest.system_id,
+                args.step_id,
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"mission_step": step.to_dict()})
+        return 0
+
+    if args.command == "mission-step-start":
+        try:
+            step = start_mission_step(
+                ledger,
+                manifest.system_id,
+                args.step_id,
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"mission_step": step.to_dict()})
+        return 0
+
+    if args.command == "mission-step-complete":
+        try:
+            step = complete_mission_step(
+                ledger,
+                manifest.system_id,
+                args.step_id,
+                actual_outcome=args.actual_outcome,
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"mission_step": step.to_dict()})
+        return 0
+
+    if args.command == "mission-step-fail":
+        try:
+            step = fail_mission_step(
+                ledger,
+                manifest.system_id,
+                args.step_id,
+                failure_note=args.failure_note,
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"mission_step": step.to_dict()})
+        return 0
+
+    if args.command == "mission-step-block":
+        try:
+            step = block_mission_step(
+                ledger,
+                manifest.system_id,
+                args.step_id,
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"mission_step": step.to_dict()})
         return 0
 
     if args.command == "reflect":

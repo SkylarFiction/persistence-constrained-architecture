@@ -231,6 +231,13 @@ python3 pca_cli.py missions --open
 python3 pca_cli.py mission-flow MISSION_ID
 python3 pca_cli.py mission-flow --all
 python3 pca_cli.py mission-advance MISSION_ID
+python3 pca_cli.py mission-step-propose MISSION_ID --description "Review public data source" --risk low --tool research --expected-outcome "Evidence note"
+python3 pca_cli.py mission-step-approve STEP_ID --reason "bounded action approved"
+python3 pca_cli.py mission-step-start STEP_ID
+python3 pca_cli.py mission-step-complete STEP_ID --actual-outcome "Step completed with recorded outcome"
+python3 pca_cli.py mission-step-fail STEP_ID --failure-note "Step failed to reach target group"
+python3 pca_cli.py mission-step-block STEP_ID --reason "requires unresolved evidence review"
+python3 pca_cli.py mission-steps --mission MISSION_ID
 python3 pca_cli.py reflect
 python3 pca_cli.py reflections
 python3 pca_cli.py reflection-queue --open
@@ -268,6 +275,10 @@ Mission flow derives a phase, blockers, and next action from the ledger, so a
 mission can be in intake, evidence review, planning, intervention readiness,
 outcome review, lesson review, completed, or blocked without manually declaring
 false progress.
+Mission steps move planning into governed action: each step is proposed,
+approved when risk requires it, started, completed, failed, or blocked. Medium
+and high risk steps cannot start without approval, and failed or blocked steps
+route back into mission reflection pressure.
 
 For a public walkthrough, run `python3 pca_cli.py demo`. It runs the local
 checks, refreshes the cockpit and replay artifacts, prints reviewer steps, and

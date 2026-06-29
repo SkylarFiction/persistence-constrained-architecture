@@ -79,6 +79,7 @@
     "memory_card_count": 0,
     "memory_signal_count": 0,
     "mission_count": 0,
+    "mission_step_count": 0,
     "name": "Lucien Persistence Kernel",
     "open_mission_count": 0,
     "output_allowed_scope": "Must identify as a fork or descendant.",
@@ -87,7 +88,7 @@
     "reasons": [
       "ledger contains an identity fork event"
     ],
-    "recorded_claim_id": "claim_fad0ccc7-a71a-4668-bca6-51261c5fb8d7",
+    "recorded_claim_id": "claim_db90700b-0c94-429f-b0de-329db69a24b7",
     "recovery_count": 0,
     "reflection_count": 0,
     "reflection_task_count": 0,

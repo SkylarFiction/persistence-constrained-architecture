@@ -87,6 +87,7 @@
     "memory_card_count": 0,
     "memory_signal_count": 0,
     "mission_count": 0,
+    "mission_step_count": 0,
     "name": "Lucien Persistence Kernel",
     "open_mission_count": 0,
     "output_allowed_scope": "May only report recovery, status, and governance state.",
@@ -95,7 +96,7 @@
     "reasons": [
       "hard constraint breached: runtime_csm_red"
     ],
-    "recorded_claim_id": "claim_2721984d-8e92-4e27-8e44-6bee367e840c",
+    "recorded_claim_id": "claim_284c5548-a365-4ac9-8d5c-74dd1da1b94f",
     "recovery_count": 0,
     "reflection_count": 0,
     "reflection_task_count": 0,

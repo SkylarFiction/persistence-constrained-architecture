@@ -26,6 +26,7 @@ from .manifest import IdentityManifest
 from .memory_cards import memory_cards_from_events
 from .memory_signals import record_memory_signal
 from .mission_flow import mission_flows_from_events
+from .mission_steps import mission_step_records_from_events
 from .missions import (
     MissionItemKind,
     MissionStatus,
@@ -459,6 +460,9 @@ def _status_payload(
         brief.to_dict()
         for brief in mission_briefs_from_events(ledger.events())
     ]
+    mission_steps = [
+        step.to_dict() for step in mission_step_records_from_events(ledger.events())
+    ]
     mission_flows = {
         flow.mission_id: flow.to_dict()
         for flow in mission_flows_from_events(ledger.events())
@@ -490,6 +494,7 @@ def _status_payload(
         "growth_conflicts": unresolved_conflicts,
         "missions": missions,
         "mission_flows": mission_flows,
+        "mission_steps": mission_steps,
         "self_model": {
             "accepted_growth_count": self_model.accepted_growth_count,
             "by_kind_counts": {
@@ -646,6 +651,10 @@ def _live_chat_html() -> str:
         <div id="missions" class="queue"></div>
       </section>
       <section>
+        <h2>Mission Steps</h2>
+        <div id="missionSteps" class="queue"></div>
+      </section>
+      <section>
         <h2>Growth Review</h2>
         <div id="growth" class="queue"></div>
       </section>
@@ -674,6 +683,7 @@ def _live_chat_html() -> str:
     const memoryInbox = document.getElementById('memoryInbox');
     const recall = document.getElementById('recall');
     const missions = document.getElementById('missions');
+    const missionSteps = document.getElementById('missionSteps');
     let lastLucien = '';
 
     function addMessage(kind, text) {
@@ -698,6 +708,7 @@ def _live_chat_html() -> str:
       renderMemoryInbox(status.memory_inbox || []);
       renderRecall((status.self_model || {}).memory_cards || []);
       renderMissions(status.missions || [], status.mission_flows || {});
+      renderMissionSteps(status.mission_steps || []);
       renderGrowth(status.active_growth || []);
       renderConflicts(status.growth_conflicts || []);
       renderTimeline(status.session_replay);
@@ -853,6 +864,26 @@ def _live_chat_html() -> str:
 
         row.append(title, meta, next, itemForm, actions);
         missions.appendChild(row);
+      }
+    }
+
+    function renderMissionSteps(records) {
+      if (!records.length) {
+        empty(missionSteps, 'No mission steps recorded.');
+        return;
+      }
+      missionSteps.innerHTML = '';
+      for (const step of records.slice(-8)) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        const title = document.createElement('div');
+        title.className = 'item-title';
+        title.textContent = `${step.execution_status} / ${step.risk_level} / ${step.required_tool}`;
+        const meta = document.createElement('div');
+        meta.className = 'item-meta';
+        meta.textContent = `${step.step_id} / approval ${step.approval_status} / mission ${step.mission_id} / hash ${step.description_sha256.slice(0, 12)}`;
+        row.append(title, meta);
+        missionSteps.appendChild(row);
       }
     }
 

@@ -107,6 +107,7 @@
     "memory_card_count": 0,
     "memory_signal_count": 0,
     "mission_count": 0,
+    "mission_step_count": 0,
     "name": "Lucien Persistence Kernel",
     "open_mission_count": 0,
     "output_allowed_scope": "May answer operationally, but cannot claim stable identity.",
@@ -115,7 +116,7 @@
     "reasons": [
       "hard constraint breached: runtime_csm_red"
     ],
-    "recorded_claim_id": "claim_a50b024d-79cf-42c3-9dd8-b2d07a297b34",
+    "recorded_claim_id": "claim_f120beb4-aad2-4841-9950-f6feee24008c",
     "recovery_count": 1,
     "reflection_count": 0,
     "reflection_task_count": 0,

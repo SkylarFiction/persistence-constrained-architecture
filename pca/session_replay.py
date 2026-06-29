@@ -12,6 +12,7 @@ from .chat_sessions import (
 )
 from .ledger import ContinuityEvent, ContinuityLedger
 from .manifest import IdentityManifest
+from .mission_steps import mission_step_records_from_events
 from .report import _event_summary, build_trace_report
 
 
@@ -71,6 +72,7 @@ def build_session_replay(
         for index, event in replay_events
     ]
     report = build_trace_report(ledger, manifest)
+    steps = mission_step_records_from_events(events)
     return SessionReplay(
         session=session,
         turns=[turn.to_dict() for turn in turn_records],
@@ -86,6 +88,8 @@ def build_session_replay(
             "unresolved_growth_conflict_count": report.summary.get(
                 "unresolved_growth_conflict_count"
             ),
+            "mission_step_count": len(steps),
+            "mission_step_statuses": _step_status_counts(steps),
         },
     )
 
@@ -195,7 +199,7 @@ def _session_event_slice(
     return [
         (index, event)
         for index, event in enumerate(events, start=1)
-        if start_index <= index <= end_index
+        if start_index <= index <= end_index or event.event_type.startswith("mission.step_")
     ]
 
 
@@ -230,3 +234,11 @@ def _render_turn(turn: dict[str, Any]) -> str:
         f"<td><code>{escape(growth_events or 'none')}</code></td>"
         "</tr>"
     )
+
+
+def _step_status_counts(steps) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for step in steps:
+        status = step.execution_status.value
+        counts[status] = counts.get(status, 0) + 1
+    return counts

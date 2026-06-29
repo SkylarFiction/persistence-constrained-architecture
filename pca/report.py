@@ -26,6 +26,7 @@ from .manifest import IdentityManifest
 from .memory_cards import memory_cards_from_events
 from .memory_signals import memory_signal_records_from_events
 from .mission_flow import mission_flows_from_events
+from .mission_steps import mission_step_records_from_events
 from .missions import mission_briefs_from_events
 from .output_gate import OutputGate
 from .recovery import current_recovery_record, recovery_records_from_events
@@ -64,6 +65,12 @@ IMPORTANT_EVENT_TYPES = {
     "mission.opened",
     "mission.item_added",
     "mission.status_updated",
+    "mission.step_proposed",
+    "mission.step_approved",
+    "mission.step_started",
+    "mission.step_completed",
+    "mission.step_failed",
+    "mission.step_blocked",
     "runtime.csm_state",
     "runtime.output_gate",
     "transform.evaluated",
@@ -103,6 +110,7 @@ class TraceReport:
     chat_turns: list[dict[str, Any]]
     missions: list[dict[str, Any]]
     mission_flows: list[dict[str, Any]]
+    mission_steps: list[dict[str, Any]]
     self_model: dict[str, Any]
     policy_errors: list[str]
     anchor_verification: dict[str, Any] | None = None
@@ -133,6 +141,7 @@ class TraceReport:
             "chat_turns": self.chat_turns,
             "missions": self.missions,
             "mission_flows": self.mission_flows,
+            "mission_steps": self.mission_steps,
             "self_model": self.self_model,
             "policy_errors": self.policy_errors,
             "anchor_verification": self.anchor_verification,
@@ -263,6 +272,12 @@ def _event_summary(event: ContinuityEvent) -> str:
             f"mission={payload.get('mission_id')} status={payload.get('status')} "
             f"reason={payload.get('reason', '')}"
         )
+    if event.event_type.startswith("mission.step_"):
+        return (
+            f"step={payload.get('step_id')} mission={payload.get('mission_id')} "
+            f"risk={payload.get('risk_level')} approval={payload.get('approval_status')} "
+            f"execution={payload.get('execution_status')}"
+        )
     if event.event_type == "transform.evaluated":
         return (
             f"transform={payload.get('transform')} "
@@ -323,6 +338,7 @@ def build_trace_report(
     chat_turns = chat_turns_from_events(events)
     missions = mission_briefs_from_events(events)
     mission_flows = mission_flows_from_events(events)
+    mission_steps = mission_step_records_from_events(events)
     open_missions = [
         brief for brief in missions if brief.mission.status.value == "open"
     ]
@@ -371,6 +387,7 @@ def build_trace_report(
         "blocked_mission_count": len(
             [flow for flow in mission_flows if flow.phase.value == "blocked"]
         ),
+        "mission_step_count": len(mission_steps),
         "accepted_growth_count": self_model.accepted_growth_count,
         "current_recovery_status": (
             current_recovery.status.value if current_recovery is not None else None
@@ -458,6 +475,7 @@ def build_trace_report(
         chat_turns=[record.to_dict() for record in chat_turns],
         missions=[brief.to_dict() for brief in missions],
         mission_flows=[flow.to_dict() for flow in mission_flows],
+        mission_steps=[step.to_dict() for step in mission_steps],
         self_model=self_model.to_dict(),
         policy_errors=manifest.policy_errors,
         anchor_verification=anchor_verification,

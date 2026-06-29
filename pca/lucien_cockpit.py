@@ -77,6 +77,18 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         "</tr>"
         for brief in data["missions"][-8:]
     ) or _empty_row(7, "No missions opened yet.")
+    mission_step_rows = "\n".join(
+        "<tr>"
+        f"<td><code>{escape(_short_hash(str(step['step_id'])))}</code></td>"
+        f"<td><code>{escape(_short_hash(str(step['mission_id'])))}</code></td>"
+        f"<td>{escape(str(step['risk_level']))}</td>"
+        f"<td>{escape(str(step['required_tool']))}</td>"
+        f"<td>{escape(str(step['approval_status']))}</td>"
+        f"<td>{escape(str(step['execution_status']))}</td>"
+        f"<td><code>{escape(_short_hash(str(step['description_sha256'])))}</code></td>"
+        "</tr>"
+        for step in data.get("mission_steps", [])[-12:]
+    ) or _empty_row(7, "No mission steps recorded.")
     reflection_rows = "\n".join(
         "<tr>"
         f"<td>{escape(str(reflection['focus']))}</td>"
@@ -222,6 +234,7 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         <div><div class="label">Open Growth</div><div class="value">{escape(str(len(pending_growth)))}</div></div>
         <div><div class="label">Missions</div><div class="value">{escape(str(summary['mission_count']))}</div></div>
         <div><div class="label">Blocked Missions</div><div class="value">{escape(str(summary['blocked_mission_count']))}</div></div>
+        <div><div class="label">Mission Steps</div><div class="value">{escape(str(summary['mission_step_count']))}</div></div>
       </div>
     </section>
     <div class="grid">
@@ -245,6 +258,10 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
     <section>
       <h2>Mission Workspace</h2>
       <table><thead><tr><th>Title</th><th>Status</th><th>Phase</th><th>ID</th><th>Items</th><th>Next Action</th><th>Values</th></tr></thead><tbody>{mission_rows}</tbody></table>
+    </section>
+    <section>
+      <h2>Mission Steps</h2>
+      <table><thead><tr><th>Step</th><th>Mission</th><th>Risk</th><th>Tool</th><th>Approval</th><th>Execution</th><th>Description Hash</th></tr></thead><tbody>{mission_step_rows}</tbody></table>
     </section>
     <section>
       <h2>Reflection Ledger</h2>

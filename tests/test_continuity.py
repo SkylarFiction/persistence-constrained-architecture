@@ -28,6 +28,9 @@ from pca import (
     LucienGovernedRuntime,
     MissionPhase,
     MissionItemKind,
+    MissionStepApprovalStatus,
+    MissionStepExecutionStatus,
+    MissionStepRisk,
     MissionStatus,
     ModelMessage,
     OverrideEngine,
@@ -60,7 +63,11 @@ from pca import (
     derive_self_model,
     accept_growth,
     add_mission_item,
+    approve_mission_step,
+    block_mission_step,
+    complete_mission_step,
     export_latest_anchor,
+    fail_mission_step,
     growth_conflict_records_from_events,
     growth_conflict_resolution_records_from_events,
     growth_records_from_events,
@@ -75,6 +82,7 @@ from pca import (
     mission_flows_from_events,
     mission_items_from_events,
     mission_records_from_events,
+    mission_step_records_from_events,
     merge_policy_packs,
     open_mission,
     open_tasks_from_reflection,
@@ -87,6 +95,7 @@ from pca import (
     recovery_records_from_events,
     safe_load_policy_pack,
     propose_growth,
+    propose_mission_step,
     record_memory_signal,
     record_growth_conflict,
     record_reflection,
@@ -97,6 +106,7 @@ from pca import (
     review_growth,
     update_mission_status,
     update_reflection_task,
+    start_mission_step,
     verify_latest_anchor,
     write_constitution_markdown,
     write_session_replay_html,
@@ -894,6 +904,250 @@ def test_mission_flow_reports_all_missions(tmp_path):
     ]
     assert flows[0].phase == MissionPhase.INTAKE
     assert flows[1].phase == MissionPhase.COMPLETED
+
+
+def test_low_risk_mission_step_can_start_without_approval(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Low risk step",
+        problem_statement="Test low risk execution.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Read public background material.",
+        risk_level="low",
+        required_tool="research",
+        expected_outcome="A short evidence note.",
+    )
+
+    started = start_mission_step(ledger, manifest.system_id, step.step_id)
+
+    assert step.approval_status == MissionStepApprovalStatus.NOT_REQUIRED
+    assert step.execution_status == MissionStepExecutionStatus.READY
+    assert started.execution_status == MissionStepExecutionStatus.RUNNING
+
+
+def test_medium_risk_mission_step_requires_approval_before_start(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Medium risk step",
+        problem_statement="Test approval gating.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Contact a community partner.",
+        risk_level=MissionStepRisk.MEDIUM,
+        required_tool="outreach",
+        expected_outcome="A permissioned conversation.",
+    )
+
+    try:
+        start_mission_step(ledger, manifest.system_id, step.step_id)
+    except ValueError as exc:
+        assert "require approval" in str(exc)
+    else:
+        raise AssertionError("medium risk step started without approval")
+
+    approved = approve_mission_step(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        reason="bounded outreach approved",
+    )
+    started = start_mission_step(ledger, manifest.system_id, step.step_id)
+
+    assert approved.approval_status == MissionStepApprovalStatus.APPROVED
+    assert started.execution_status == MissionStepExecutionStatus.RUNNING
+
+
+def test_completed_mission_step_records_outcome_item(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Complete step",
+        problem_statement="Record outcome from execution.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Run a bounded check.",
+        risk_level="low",
+        required_tool="local_check",
+        expected_outcome="A checked result.",
+    )
+    start_mission_step(ledger, manifest.system_id, step.step_id)
+
+    completed = complete_mission_step(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        actual_outcome="The check completed successfully.",
+    )
+    items = mission_items_from_events(ledger.events(), mission.mission_id)
+    steps = mission_step_records_from_events(ledger.events(), mission.mission_id)
+
+    assert completed.execution_status == MissionStepExecutionStatus.COMPLETED
+    assert steps[-1].actual_outcome_sha256
+    assert items[-1].kind == MissionItemKind.OUTCOME
+    assert items[-1].status == "completed"
+
+
+def test_failed_mission_step_routes_reflection_pressure(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Failing step",
+        problem_statement="Failed steps should create review pressure.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Try a bounded pilot.",
+        risk_level="low",
+        required_tool="pilot",
+    )
+
+    failed = fail_mission_step(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        failure_note="Pilot failed to reach intended users.",
+    )
+    reflections = reflection_records_from_events(ledger.events())
+    tasks = reflection_task_records_from_events(ledger.events())
+
+    assert failed.execution_status == MissionStepExecutionStatus.FAILED
+    assert reflections[-1].focus == "mission_outcome_review"
+    assert tasks[-1].kind.value == "review_mission"
+
+
+def test_blocked_mission_step_routes_reflection_pressure(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Blocked step",
+        problem_statement="Blocked steps should create review pressure.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Use an external source.",
+        risk_level="low",
+        required_tool="research",
+    )
+
+    blocked = block_mission_step(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        reason="external evidence is unresolved",
+    )
+    flow = mission_flow(ledger, mission.mission_id)
+
+    assert blocked.execution_status == MissionStepExecutionStatus.BLOCKED
+    assert flow.phase == MissionPhase.BLOCKED
+    assert flow.open_task_ids
+
+
+def test_mission_flow_tracks_step_counts(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Step counts",
+        problem_statement="Mission flow should include step counts.",
+    )
+    propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Needs approval.",
+        risk_level="high",
+        required_tool="external_action",
+    )
+
+    flow = mission_flow(ledger, mission.mission_id)
+
+    assert flow.phase == MissionPhase.BLOCKED
+    assert flow.step_counts["total"] == 1
+    assert flow.step_counts["approval_pending"] == 1
+    assert "requires approval" in flow.blockers[0]
+
+
+def test_trace_report_and_replay_include_mission_steps(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    session = ledger.append(
+        "lucien.chat_session_started",
+        manifest.system_id,
+        {
+            "session_id": "session_step_test",
+            "identity_id": manifest.system_id,
+            "started_at": "2026-01-01T00:00:00+00:00",
+            "status": "open",
+            "turn_count": 0,
+            "closed_at": None,
+            "reason": "",
+        },
+    )
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Replay step",
+        problem_statement="Replay should show step events.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Replayable step.",
+        risk_level="low",
+        required_tool="local",
+    )
+    ledger.append(
+        "lucien.chat_session_closed",
+        manifest.system_id,
+        {
+            "session_id": "session_step_test",
+            "identity_id": manifest.system_id,
+            "started_at": session.timestamp,
+            "status": "closed",
+            "turn_count": 0,
+            "closed_at": "2026-01-01T00:00:01+00:00",
+            "reason": "done",
+        },
+    )
+
+    report = build_trace_report(ledger, manifest)
+    replay = build_session_replay(ledger, manifest, "session_step_test")
+
+    assert report.summary["mission_step_count"] == 1
+    assert report.mission_steps[0]["step_id"] == step.step_id
+    assert any(
+        entry.event_type == "mission.step_proposed"
+        for entry in replay.timeline
+    )
+    assert replay.final_state["mission_step_count"] == 1
 
 
 def test_evaluator_precedence_is_declared():

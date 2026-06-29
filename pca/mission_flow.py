@@ -12,6 +12,12 @@ from .missions import (
     mission_briefs_from_events,
     require_mission,
 )
+from .mission_steps import (
+    MissionStepApprovalStatus,
+    MissionStepExecutionStatus,
+    MissionStepRisk,
+    mission_step_records_from_events,
+)
 from .reflection_queue import active_reflection_tasks
 
 
@@ -34,6 +40,7 @@ class MissionFlowState:
     blockers: list[str] = field(default_factory=list)
     next_action: str = ""
     counts: dict[str, int] = field(default_factory=dict)
+    step_counts: dict[str, int] = field(default_factory=dict)
     open_task_ids: list[str] = field(default_factory=list)
     ready_to_advance: bool = False
 
@@ -44,6 +51,7 @@ class MissionFlowState:
             "blockers": self.blockers,
             "next_action": self.next_action,
             "counts": self.counts,
+            "step_counts": self.step_counts,
             "open_task_ids": self.open_task_ids,
             "ready_to_advance": self.ready_to_advance,
         }
@@ -57,10 +65,24 @@ def mission_flow_from_events(
     brief = _require_brief(events, mission_id)
     counts = brief.to_dict()["counts"]
     open_mission_tasks = _open_mission_tasks(events, mission_id)
+    steps = mission_step_records_from_events(events, mission_id)
+    step_counts = _step_counts(steps)
     blockers = [
         f"open steward task {task.task_id}: {task.reason}"
         for task in open_mission_tasks
     ]
+    approval_blockers = [
+        f"step {step.step_id} requires approval before start"
+        for step in steps
+        if step.risk_level in {MissionStepRisk.MEDIUM, MissionStepRisk.HIGH}
+        and step.approval_status != MissionStepApprovalStatus.APPROVED
+        and step.execution_status
+        in {
+            MissionStepExecutionStatus.PROPOSED,
+            MissionStepExecutionStatus.READY,
+        }
+    ]
+    blockers.extend(approval_blockers)
     unresolved_evidence = [
         item
         for item in brief.items
@@ -85,6 +107,7 @@ def mission_flow_from_events(
             mission_id,
             MissionPhase.COMPLETED,
             counts,
+            step_counts,
             [],
             [],
             "Archive or review lessons for future governed growth.",
@@ -94,6 +117,7 @@ def mission_flow_from_events(
             mission_id,
             MissionPhase.BLOCKED,
             counts,
+            step_counts,
             [f"mission status is {mission.status.value}"],
             [],
             "Reopen the mission before continuing.",
@@ -103,15 +127,70 @@ def mission_flow_from_events(
             mission_id,
             MissionPhase.BLOCKED,
             counts,
+            step_counts,
             blockers,
             [task.task_id for task in open_mission_tasks],
             "Resolve mission review tasks before advancing.",
+        )
+    if step_counts["failed"] or step_counts["blocked"]:
+        return _state(
+            mission_id,
+            MissionPhase.OUTCOME_REVIEW,
+            counts,
+            step_counts,
+            [],
+            [],
+            "Review failed or blocked mission steps and add lessons.",
+            ready=True,
+        )
+    if step_counts["running"]:
+        return _state(
+            mission_id,
+            MissionPhase.INTERVENTION_READY,
+            counts,
+            step_counts,
+            [],
+            [],
+            "Complete, fail, or block the running mission step.",
+        )
+    if step_counts["completed"]:
+        return _state(
+            mission_id,
+            MissionPhase.OUTCOME_REVIEW,
+            counts,
+            step_counts,
+            [],
+            [],
+            "Review completed step outcomes and extract lessons.",
+            ready=True,
+        )
+    if step_counts["ready"]:
+        return _state(
+            mission_id,
+            MissionPhase.INTERVENTION_READY,
+            counts,
+            step_counts,
+            [],
+            [],
+            "Start an approved or low-risk mission step.",
+            ready=True,
+        )
+    if step_counts["proposed"]:
+        return _state(
+            mission_id,
+            MissionPhase.PLANNING,
+            counts,
+            step_counts,
+            [],
+            [],
+            "Approve or refine proposed mission steps.",
         )
     if failed_outcomes:
         return _state(
             mission_id,
             MissionPhase.OUTCOME_REVIEW,
             counts,
+            step_counts,
             [],
             [],
             "Review failed outcome and add a lesson or revised plan.",
@@ -122,6 +201,7 @@ def mission_flow_from_events(
             mission_id,
             MissionPhase.LESSON_REVIEW,
             counts,
+            step_counts,
             [],
             [],
             "Review lesson growth candidates before completing the mission.",
@@ -132,6 +212,7 @@ def mission_flow_from_events(
             mission_id,
             MissionPhase.OUTCOME_REVIEW,
             counts,
+            step_counts,
             [],
             [],
             "Extract lessons from the recorded outcome.",
@@ -142,6 +223,7 @@ def mission_flow_from_events(
             mission_id,
             MissionPhase.INTERVENTION_READY,
             counts,
+            step_counts,
             [],
             [],
             "Run or record the intervention outcome.",
@@ -155,6 +237,7 @@ def mission_flow_from_events(
             mission_id,
             MissionPhase.INTERVENTION_READY,
             counts,
+            step_counts,
             [],
             [],
             "Select or record the intervention once steward risk review is clear.",
@@ -165,6 +248,7 @@ def mission_flow_from_events(
             mission_id,
             MissionPhase.PLANNING,
             counts,
+            step_counts,
             [],
             [],
             "Add risk review before marking an intervention ready.",
@@ -174,6 +258,7 @@ def mission_flow_from_events(
             mission_id,
             MissionPhase.EVIDENCE_REVIEW,
             counts,
+            step_counts,
             ["mission evidence is unresolved or low confidence"],
             [],
             "Resolve evidence before planning intervention.",
@@ -186,6 +271,7 @@ def mission_flow_from_events(
             mission_id,
             MissionPhase.PLANNING,
             counts,
+            step_counts,
             [],
             [],
             "Draft plan steps and risk review.",
@@ -196,6 +282,7 @@ def mission_flow_from_events(
             mission_id,
             MissionPhase.EVIDENCE_REVIEW,
             counts,
+            step_counts,
             [],
             [],
             "Add evidence for or against the hypothesis.",
@@ -204,6 +291,7 @@ def mission_flow_from_events(
         mission_id,
         MissionPhase.INTAKE,
         counts,
+        step_counts,
         [],
         [],
         "Add a first hypothesis that can be tested.",
@@ -243,6 +331,7 @@ def _state(
     mission_id: str,
     phase: MissionPhase,
     counts: dict[str, int],
+    step_counts: dict[str, int],
     blockers: list[str],
     task_ids: list[str],
     next_action: str,
@@ -254,6 +343,28 @@ def _state(
         blockers=blockers,
         next_action=next_action,
         counts=counts,
+        step_counts=step_counts,
         open_task_ids=task_ids,
         ready_to_advance=ready and not blockers,
     )
+
+
+def _step_counts(steps) -> dict[str, int]:
+    counts = {
+        "total": len(steps),
+        "proposed": 0,
+        "ready": 0,
+        "running": 0,
+        "completed": 0,
+        "failed": 0,
+        "blocked": 0,
+        "approval_pending": 0,
+        "approved": 0,
+    }
+    for step in steps:
+        counts[step.execution_status.value] += 1
+        if step.approval_status == MissionStepApprovalStatus.PENDING:
+            counts["approval_pending"] += 1
+        if step.approval_status == MissionStepApprovalStatus.APPROVED:
+            counts["approved"] += 1
+    return counts
