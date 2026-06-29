@@ -163,6 +163,7 @@ from .missions import (
 from .model_adapter import (
     EchoAdapter,
     ModelAdapter,
+    ModelAdapterError,
     ModelMessage,
     ModelResponse,
     OpenAICompatibleAdapter,
@@ -333,6 +334,7 @@ __all__ = [
     "EvidenceSourceType",
     "EvidenceTargetType",
     "ModelAdapter",
+    "ModelAdapterError",
     "ModelMessage",
     "ModelResponse",
     "OpenAICompatibleAdapter",

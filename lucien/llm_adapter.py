@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from pca.model_adapter import ModelAdapter, ModelMessage
+from pca.model_adapter import ModelAdapter, ModelAdapterError, ModelMessage, ModelResponse
 
 from .memory import MemoryCard
 
@@ -43,10 +43,12 @@ class LocalLucienResponder:
         )
 
 
-@dataclass(frozen=True)
+@dataclass
 class ModelLucienResponder:
     adapter: ModelAdapter
     name: str = "Lucien"
+    last_model_response: ModelResponse | None = field(default=None, init=False)
+    last_model_error: ModelAdapterError | None = field(default=None, init=False)
 
     def generate(
         self,
@@ -56,15 +58,22 @@ class ModelLucienResponder:
         accepted_growth_count: int,
         governed_context: str = "",
     ) -> str:
-        response = self.adapter.generate(
-            messages=[ModelMessage(role="user", content=user_message)],
-            system_context=_system_context(
-                continuity_claim,
-                memory_cards,
-                accepted_growth_count,
-                governed_context,
-            ),
-        )
+        self.last_model_response = None
+        self.last_model_error = None
+        try:
+            response = self.adapter.generate(
+                messages=[ModelMessage(role="user", content=user_message)],
+                system_context=_system_context(
+                    continuity_claim,
+                    memory_cards,
+                    accepted_growth_count,
+                    governed_context,
+                ),
+            )
+        except ModelAdapterError as error:
+            self.last_model_error = error
+            raise
+        self.last_model_response = response
         return response.text
 
 

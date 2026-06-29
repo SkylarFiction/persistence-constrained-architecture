@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import json
 import os
 from typing import Any
-from urllib import request
+from urllib import error, request
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,28 @@ class ModelResponse:
             "provider": self.provider,
             "model": self.model,
             "raw": self.raw or {},
+        }
+
+
+class ModelAdapterError(RuntimeError):
+    def __init__(
+        self,
+        message: str,
+        provider: str,
+        model: str,
+        error_type: str = "model_adapter_error",
+    ):
+        super().__init__(message)
+        self.provider = provider
+        self.model = model
+        self.error_type = error_type
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "message": str(self),
+            "provider": self.provider,
+            "model": self.model,
+            "error_type": self.error_type,
         }
 
 
@@ -64,7 +86,7 @@ class OpenAICompatibleAdapter(ModelAdapter):
     def __init__(
         self,
         api_key: str,
-        model: str = "gpt-4o-mini",
+        model: str = "gpt-4.1-mini",
         base_url: str = "https://api.openai.com/v1",
         timeout_seconds: int = 30,
     ):
@@ -80,15 +102,23 @@ class OpenAICompatibleAdapter(ModelAdapter):
     ) -> ModelResponse:
         payload = {
             "model": self.model,
-            "messages": [
-                {"role": "system", "content": system_context},
-                *[message.to_dict() for message in messages],
+            "input": [
+                {
+                    "role": "developer",
+                    "content": system_context,
+                },
+                *[
+                    {
+                        "role": message.role,
+                        "content": message.content,
+                    }
+                    for message in messages
+                ],
             ],
-            "temperature": 0.4,
         }
         body = json.dumps(payload).encode("utf-8")
         req = request.Request(
-            f"{self.base_url}/chat/completions",
+            f"{self.base_url}/responses",
             data=body,
             method="POST",
             headers={
@@ -96,29 +126,41 @@ class OpenAICompatibleAdapter(ModelAdapter):
                 "Content-Type": "application/json",
             },
         )
-        with request.urlopen(req, timeout=self.timeout_seconds) as response:
-            data = json.loads(response.read().decode("utf-8"))
-        text = (
-            data.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content", "")
-            .strip()
-        )
+        try:
+            with request.urlopen(req, timeout=self.timeout_seconds) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", "replace")[:500]
+            raise ModelAdapterError(
+                f"OpenAI API request failed with HTTP {exc.code}: {detail}",
+                provider="openai",
+                model=self.model,
+                error_type="http_error",
+            ) from exc
+        except OSError as exc:
+            raise ModelAdapterError(
+                f"OpenAI API request failed: {exc}",
+                provider="openai",
+                model=self.model,
+                error_type=exc.__class__.__name__,
+            ) from exc
+        text = _extract_responses_text(data).strip()
         return ModelResponse(
             text=text or "The model returned an empty response.",
-            provider="openai_compatible",
+            provider="openai",
             model=self.model,
             raw=_compact_raw(data),
         )
 
 
-def adapter_from_environment() -> ModelAdapter:
+def adapter_from_environment(env_path: str = ".env") -> ModelAdapter:
+    _load_dotenv(env_path)
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return EchoAdapter()
     return OpenAICompatibleAdapter(
         api_key=api_key,
-        model=os.environ.get("LUCIEN_MODEL", "gpt-4o-mini"),
+        model=os.environ.get("LUCIEN_MODEL", "gpt-4.1-mini"),
         base_url=os.environ.get("LUCIEN_MODEL_BASE_URL", "https://api.openai.com/v1"),
     )
 
@@ -135,5 +177,44 @@ def _compact_raw(data: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": data.get("id"),
         "object": data.get("object"),
+        "status": data.get("status"),
         "usage": usage,
     }
+
+
+def _extract_responses_text(data: dict[str, Any]) -> str:
+    output_text = data.get("output_text")
+    if isinstance(output_text, str):
+        return output_text
+    chunks = []
+    for item in data.get("output", []):
+        for content in item.get("content", []):
+            text = content.get("text")
+            if isinstance(text, str):
+                chunks.append(text)
+    return "".join(chunks)
+
+
+def _load_dotenv(path: str) -> None:
+    if not path:
+        return
+    try:
+        with open(path, encoding="utf-8") as handle:
+            lines = handle.readlines()
+    except FileNotFoundError:
+        return
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+        os.environ[key] = _strip_env_value(value.strip())
+
+
+def _strip_env_value(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value

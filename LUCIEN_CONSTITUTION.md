@@ -2,17 +2,17 @@
 
 > Generated from PCA ledger evidence. This file is a review artifact, not a manual identity override.
 
-Generated at: 2026-06-29T21:48:54.579545+00:00
-Ledger: `data/lucien_chat.log`
+Generated at: 2026-06-29T22:04:51.698982+00:00
+Ledger: `/private/tmp/lucien_no_key_final_smoke.log`
 
 ## Identity Baseline
 
 - Name: Lucien Persistence Kernel
 - System ID: `lucien-pca-seed`
 - Version: 0.1.0
-- Current continuity claim: `review_required`
-- Identity state: `suspended`
-- Output mode: `disclose_review`
+- Current continuity claim: `certified_continuity`
+- Identity state: `continuous`
+- Output mode: `normal_identity`
 - Chain valid: `True`
 - Origin: created_by=Nick Whitehead, purpose=Prototype identity persistence under operational constraint
 
@@ -24,7 +24,7 @@ Ledger: `data/lucien_chat.log`
 
 ## Accepted Commitments
 
-- `growth_7de26...` impact=`high` hash=`363e84cfa9c3...` evidence=truth_before_comfort reason=truth_before_comfort
+- none accepted
 
 ## Active Policies
 
@@ -36,11 +36,11 @@ Ledger: `data/lucien_chat.log`
 
 ## Memory and Preference State
 
-- Accepted memory records: 1
+- Accepted memory records: 0
 - Accepted preferences: 0
 - Accepted skills: 0
-- Memory cards: 1
-- Memory signals: 1
+- Memory cards: 0
+- Memory signals: 0
 
 ## Growth Rules
 
@@ -55,9 +55,9 @@ Ledger: `data/lucien_chat.log`
 - `accept_new` permits steward-reviewed acceptance of the proposed growth.
 - `keep_existing` preserves the accepted commitment, policy, or identity marker.
 - `fork` requires lineage-scoped treatment instead of pretending continuity is unchanged.
-- Recorded conflicts: 1
+- Recorded conflicts: 0
 - Resolved conflicts: 0
-- Unresolved conflicts: 1
+- Unresolved conflicts: 0
 
 ## Recovery Rules
 
@@ -75,19 +75,11 @@ Ledger: `data/lucien_chat.log`
 
 ## Current Steward Queue
 
-- `review_growth` severity=`medium` status=`open` reason=1 growth record(s) await review action=Review pending growth records.
-- `resolve_conflict` severity=`high` status=`open` reason=1 growth conflict(s) require steward attention action=Resolve conflict before accepting related growth.
+- no open steward tasks
 
 ## Last Reflection
 
-- Focus: `growth_conflict_resolution`
-- Severity: `review_required`
-- Observations:
-  - 1 growth record(s) await review
-  - 1 growth conflict(s) require steward attention
-- Recommended actions:
-  - review pending growth records
-  - resolve growth conflicts before accepting related changes
+- no reflection recorded
 
 ## Known Limits
 

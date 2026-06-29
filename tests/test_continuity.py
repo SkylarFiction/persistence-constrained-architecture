@@ -1,7 +1,9 @@
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pca.model_adapter as model_adapter_module
 from lucien import LucienChatShell
 from pca.demo_live import prepare_demo_artifacts
 from pca.live_chat import _apply_steward_action, chat_once
@@ -32,7 +34,9 @@ from pca import (
     MissionStepExecutionStatus,
     MissionStepRisk,
     MissionStatus,
+    ModelAdapterError,
     ModelMessage,
+    OpenAICompatibleAdapter,
     OverrideEngine,
     OverrideRequest,
     OutputGate,
@@ -52,6 +56,7 @@ from pca import (
     append_ledger_anchor,
     active_followups,
     authorization_policy_from_packs,
+    adapter_from_environment,
     authorize,
     auto_propose_skill_candidates,
     build_governed_context,
@@ -278,6 +283,117 @@ def test_echo_adapter_generates_without_external_credentials():
     assert response.provider == "echo"
     assert "what changed?" in response.text
     assert "PCA" in response.text
+
+
+def test_adapter_from_environment_uses_echo_without_api_key(tmp_path):
+    old_key = os.environ.pop("OPENAI_API_KEY", None)
+    old_model = os.environ.pop("LUCIEN_MODEL", None)
+    try:
+        adapter = adapter_from_environment(env_path=str(tmp_path / "missing.env"))
+    finally:
+        if old_key is not None:
+            os.environ["OPENAI_API_KEY"] = old_key
+        if old_model is not None:
+            os.environ["LUCIEN_MODEL"] = old_model
+
+    assert isinstance(adapter, EchoAdapter)
+
+
+def test_adapter_from_environment_loads_local_dotenv(tmp_path):
+    old_key = os.environ.pop("OPENAI_API_KEY", None)
+    old_model = os.environ.pop("LUCIEN_MODEL", None)
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        'OPENAI_API_KEY="local-test-key"\nLUCIEN_MODEL=test-model\n',
+        encoding="utf-8",
+    )
+    try:
+        adapter = adapter_from_environment(env_path=str(env_path))
+    finally:
+        if old_key is not None:
+            os.environ["OPENAI_API_KEY"] = old_key
+        else:
+            os.environ.pop("OPENAI_API_KEY", None)
+        if old_model is not None:
+            os.environ["LUCIEN_MODEL"] = old_model
+        else:
+            os.environ.pop("LUCIEN_MODEL", None)
+
+    assert isinstance(adapter, OpenAICompatibleAdapter)
+    assert adapter.model == "test-model"
+
+
+def test_openai_adapter_uses_responses_api_without_raw_prompt_in_result():
+    captured = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "id": "resp_test",
+                    "object": "response",
+                    "status": "completed",
+                    "output_text": "Grounded response.",
+                    "usage": {"input_tokens": 4, "output_tokens": 2},
+                }
+            ).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        captured["timeout"] = timeout
+        captured["payload"] = json.loads(request.data.decode("utf-8"))
+        captured["authorization"] = request.headers.get("Authorization")
+        return FakeResponse()
+
+    old_urlopen = model_adapter_module.request.urlopen
+    model_adapter_module.request.urlopen = fake_urlopen
+    try:
+        adapter = OpenAICompatibleAdapter("secret-key", model="test-model")
+        response = adapter.generate(
+            [ModelMessage(role="user", content="hello")],
+            system_context="governed context",
+        )
+    finally:
+        model_adapter_module.request.urlopen = old_urlopen
+
+    assert captured["url"].endswith("/responses")
+    assert captured["payload"]["model"] == "test-model"
+    assert captured["payload"]["input"][0]["role"] == "developer"
+    assert captured["payload"]["input"][0]["content"] == "governed context"
+    assert captured["authorization"] == "Bearer secret-key"
+    assert response.provider == "openai"
+    assert response.model == "test-model"
+    assert response.text == "Grounded response."
+    assert "governed context" not in json.dumps(response.raw)
+
+
+def test_openai_adapter_failure_is_clean_error():
+    def failing_urlopen(request, timeout):
+        raise OSError("network unavailable")
+
+    old_urlopen = model_adapter_module.request.urlopen
+    model_adapter_module.request.urlopen = failing_urlopen
+    try:
+        adapter = OpenAICompatibleAdapter("secret-key", model="test-model")
+        try:
+            adapter.generate(
+                [ModelMessage(role="user", content="hello")],
+                system_context="governed context",
+            )
+        except ModelAdapterError as exc:
+            assert exc.provider == "openai"
+            assert exc.model == "test-model"
+            assert exc.error_type == "OSError"
+        else:
+            raise AssertionError("OpenAI adapter did not raise clean model error")
+    finally:
+        model_adapter_module.request.urlopen = old_urlopen
 
 
 def test_chat_once_writes_governed_live_chat_events(tmp_path):
@@ -3185,6 +3301,44 @@ def test_lucien_chat_shell_accepts_low_impact_memory_growth(tmp_path):
     assert "evidence_locker" in result.context_summary["item_counts"]
     assert (tmp_path / "dashboard.html").exists()
     assert "Remember that PCA learning must be governed" not in serialized_events
+
+
+def test_lucien_chat_shell_records_model_error_without_leaking_context(tmp_path):
+    class FailingResponder:
+        def generate(self, **kwargs):
+            raise ModelAdapterError(
+                "synthetic model failure with hidden context detail",
+                provider="openai",
+                model="test-model",
+                error_type="synthetic_failure",
+            )
+
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "lucien_chat.log")
+    shell = LucienChatShell(
+        manifest=manifest,
+        ledger=ledger,
+        responder=FailingResponder(),
+    )
+    shell.seed_required_evidence()
+
+    result = shell.handle_message("Can you answer with the model?")
+    error_events = [
+        event for event in ledger.events() if event.event_type == "chat.model_response_error"
+    ]
+    generated_events = [
+        event
+        for event in ledger.events()
+        if event.event_type == "chat.model_response_generated"
+    ]
+
+    assert "could not reach the configured language model" in result.response_text
+    assert error_events[0].payload["model"] == "test-model"
+    assert error_events[0].payload["error_type"] == "synthetic_failure"
+    assert "context_sha256" in error_events[0].payload
+    assert "hidden context detail" not in json.dumps(error_events[0].payload)
+    assert generated_events[-1].payload["provider"] == "error"
+    assert generated_events[-1].payload["model"] == "unavailable"
 
 
 def test_lucien_chat_shell_records_session_turn_and_close(tmp_path):

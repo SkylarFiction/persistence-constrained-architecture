@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,11 @@ from .growth_classifier import ClassifiedGrowth, classify_growth
 from .llm_adapter import LocalLucienResponder
 from .memory import MemoryCard, memory_cards_from_self_model
 from .memory_signal_classifier import classify_memory_signal
+from pca.model_adapter import ModelAdapterError
+
+
+def _text_hash(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -159,13 +165,36 @@ class LucienChatShell:
         memory_cards = memory_cards_from_self_model(self_model)
         governed_context = build_governed_context(self.ledger, self.manifest)
         classified = classify_growth(user_message)
-        draft = self.responder.generate(
-            user_message=user_message,
-            continuity_claim=claim,
-            memory_cards=memory_cards,
-            accepted_growth_count=self_model.accepted_growth_count,
-            governed_context=governed_context.render_prompt_context(),
-        )
+        prompt_context = governed_context.render_prompt_context()
+        model_error = None
+        try:
+            draft = self.responder.generate(
+                user_message=user_message,
+                continuity_claim=claim,
+                memory_cards=memory_cards,
+                accepted_growth_count=self_model.accepted_growth_count,
+                governed_context=prompt_context,
+            )
+        except ModelAdapterError as error:
+            model_error = error
+            draft = (
+                "I could not reach the configured language model. "
+                "PCA governance is still running, and the issue was recorded."
+            )
+            self.ledger.append(
+                "chat.model_response_error",
+                self.manifest.system_id,
+                {
+                    "provider": error.provider,
+                    "model": error.model,
+                    "error_type": error.error_type,
+                    "error_length": len(str(error)),
+                    "surface": "lucien_chat_shell",
+                    "context_sha256": _text_hash(prompt_context),
+                    "context_length": len(prompt_context),
+                },
+            )
+        model_response = getattr(self.responder, "last_model_response", None)
         self.ledger.append(
             "chat.model_response_generated",
             self.manifest.system_id,
@@ -173,6 +202,18 @@ class LucienChatShell:
                 "response_length": len(draft),
                 "surface": "lucien_chat_shell",
                 "continuity_claim": claim,
+                "provider": (
+                    model_response.provider
+                    if model_response is not None
+                    else ("error" if model_error else "local")
+                ),
+                "model": (
+                    model_response.model
+                    if model_response is not None
+                    else ("unavailable" if model_error else "local")
+                ),
+                "context_sha256": _text_hash(prompt_context),
+                "context_length": len(prompt_context),
             },
         )
         runtime = LucienGovernedRuntime(self.manifest, self.ledger)

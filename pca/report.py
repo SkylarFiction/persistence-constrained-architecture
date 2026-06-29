@@ -51,6 +51,7 @@ IMPORTANT_EVENT_TYPES = {
     "continuity_claim_record",
     "chat.user_message_received",
     "chat.model_response_generated",
+    "chat.model_response_error",
     "constraint.breached",
     "identity.forked",
     "lucien.input",
@@ -198,7 +199,13 @@ def _event_summary(event: ContinuityEvent) -> str:
         return (
             f"surface={payload.get('surface')} "
             f"response_length={payload.get('response_length')} "
-            f"claim={payload.get('continuity_claim')}"
+            f"claim={payload.get('continuity_claim')} "
+            f"model={payload.get('model', 'unknown')}"
+        )
+    if event.event_type == "chat.model_response_error":
+        return (
+            f"surface={payload.get('surface')} "
+            f"model={payload.get('model')} error={payload.get('error_type')}"
         )
     if event.event_type == "constraint.breached":
         return (

@@ -118,7 +118,7 @@ what move the claim to `continuity_break`.
 - `Lucien Live Chat`: serves a local three-panel chat page where messages are sent
   through PCA, responses are output-gated, ledger events are shown live, and browser
   text-to-speech can read Lucien's response.
-- `ModelAdapter`: provides an Echo fallback plus optional OpenAI-compatible model
+- `ModelAdapter`: provides an Echo fallback plus optional OpenAI Responses API
   calls through `OPENAI_API_KEY`, `LUCIEN_MODEL`, and `LUCIEN_MODEL_BASE_URL`.
 - `CSMRuntimeBridge`: connects Lucien-style CSM monitor results and hard-kill audit
   logs to PCA continuity events.
@@ -277,6 +277,26 @@ python3 pca_cli.py cockpit --html reports/lucien_cockpit.html
 python3 scripts/lucien_cockpit_demo.py
 python3 lucien_chat.py --seed-required --message "Remember that PCA learning must be governed."
 ```
+
+## OpenAI API Setup
+
+Lucien can run without an API key; in that mode it uses the local Echo fallback.
+To give Lucien a real model-backed voice, create a local `.env` file:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env`:
+
+```bash
+OPENAI_API_KEY=your_api_key_here
+LUCIEN_MODEL=gpt-4.1-mini
+```
+
+Do not commit `.env`. It is ignored by Git. The model is only the language
+engine: PCA still builds governed context, output-gates the answer, and records
+only model metadata, response length, and context hash in the ledger.
 
 The live chat page includes steward controls for resolving reflection tasks,
 reviewing pending growth, and resolving growth conflicts. These controls write

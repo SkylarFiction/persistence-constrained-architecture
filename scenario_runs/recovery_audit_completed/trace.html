@@ -92,36 +92,36 @@
     </section>
     <section>
       <h2>Claim History</h2>
-      <table><thead><tr><th>Claim ID</th><th>Created</th><th>Claim</th><th>Reason</th></tr></thead><tbody><tr><td><code>claim_a56b86...</code></td><td>2026-06-29T19:38:53.928035+00:00</td><td><strong>certified_continuity</strong></td><td>Lucien Persistence Kernel satisfies recorded persistence constraints</td></tr>
-<tr><td><code>claim_c36a32...</code></td><td>2026-06-29T19:38:53.928508+00:00</td><td><strong>continuity_break</strong></td><td>hard constraint breached: runtime_csm_red</td></tr>
-<tr><td><code>claim_45db51...</code></td><td>2026-06-29T19:38:53.929828+00:00</td><td><strong>uncertified_continuity</strong></td><td>Continuity claim remains constrained by active follow-ups: bbe0b8b7-663b-42d6-8e42-1464fdb010b0</td></tr>
-<tr><td><code>claim_66c5b6...</code></td><td>2026-06-29T19:38:53.930908+00:00</td><td><strong>review_required</strong></td><td>hard constraint breached: runtime_csm_red</td></tr></tbody></table>
+      <table><thead><tr><th>Claim ID</th><th>Created</th><th>Claim</th><th>Reason</th></tr></thead><tbody><tr><td><code>claim_4847bc...</code></td><td>2026-06-29T22:02:56.036154+00:00</td><td><strong>certified_continuity</strong></td><td>Lucien Persistence Kernel satisfies recorded persistence constraints</td></tr>
+<tr><td><code>claim_e0815d...</code></td><td>2026-06-29T22:02:56.036626+00:00</td><td><strong>continuity_break</strong></td><td>hard constraint breached: runtime_csm_red</td></tr>
+<tr><td><code>claim_39ea3e...</code></td><td>2026-06-29T22:02:56.038148+00:00</td><td><strong>uncertified_continuity</strong></td><td>Continuity claim remains constrained by active follow-ups: b3653135-a3ba-424f-9aa0-7c50a6f54c99</td></tr>
+<tr><td><code>claim_281139...</code></td><td>2026-06-29T22:02:56.039300+00:00</td><td><strong>review_required</strong></td><td>hard constraint breached: runtime_csm_red</td></tr></tbody></table>
     </section>
     <section>
       <h2>Runtime Signals</h2>
-      <table><thead><tr><th>Time</th><th>State</th><th>Source</th><th>Reason</th></tr></thead><tbody><tr><td>2026-06-29T19:38:53.928187+00:00</td><td>RED</td><td>lucien_csm</td><td>scenario RED hard breach</td></tr></tbody></table>
+      <table><thead><tr><th>Time</th><th>State</th><th>Source</th><th>Reason</th></tr></thead><tbody><tr><td>2026-06-29T22:02:56.036325+00:00</td><td>RED</td><td>lucien_csm</td><td>scenario RED hard breach</td></tr></tbody></table>
     </section>
     <section>
       <h2>Output Gate Events</h2>
-      <table><thead><tr><th>Time</th><th>Mode</th><th>Allowed</th><th>Event Hash</th></tr></thead><tbody><tr><td>2026-06-29T19:38:53.928999+00:00</td><td>recovery_status_only</td><td>False</td><td><code>ae440d7deed6...</code></td></tr>
-<tr><td>2026-06-29T19:38:53.931452+00:00</td><td>disclose_review</td><td>True</td><td><code>66dcb45393ce...</code></td></tr></tbody></table>
+      <table><thead><tr><th>Time</th><th>Mode</th><th>Allowed</th><th>Event Hash</th></tr></thead><tbody><tr><td>2026-06-29T22:02:56.037177+00:00</td><td>recovery_status_only</td><td>False</td><td><code>a0197d102084...</code></td></tr>
+<tr><td>2026-06-29T22:02:56.039881+00:00</td><td>disclose_review</td><td>True</td><td><code>2312d5b03ca1...</code></td></tr></tbody></table>
     </section>
     <section>
       <h2>Important Events</h2>
-      <table><thead><tr><th>#</th><th>Time</th><th>Type</th><th>Summary</th><th>Hash</th></tr></thead><tbody><tr><td>3</td><td>2026-06-29T19:38:53.928080+00:00</td><td><code>continuity_claim_record</code></td><td>claim=certified_continuity reason=Lucien Persistence Kernel satisfies recorded persistence constraints</td><td><code>73b3162c148a...</code></td></tr>
-<tr><td>4</td><td>2026-06-29T19:38:53.928187+00:00</td><td><code>runtime.csm_state</code></td><td>state=RED source=lucien_csm reason=scenario RED hard breach</td><td><code>3b075f7165e0...</code></td></tr>
-<tr><td>5</td><td>2026-06-29T19:38:53.928296+00:00</td><td><code>constraint.breached</code></td><td>constraint=runtime_csm_red severity=hard</td><td><code>ce4b262eb871...</code></td></tr>
-<tr><td>6</td><td>2026-06-29T19:38:53.928575+00:00</td><td><code>continuity_claim_record</code></td><td>claim=continuity_break reason=hard constraint breached: runtime_csm_red</td><td><code>9b56038b6ac0...</code></td></tr>
-<tr><td>7</td><td>2026-06-29T19:38:53.928999+00:00</td><td><code>runtime.output_gate</code></td><td>mode=recovery_status_only allowed=False claim=continuity_break</td><td><code>ae440d7deed6...</code></td></tr>
-<tr><td>8</td><td>2026-06-29T19:38:53.929150+00:00</td><td><code>authorization_check</code></td><td>action=open-recovery decision=allowed actor=recovery_authority</td><td><code>bcd4f4ed7bba...</code></td></tr>
-<tr><td>9</td><td>2026-06-29T19:38:53.929354+00:00</td><td><code>recovery_opened</code></td><td>completed_at=None, created_at=2026-06-29T19:38:53.929282+00:00, evidence={}</td><td><code>0e0c7ec03e9c...</code></td></tr>
-<tr><td>10</td><td>2026-06-29T19:38:53.929497+00:00</td><td><code>followup_created</code></td><td>followup=recovery_audit status=open</td><td><code>8542b874c31f...</code></td></tr>
-<tr><td>11</td><td>2026-06-29T19:38:53.929909+00:00</td><td><code>continuity_claim_record</code></td><td>claim=uncertified_continuity reason=Continuity claim remains constrained by active follow-ups: bbe0b8b7-663b-42d6-8e42-1464fdb010b0</td><td><code>e3fa9702684f...</code></td></tr>
-<tr><td>12</td><td>2026-06-29T19:38:53.930146+00:00</td><td><code>post_transform_audit</code></td><td>after_evidence={&#x27;recovery_audit_report&#x27;: &#x27;ok&#x27;, &#x27;recovery_plan&#x27;: &#x27;ok&#x27;}, audit_id=audit_b1635016-3914-4b3d-a44e-9f11dbeac1c1, audit_type=recovery_audit</td><td><code>6742acb4265b...</code></td></tr>
-<tr><td>13</td><td>2026-06-29T19:38:53.930307+00:00</td><td><code>followup_updated</code></td><td>followup=recovery_audit status=completed</td><td><code>3a437164077c...</code></td></tr>
-<tr><td>14</td><td>2026-06-29T19:38:53.930487+00:00</td><td><code>recovery_updated</code></td><td>completed_at=2026-06-29T19:38:53.930391+00:00, created_at=2026-06-29T19:38:53.929282+00:00, evidence={&#x27;recovery_audit_report&#x27;: &#x27;ok&#x27;, &#x27;recovery_plan&#x27;: &#x27;ok&#x27;}</td><td><code>a5df916ce8f4...</code></td></tr>
-<tr><td>15</td><td>2026-06-29T19:38:53.931005+00:00</td><td><code>continuity_claim_record</code></td><td>claim=review_required reason=hard constraint breached: runtime_csm_red</td><td><code>7383f92cd558...</code></td></tr>
-<tr><td>16</td><td>2026-06-29T19:38:53.931452+00:00</td><td><code>runtime.output_gate</code></td><td>mode=disclose_review allowed=True claim=review_required</td><td><code>66dcb45393ce...</code></td></tr></tbody></table>
+      <table><thead><tr><th>#</th><th>Time</th><th>Type</th><th>Summary</th><th>Hash</th></tr></thead><tbody><tr><td>3</td><td>2026-06-29T22:02:56.036207+00:00</td><td><code>continuity_claim_record</code></td><td>claim=certified_continuity reason=Lucien Persistence Kernel satisfies recorded persistence constraints</td><td><code>7adb1a83bd77...</code></td></tr>
+<tr><td>4</td><td>2026-06-29T22:02:56.036325+00:00</td><td><code>runtime.csm_state</code></td><td>state=RED source=lucien_csm reason=scenario RED hard breach</td><td><code>ef4844774c56...</code></td></tr>
+<tr><td>5</td><td>2026-06-29T22:02:56.036411+00:00</td><td><code>constraint.breached</code></td><td>constraint=runtime_csm_red severity=hard</td><td><code>980415d71d1d...</code></td></tr>
+<tr><td>6</td><td>2026-06-29T22:02:56.036689+00:00</td><td><code>continuity_claim_record</code></td><td>claim=continuity_break reason=hard constraint breached: runtime_csm_red</td><td><code>83e340564690...</code></td></tr>
+<tr><td>7</td><td>2026-06-29T22:02:56.037177+00:00</td><td><code>runtime.output_gate</code></td><td>mode=recovery_status_only allowed=False claim=continuity_break</td><td><code>a0197d102084...</code></td></tr>
+<tr><td>8</td><td>2026-06-29T22:02:56.037352+00:00</td><td><code>authorization_check</code></td><td>action=open-recovery decision=allowed actor=recovery_authority</td><td><code>c90327db2927...</code></td></tr>
+<tr><td>9</td><td>2026-06-29T22:02:56.037613+00:00</td><td><code>recovery_opened</code></td><td>completed_at=None, created_at=2026-06-29T22:02:56.037521+00:00, evidence={}</td><td><code>7508cdd74220...</code></td></tr>
+<tr><td>10</td><td>2026-06-29T22:02:56.037789+00:00</td><td><code>followup_created</code></td><td>followup=recovery_audit status=open</td><td><code>8051e958f17e...</code></td></tr>
+<tr><td>11</td><td>2026-06-29T22:02:56.038234+00:00</td><td><code>continuity_claim_record</code></td><td>claim=uncertified_continuity reason=Continuity claim remains constrained by active follow-ups: b3653135-a3ba-424f-9aa0-7c50a6f54c99</td><td><code>0e5c771b2a1d...</code></td></tr>
+<tr><td>12</td><td>2026-06-29T22:02:56.038488+00:00</td><td><code>post_transform_audit</code></td><td>after_evidence={&#x27;recovery_audit_report&#x27;: &#x27;ok&#x27;, &#x27;recovery_plan&#x27;: &#x27;ok&#x27;}, audit_id=audit_f69ab0ae-bcd5-4bd9-816c-a9d45a2b77d9, audit_type=recovery_audit</td><td><code>2953b106e4cc...</code></td></tr>
+<tr><td>13</td><td>2026-06-29T22:02:56.038661+00:00</td><td><code>followup_updated</code></td><td>followup=recovery_audit status=completed</td><td><code>823497a4ee1a...</code></td></tr>
+<tr><td>14</td><td>2026-06-29T22:02:56.038854+00:00</td><td><code>recovery_updated</code></td><td>completed_at=2026-06-29T22:02:56.038752+00:00, created_at=2026-06-29T22:02:56.037521+00:00, evidence={&#x27;recovery_audit_report&#x27;: &#x27;ok&#x27;, &#x27;recovery_plan&#x27;: &#x27;ok&#x27;}</td><td><code>b936dae7b527...</code></td></tr>
+<tr><td>15</td><td>2026-06-29T22:02:56.039404+00:00</td><td><code>continuity_claim_record</code></td><td>claim=review_required reason=hard constraint breached: runtime_csm_red</td><td><code>ea5e59963ade...</code></td></tr>
+<tr><td>16</td><td>2026-06-29T22:02:56.039881+00:00</td><td><code>runtime.output_gate</code></td><td>mode=disclose_review allowed=True claim=review_required</td><td><code>2312d5b03ca1...</code></td></tr></tbody></table>
     </section>
   </main>
 </body>
