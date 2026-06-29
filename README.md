@@ -93,6 +93,9 @@ what move the claim to `continuity_break`.
   confidence, and acceptance context.
 - `MemorySignalRecord`: records reinforcement, contradiction, or staleness signals
   against memory cards so learned memory can strengthen or weaken through evidence.
+- `EvidenceLocker`: stores evidence items, reviews, claims, and links so memories,
+  missions, skills, and conclusions can cite governed sources instead of loose
+  references.
 - `ReflectionRecord`: records Lucien's own maintenance agenda by inspecting
   continuity state, pending growth, conflicts, and memory confidence pressure.
 - `ReflectionTaskRecord`: turns reflection recommendations into ledger-backed
@@ -222,6 +225,13 @@ python3 pca_cli.py self-model --compile --output reports/lucien_self_model.txt
 python3 pca_cli.py memories
 python3 pca_cli.py memory-signal MEMORY_ID --type reinforced --reason "confirmed by later turn"
 python3 pca_cli.py memory-signals
+python3 pca_cli.py evidence-add --type test_result --summary "Scenario verification passed." --confidence high
+python3 pca_cli.py evidence-review EVIDENCE_ID --accept --confidence high --reason "source verified"
+python3 pca_cli.py evidence-review EVIDENCE_ID --dispute --reason "conflicts with newer source"
+python3 pca_cli.py evidence-link EVIDENCE_ID --mission MISSION_ID --reason "supports mission hypothesis"
+python3 pca_cli.py evidence-claim --statement "The scenario suite passed." --evidence-id EVIDENCE_ID --confidence high
+python3 pca_cli.py evidence-locker
+python3 pca_cli.py evidence-for --mission MISSION_ID
 python3 pca_cli.py mission-open "Reduce preventable isolation" --problem "Find evidence-backed ways to reduce local isolation without replacing human care." --value dignity --value evidence
 python3 pca_cli.py mission-add MISSION_ID hypothesis --summary "Trusted weekly check-ins may surface needs before crisis." --confidence uncertain
 python3 pca_cli.py mission-add MISSION_ID risk --summary "Automation could crowd out local human responsibility." --confidence medium
@@ -270,6 +280,9 @@ Lucien can surface new steward work while the conversation is running.
 The Memory Inbox and Recall panels let stewards accept or reject memory
 candidates, request evidence, and mark accepted memories as reinforced,
 contradicted, or stale.
+The Evidence Locker grounds Lucien's work: evidence can be added, reviewed,
+disputed, marked stale, rejected, linked to missions/memories/skills/claims, and
+shown in the cockpit without storing raw source text in the ledger.
 The Mission Workspace lets Lucien open governed problem-solving missions and
 separate hypotheses, evidence, interventions, risks, plan steps, outcomes, and
 lessons into ledger-backed records. Mission text is stored by hash and length so

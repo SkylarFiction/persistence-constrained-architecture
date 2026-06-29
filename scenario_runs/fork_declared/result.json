@@ -69,7 +69,11 @@
     "chat_turn_count": 0,
     "current_continuity_claim": "declared_fork",
     "current_recovery_status": null,
+    "disputed_evidence_count": 0,
     "event_count": 6,
+    "evidence_claim_count": 0,
+    "evidence_count": 0,
+    "evidence_link_count": 0,
     "followup_count": 0,
     "growth_conflict_count": 0,
     "growth_conflict_resolution_count": 0,
@@ -89,11 +93,13 @@
     "reasons": [
       "ledger contains an identity fork event"
     ],
-    "recorded_claim_id": "claim_7ccf617b-9c2b-4331-b7d4-d1faf852c338",
+    "recorded_claim_id": "claim_c684d60c-b22d-4c7b-a286-21e9ca5058c2",
     "recovery_count": 0,
     "reflection_count": 0,
     "reflection_task_count": 0,
+    "reviewed_evidence_count": 0,
     "skill_candidate_count": 0,
+    "stale_evidence_count": 0,
     "state_precedence": [
       "chain_invalid",
       "no_events",

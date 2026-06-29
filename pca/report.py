@@ -10,6 +10,12 @@ from .anchors import verify_latest_anchor
 from .claims import claims_from_events, current_claim_record
 from .chat_sessions import chat_sessions_from_events, chat_turns_from_events
 from .evaluator import EVALUATION_PRECEDENCE, ContinuityEvaluator
+from .evidence_locker import (
+    evidence_claim_records_from_events,
+    evidence_link_records_from_events,
+    evidence_records_from_events,
+    evidence_review_records_from_events,
+)
 from .followups import active_followups, followups_from_events
 from .growth import (
     active_growth_records,
@@ -72,6 +78,11 @@ IMPORTANT_EVENT_TYPES = {
     "mission.step_completed",
     "mission.step_failed",
     "mission.step_blocked",
+    "evidence.added",
+    "evidence.claim_recorded",
+    "evidence.linked",
+    "evidence.reviewed",
+    "evidence.updated",
     "skill.candidate_proposed",
     "skill.candidate_reviewed",
     "runtime.csm_state",
@@ -114,6 +125,10 @@ class TraceReport:
     missions: list[dict[str, Any]]
     mission_flows: list[dict[str, Any]]
     mission_steps: list[dict[str, Any]]
+    evidence_records: list[dict[str, Any]]
+    evidence_claims: list[dict[str, Any]]
+    evidence_links: list[dict[str, Any]]
+    evidence_reviews: list[dict[str, Any]]
     skill_candidates: list[dict[str, Any]]
     accepted_skills: list[dict[str, Any]]
     self_model: dict[str, Any]
@@ -147,6 +162,10 @@ class TraceReport:
             "missions": self.missions,
             "mission_flows": self.mission_flows,
             "mission_steps": self.mission_steps,
+            "evidence_records": self.evidence_records,
+            "evidence_claims": self.evidence_claims,
+            "evidence_links": self.evidence_links,
+            "evidence_reviews": self.evidence_reviews,
             "skill_candidates": self.skill_candidates,
             "accepted_skills": self.accepted_skills,
             "self_model": self.self_model,
@@ -285,6 +304,26 @@ def _event_summary(event: ContinuityEvent) -> str:
             f"risk={payload.get('risk_level')} approval={payload.get('approval_status')} "
             f"execution={payload.get('execution_status')}"
         )
+    if event.event_type in {"evidence.added", "evidence.updated"}:
+        return (
+            f"evidence={payload.get('evidence_id')} type={payload.get('source_type')} "
+            f"status={payload.get('review_status')} confidence={payload.get('confidence')}"
+        )
+    if event.event_type == "evidence.linked":
+        return (
+            f"evidence={payload.get('evidence_id')} "
+            f"target={payload.get('target_type')}:{payload.get('target_id')}"
+        )
+    if event.event_type == "evidence.reviewed":
+        return (
+            f"evidence={payload.get('evidence_id')} "
+            f"status={payload.get('review_status')} reviewer={payload.get('reviewer')}"
+        )
+    if event.event_type == "evidence.claim_recorded":
+        return (
+            f"claim={payload.get('claim_id')} status={payload.get('status')} "
+            f"evidence={len(payload.get('evidence_ids', []))}"
+        )
     if event.event_type in {"skill.candidate_proposed", "skill.candidate_reviewed"}:
         return (
             f"skill={payload.get('skill_id')} name={payload.get('name')} "
@@ -351,6 +390,10 @@ def build_trace_report(
     missions = mission_briefs_from_events(events)
     mission_flows = mission_flows_from_events(events)
     mission_steps = mission_step_records_from_events(events)
+    evidence_records = evidence_records_from_events(events)
+    evidence_claims = evidence_claim_records_from_events(events)
+    evidence_links = evidence_link_records_from_events(events)
+    evidence_reviews = evidence_review_records_from_events(events)
     skill_candidates = skill_candidates_from_events(events)
     accepted_skills = accepted_skills_from_events(events)
     open_missions = [
@@ -402,6 +445,18 @@ def build_trace_report(
             [flow for flow in mission_flows if flow.phase.value == "blocked"]
         ),
         "mission_step_count": len(mission_steps),
+        "evidence_count": len(evidence_records),
+        "reviewed_evidence_count": len(
+            [record for record in evidence_records if record.review_status.value == "reviewed"]
+        ),
+        "disputed_evidence_count": len(
+            [record for record in evidence_records if record.review_status.value == "disputed"]
+        ),
+        "stale_evidence_count": len(
+            [record for record in evidence_records if record.review_status.value == "stale"]
+        ),
+        "evidence_link_count": len(evidence_links),
+        "evidence_claim_count": len(evidence_claims),
         "skill_candidate_count": len(skill_candidates),
         "accepted_skill_count": len(accepted_skills),
         "accepted_growth_count": self_model.accepted_growth_count,
@@ -492,6 +547,10 @@ def build_trace_report(
         missions=[brief.to_dict() for brief in missions],
         mission_flows=[flow.to_dict() for flow in mission_flows],
         mission_steps=[step.to_dict() for step in mission_steps],
+        evidence_records=[record.to_dict() for record in evidence_records],
+        evidence_claims=[record.to_dict() for record in evidence_claims],
+        evidence_links=[record.to_dict() for record in evidence_links],
+        evidence_reviews=[record.to_dict() for record in evidence_reviews],
         skill_candidates=[record.to_dict() for record in skill_candidates],
         accepted_skills=[record.to_dict() for record in accepted_skills],
         self_model=self_model.to_dict(),

@@ -89,6 +89,36 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         "</tr>"
         for step in data.get("mission_steps", [])[-12:]
     ) or _empty_row(7, "No mission steps recorded.")
+    evidence_rows = "\n".join(
+        "<tr>"
+        f"<td><code>{escape(_short_hash(str(record['evidence_id'])))}</code></td>"
+        f"<td>{escape(str(record['source_type']))}</td>"
+        f"<td>{escape(str(record['review_status']))}</td>"
+        f"<td>{escape(str(record['confidence']))}</td>"
+        f"<td><code>{escape(_short_hash(str(record['summary_hash'])))}</code></td>"
+        f"<td>{escape(str(record['reason']))}</td>"
+        "</tr>"
+        for record in data.get("evidence_records", [])[-10:]
+    ) or _empty_row(6, "No evidence recorded.")
+    evidence_link_rows = "\n".join(
+        "<tr>"
+        f"<td><code>{escape(_short_hash(str(link['evidence_id'])))}</code></td>"
+        f"<td>{escape(str(link['target_type']))}</td>"
+        f"<td><code>{escape(_short_hash(str(link['target_id'])))}</code></td>"
+        f"<td>{escape(str(link['reason']))}</td>"
+        "</tr>"
+        for link in data.get("evidence_links", [])[-10:]
+    ) or _empty_row(4, "No evidence links yet.")
+    evidence_claim_rows = "\n".join(
+        "<tr>"
+        f"<td><code>{escape(_short_hash(str(claim['claim_id'])))}</code></td>"
+        f"<td>{escape(str(claim['status']))}</td>"
+        f"<td>{escape(str(claim['confidence']))}</td>"
+        f"<td>{escape(str(len(claim['evidence_ids'])))} evidence item(s)</td>"
+        f"<td><code>{escape(_short_hash(str(claim['statement_hash'])))}</code></td>"
+        "</tr>"
+        for claim in data.get("evidence_claims", [])[-8:]
+    ) or _empty_row(5, "No evidence claims recorded.")
     skill_candidate_rows = "\n".join(
         "<tr>"
         f"<td>{escape(str(skill['name']))}</td>"
@@ -258,6 +288,9 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         <div><div class="label">Missions</div><div class="value">{escape(str(summary['mission_count']))}</div></div>
         <div><div class="label">Blocked Missions</div><div class="value">{escape(str(summary['blocked_mission_count']))}</div></div>
         <div><div class="label">Mission Steps</div><div class="value">{escape(str(summary['mission_step_count']))}</div></div>
+        <div><div class="label">Evidence Items</div><div class="value">{escape(str(summary['evidence_count']))}</div></div>
+        <div><div class="label">Disputed Evidence</div><div class="value">{escape(str(summary['disputed_evidence_count']))}</div></div>
+        <div><div class="label">Evidence Links</div><div class="value">{escape(str(summary['evidence_link_count']))}</div></div>
         <div><div class="label">Skill Candidates</div><div class="value">{escape(str(summary['skill_candidate_count']))}</div></div>
         <div><div class="label">Accepted Skills</div><div class="value">{escape(str(summary['accepted_skill_count']))}</div></div>
       </div>
@@ -288,6 +321,20 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
       <h2>Mission Steps</h2>
       <table><thead><tr><th>Step</th><th>Mission</th><th>Risk</th><th>Tool</th><th>Approval</th><th>Execution</th><th>Description Hash</th></tr></thead><tbody>{mission_step_rows}</tbody></table>
     </section>
+    <section>
+      <h2>Evidence Locker</h2>
+      <table><thead><tr><th>ID</th><th>Type</th><th>Status</th><th>Confidence</th><th>Summary Hash</th><th>Reason</th></tr></thead><tbody>{evidence_rows}</tbody></table>
+    </section>
+    <div class="grid">
+      <section>
+        <h2>Evidence Links</h2>
+        <table><thead><tr><th>Evidence</th><th>Target</th><th>Target ID</th><th>Reason</th></tr></thead><tbody>{evidence_link_rows}</tbody></table>
+      </section>
+      <section>
+        <h2>Claims</h2>
+        <table><thead><tr><th>Claim</th><th>Status</th><th>Confidence</th><th>Evidence</th><th>Statement Hash</th></tr></thead><tbody>{evidence_claim_rows}</tbody></table>
+      </section>
+    </div>
     <div class="grid">
       <section>
         <h2>Skill Candidates</h2>

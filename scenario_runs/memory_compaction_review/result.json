@@ -60,7 +60,11 @@
     "chat_turn_count": 0,
     "current_continuity_claim": "certified_continuity",
     "current_recovery_status": null,
+    "disputed_evidence_count": 0,
     "event_count": 5,
+    "evidence_claim_count": 0,
+    "evidence_count": 0,
+    "evidence_link_count": 0,
     "followup_count": 0,
     "growth_conflict_count": 0,
     "growth_conflict_resolution_count": 0,
@@ -80,11 +84,13 @@
     "reasons": [
       "Lucien Persistence Kernel satisfies recorded persistence constraints"
     ],
-    "recorded_claim_id": "claim_8d675cb4-ba9d-4ab8-9629-9c6a4432da81",
+    "recorded_claim_id": "claim_f67adb8b-42cc-4bb8-9ad3-12d124ba540e",
     "recovery_count": 0,
     "reflection_count": 0,
     "reflection_task_count": 0,
+    "reviewed_evidence_count": 0,
     "skill_candidate_count": 0,
+    "stale_evidence_count": 0,
     "state_precedence": [
       "chain_invalid",
       "no_events",

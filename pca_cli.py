@@ -31,6 +31,8 @@ from pca import (
     RecoveryRecord,
     RecoveryStatus,
     TransformRequest,
+    add_evidence,
+    add_evidence_claim,
     append_ledger_anchor,
     accepted_skills_from_events,
     authorization_policy_from_packs,
@@ -46,6 +48,8 @@ from pca import (
     current_recovery_record,
     derive_self_model,
     derive_current_claim,
+    evidence_for_target,
+    evidence_locker_snapshot,
     export_latest_anchor,
     find_followup,
     find_recovery,
@@ -83,6 +87,8 @@ from pca import (
     reflection_records_from_events,
     review_growth,
     review_skill_candidate,
+    review_evidence,
+    link_evidence,
     safe_load_policy_directory,
     safe_load_policy_pack,
     update_mission_status,
@@ -137,6 +143,14 @@ def parse_key_values(items: list[str]) -> dict[str, str]:
             raise SystemExit(f"Expected key=value, got: {item}")
         values[key] = value
     return values
+
+
+def _evidence_target_from_args(args) -> tuple[str, str]:
+    for target_type in ("memory", "mission", "skill", "claim"):
+        target_id = getattr(args, target_type, None)
+        if target_id:
+            return target_type, target_id
+    raise SystemExit("evidence target is required")
 
 
 def create_followups_for_override(
@@ -241,6 +255,64 @@ def main() -> int:
     subparsers.add_parser("lineage")
     subparsers.add_parser("memories")
     subparsers.add_parser("memory-signals")
+
+    evidence_add_parser = subparsers.add_parser("evidence-add")
+    evidence_add_parser.add_argument(
+        "--type",
+        required=True,
+        choices=[
+            "user_statement",
+            "file",
+            "web_source",
+            "mission_observation",
+            "tool_output",
+            "chat_turn",
+            "test_result",
+            "code_result",
+            "manual_note",
+        ],
+    )
+    evidence_add_parser.add_argument("--summary", required=True)
+    evidence_add_parser.add_argument("--source", default="")
+    evidence_add_parser.add_argument("--confidence", default="unknown")
+    evidence_add_parser.add_argument("--reason", default="")
+
+    evidence_link_parser = subparsers.add_parser("evidence-link")
+    evidence_link_parser.add_argument("evidence_id")
+    target_group = evidence_link_parser.add_mutually_exclusive_group(required=True)
+    target_group.add_argument("--memory")
+    target_group.add_argument("--mission")
+    target_group.add_argument("--skill")
+    target_group.add_argument("--claim")
+    evidence_link_parser.add_argument("--reason", default="")
+
+    evidence_review_parser = subparsers.add_parser("evidence-review")
+    evidence_review_parser.add_argument("evidence_id")
+    review_group = evidence_review_parser.add_mutually_exclusive_group(required=True)
+    review_group.add_argument("--accept", action="store_true")
+    review_group.add_argument("--dispute", action="store_true")
+    review_group.add_argument("--stale", action="store_true")
+    review_group.add_argument("--reject", action="store_true")
+    evidence_review_parser.add_argument("--reviewer", default="steward")
+    evidence_review_parser.add_argument("--confidence")
+    evidence_review_parser.add_argument("--reason", required=True)
+
+    evidence_claim_parser = subparsers.add_parser("evidence-claim")
+    evidence_claim_parser.add_argument("--statement", required=True)
+    evidence_claim_parser.add_argument("--evidence-id", action="append", default=[])
+    evidence_claim_parser.add_argument("--confidence", default="unknown")
+    evidence_claim_parser.add_argument("--status", default="proposed")
+    evidence_claim_parser.add_argument("--reason", default="")
+
+    subparsers.add_parser("evidence-locker")
+
+    evidence_for_parser = subparsers.add_parser("evidence-for")
+    target_for_group = evidence_for_parser.add_mutually_exclusive_group(required=True)
+    target_for_group.add_argument("--memory")
+    target_for_group.add_argument("--mission")
+    target_for_group.add_argument("--skill")
+    target_for_group.add_argument("--claim")
+
     missions_parser = subparsers.add_parser("missions")
     missions_parser.add_argument("--open", action="store_true")
 
@@ -851,6 +923,94 @@ def main() -> int:
             confidence_delta=args.confidence_delta,
         )
         print_json({"memory_signal": record.to_dict()})
+        return 0
+
+    if args.command == "evidence-add":
+        record = add_evidence(
+            ledger=ledger,
+            identity_id=manifest.system_id,
+            source_type=args.type,
+            source=args.source,
+            summary=args.summary,
+            confidence=args.confidence,
+            reason=args.reason,
+        )
+        print_json({"evidence": record.to_dict()})
+        return 0
+
+    if args.command == "evidence-link":
+        target_type, target_id = _evidence_target_from_args(args)
+        try:
+            record = link_evidence(
+                ledger=ledger,
+                identity_id=manifest.system_id,
+                evidence_id=args.evidence_id,
+                target_type=target_type,
+                target_id=target_id,
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"evidence_link": record.to_dict()})
+        return 0
+
+    if args.command == "evidence-review":
+        if args.accept:
+            status = "reviewed"
+        elif args.dispute:
+            status = "disputed"
+        elif args.stale:
+            status = "stale"
+        else:
+            status = "rejected"
+        try:
+            record = review_evidence(
+                ledger=ledger,
+                identity_id=manifest.system_id,
+                evidence_id=args.evidence_id,
+                review_status=status,
+                reviewer=args.reviewer,
+                confidence=args.confidence,
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"evidence": record.to_dict()})
+        return 0
+
+    if args.command == "evidence-claim":
+        try:
+            record = add_evidence_claim(
+                ledger=ledger,
+                identity_id=manifest.system_id,
+                statement=args.statement,
+                evidence_ids=args.evidence_id,
+                confidence=args.confidence,
+                status=args.status,
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"evidence_claim": record.to_dict()})
+        return 0
+
+    if args.command == "evidence-locker":
+        snapshot = evidence_locker_snapshot(ledger.events())
+        print_json({"system_id": manifest.system_id, **snapshot})
+        return 0
+
+    if args.command == "evidence-for":
+        target_type, target_id = _evidence_target_from_args(args)
+        records = evidence_for_target(ledger.events(), target_type, target_id)
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "target_type": target_type,
+                "target_id": target_id,
+                "count": len(records),
+                "evidence": records,
+            }
+        )
         return 0
 
     if args.command == "missions":

@@ -108,7 +108,11 @@
     "chat_turn_count": 0,
     "current_continuity_claim": "review_required",
     "current_recovery_status": "recovery_certified",
+    "disputed_evidence_count": 0,
     "event_count": 16,
+    "evidence_claim_count": 0,
+    "evidence_count": 0,
+    "evidence_link_count": 0,
     "followup_count": 1,
     "growth_conflict_count": 0,
     "growth_conflict_resolution_count": 0,
@@ -128,11 +132,13 @@
     "reasons": [
       "hard constraint breached: runtime_csm_red"
     ],
-    "recorded_claim_id": "claim_cd79674b-0b5f-4bc1-8961-68dd956eef9a",
+    "recorded_claim_id": "claim_db520199-8af3-4392-a688-f94ab5389674",
     "recovery_count": 1,
     "reflection_count": 0,
     "reflection_task_count": 0,
+    "reviewed_evidence_count": 0,
     "skill_candidate_count": 0,
+    "stale_evidence_count": 0,
     "state_precedence": [
       "chain_invalid",
       "no_events",

@@ -47,6 +47,8 @@ from pca import (
     SkillCandidateStatus,
     TransformRequest,
     accepted_skills_from_events,
+    add_evidence,
+    add_evidence_claim,
     append_ledger_anchor,
     active_followups,
     authorization_policy_from_packs,
@@ -64,6 +66,9 @@ from pca import (
     current_claim_record,
     derive_current_claim,
     derive_self_model,
+    evidence_for_target,
+    evidence_locker_snapshot,
+    evidence_records_from_events,
     accept_growth,
     add_mission_item,
     approve_mission_step,
@@ -107,6 +112,8 @@ from pca import (
     reflection_task_records_from_events,
     resolve_growth_conflict,
     resolve_matching_reflection_tasks,
+    review_evidence,
+    link_evidence,
     review_skill_candidate,
     review_growth,
     skill_candidates_from_events,
@@ -600,6 +607,124 @@ def test_mission_status_updates_and_trace_report_counts(tmp_path):
     assert report.summary["mission_count"] == 1
     assert report.summary["open_mission_count"] == 0
     assert report.missions[0]["mission"]["status"] == "completed"
+
+
+def test_evidence_locker_adds_reviews_and_links_evidence(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Evidence mission",
+        problem_statement="Ground a mission in reviewed evidence.",
+    )
+
+    evidence = add_evidence(
+        ledger,
+        manifest.system_id,
+        source_type="manual_note",
+        summary="Public reports suggest weekly check-ins can surface needs.",
+        confidence="medium",
+        reason="mission grounding test",
+    )
+    reviewed = review_evidence(
+        ledger,
+        manifest.system_id,
+        evidence.evidence_id,
+        "reviewed",
+        reviewer="steward",
+        confidence="high",
+        reason="source verified",
+    )
+    link = link_evidence(
+        ledger,
+        manifest.system_id,
+        evidence.evidence_id,
+        "mission",
+        mission.mission_id,
+        reason="supports mission hypothesis",
+    )
+    linked = evidence_for_target(ledger.events(), "mission", mission.mission_id)
+
+    assert evidence.review_status.value == "raw"
+    assert reviewed.review_status.value == "reviewed"
+    assert reviewed.confidence == "high"
+    assert link.target_id == mission.mission_id
+    assert linked[0]["evidence"]["evidence_id"] == evidence.evidence_id
+    assert linked[0]["link"]["target_type"] == "mission"
+
+
+def test_evidence_claim_cites_existing_evidence_and_locker_counts(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    evidence = add_evidence(
+        ledger,
+        manifest.system_id,
+        source_type="test_result",
+        summary="Scenario verification passed.",
+        confidence="high",
+    )
+
+    claim = add_evidence_claim(
+        ledger,
+        manifest.system_id,
+        statement="The scenario suite passed verification.",
+        evidence_ids=[evidence.evidence_id],
+        confidence="high",
+        status="supported",
+        reason="test result supports claim",
+    )
+    snapshot = evidence_locker_snapshot(ledger.events())
+
+    assert claim.evidence_ids == [evidence.evidence_id]
+    assert snapshot["count"] == 1
+    assert snapshot["claims"][0]["claim_id"] == claim.claim_id
+    assert snapshot["links"][0]["target_type"] == "claim"
+
+
+def test_evidence_claim_rejects_missing_evidence(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    try:
+        add_evidence_claim(
+            ledger,
+            manifest.system_id,
+            statement="Unsupported claim should fail.",
+            evidence_ids=["missing_evidence"],
+        )
+    except ValueError as exc:
+        assert "Evidence not found" in str(exc)
+    else:
+        raise AssertionError("claim accepted missing evidence")
+
+
+def test_trace_report_and_cockpit_include_evidence_locker(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    evidence = add_evidence(
+        ledger,
+        manifest.system_id,
+        source_type="code_result",
+        summary="Compile completed for PCA modules.",
+        confidence="medium",
+    )
+    review_evidence(
+        ledger,
+        manifest.system_id,
+        evidence.evidence_id,
+        "disputed",
+        reason="newer result conflicts",
+    )
+
+    report = build_trace_report(ledger, manifest)
+    html = render_lucien_cockpit_html(report)
+
+    assert report.summary["evidence_count"] == 1
+    assert report.summary["disputed_evidence_count"] == 1
+    assert report.evidence_records[0]["review_status"] == "disputed"
+    assert "Evidence Locker" in html
+    assert "Disputed Evidence" in html
 
 
 def test_live_steward_action_opens_mission_and_adds_item(tmp_path):
