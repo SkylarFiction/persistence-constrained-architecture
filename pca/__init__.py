@@ -269,6 +269,12 @@ from .state import (
     derive_current_claim,
     record_claim_if_changed,
 )
+from .steward_inbox import (
+    StewardInboxItem,
+    apply_steward_inbox_action,
+    find_steward_inbox_item,
+    steward_inbox,
+)
 
 __all__ = [
     "ContinuityEvaluation",
@@ -371,6 +377,7 @@ __all__ = [
     "SessionTimelineEntry",
     "SkillCandidateRecord",
     "SkillCandidateStatus",
+    "StewardInboxItem",
     "TraceReport",
     "TransformEvaluation",
     "TransformPolicy",
@@ -384,6 +391,7 @@ __all__ = [
     "add_evidence_claim",
     "add_mission_item",
     "append_ledger_anchor",
+    "apply_steward_inbox_action",
     "approve_mission_step",
     "auto_propose_skill_candidates",
     "authorization_policy_from_packs",
@@ -426,6 +434,7 @@ __all__ = [
     "find_growth_conflict_resolution",
     "find_recovery",
     "find_reflection_task",
+    "find_steward_inbox_item",
     "followups_from_events",
     "growth_records_from_events",
     "growth_review_records_from_events",
@@ -493,6 +502,7 @@ __all__ = [
     "skill_suggestions_for_mission",
     "start_chat_session",
     "start_mission_step",
+    "steward_inbox",
     "verify_all_scenarios",
     "verify_anchor_chain",
     "verify_latest_anchor",

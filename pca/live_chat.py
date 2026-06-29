@@ -53,6 +53,7 @@ from .session_replay import build_session_replay, latest_session_id
 from .self_model import derive_self_model
 from .skill_memory import accepted_skills_from_events, skill_candidates_from_events
 from .state import derive_current_claim
+from .steward_inbox import apply_steward_inbox_action, steward_inbox
 
 
 def run_live_chat_server(
@@ -382,6 +383,22 @@ def _apply_steward_action(
             "opened_tasks": [task.to_dict() for task in opened_tasks],
         }
 
+    if action == "steward_inbox_action":
+        inbox_id = str(payload.get("inbox_id", "")).strip()
+        inbox_action = str(payload.get("inbox_action", "")).strip()
+        if not inbox_id:
+            raise ValueError("inbox_id is required")
+        if not inbox_action:
+            raise ValueError("inbox_action is required")
+        return apply_steward_inbox_action(
+            ledger,
+            manifest,
+            inbox_id,
+            inbox_action,
+            reason=reason,
+            reviewer=str(payload.get("reviewer", "steward")),
+        )
+
     raise ValueError(f"unknown steward action: {action}")
 
 
@@ -527,6 +544,7 @@ def _status_payload(
         "summary": summary,
         "model_adapter": model_environment_diagnostic(),
         "model_usage": model_usage,
+        "steward_inbox": [item.to_dict() for item in steward_inbox(ledger)],
         "csm_state": latest_signal["state"] if latest_signal else "unknown",
         "output_gate": latest_gate or {},
         "open_reflection_tasks": report.active_reflection_tasks,
@@ -735,6 +753,21 @@ def _live_chat_html() -> str:
         </div>
       </section>
       <section>
+        <h2>Steward Inbox</h2>
+        <div class="actions">
+          <button type="button" class="secondary" data-inbox-filter="all">All</button>
+          <button type="button" class="secondary" data-inbox-filter="growth">Growth</button>
+          <button type="button" class="secondary" data-inbox-filter="memory">Memory</button>
+          <button type="button" class="secondary" data-inbox-filter="skills">Skills</button>
+          <button type="button" class="secondary" data-inbox-filter="evidence">Evidence</button>
+          <button type="button" class="secondary" data-inbox-filter="missions">Missions</button>
+          <button type="button" class="secondary" data-inbox-filter="conflicts">Conflicts</button>
+          <button type="button" class="secondary" data-inbox-filter="recovery">Recovery</button>
+          <button type="button" class="secondary" data-inbox-filter="high">High Priority</button>
+        </div>
+        <div id="stewardInbox" class="queue"></div>
+      </section>
+      <section>
         <h2>Steward Queue</h2>
         <div class="actions"><button type="button" id="reflectNow">Reflect Now</button></div>
         <div id="queue" class="queue"></div>
@@ -805,6 +838,8 @@ def _live_chat_html() -> str:
     const missions = document.getElementById('missions');
     const missionSteps = document.getElementById('missionSteps');
     const skillMemory = document.getElementById('skillMemory');
+    const stewardInbox = document.getElementById('stewardInbox');
+    let activeInboxFilter = 'all';
     let lastLucien = '';
 
     function addMessage(kind, text) {
@@ -840,6 +875,7 @@ def _live_chat_html() -> str:
       renderMissions(status.missions || [], status.mission_flows || {});
       renderMissionSteps(status.mission_steps || []);
       renderSkillMemory(status.skill_candidates || [], status.accepted_skills || []);
+      renderStewardInbox(status.steward_inbox || []);
       renderGrowth(status.active_growth || []);
       renderConflicts(status.growth_conflicts || []);
       renderTimeline(status.session_replay);
@@ -850,6 +886,60 @@ def _live_chat_html() -> str:
         row.innerHTML = `<code>${event.event_type}</code><br>${event.detail || ''}`;
         events.appendChild(row);
       }
+    }
+
+    function renderStewardInbox(items) {
+      const filtered = items.filter((item) => {
+        if (activeInboxFilter === 'all') return true;
+        if (activeInboxFilter === 'high') return item.severity === 'high' || item.severity === 'critical';
+        const groups = {
+          growth: ['growth_review'],
+          memory: ['memory_review'],
+          skills: ['skill_candidate'],
+          evidence: ['evidence_review'],
+          missions: ['mission_review'],
+          conflicts: ['conflict_resolution'],
+          recovery: ['recovery_review']
+        };
+        return (groups[activeInboxFilter] || [activeInboxFilter]).includes(item.source_type);
+      });
+      if (!filtered.length) {
+        empty(stewardInbox, 'No steward inbox items for this filter.');
+        return;
+      }
+      stewardInbox.innerHTML = '';
+      for (const item of filtered) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        const title = document.createElement('div');
+        title.className = 'item-title';
+        title.textContent = `${item.severity} / ${item.source_type} / ${item.title}`;
+        const meta = document.createElement('div');
+        meta.className = 'item-meta';
+        meta.textContent = `${item.inbox_id} / ${item.reason}`;
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        for (const action of item.recommended_actions || []) {
+          actions.appendChild(button(labelForInboxAction(action), {
+            action: 'steward_inbox_action',
+            inbox_id: item.inbox_id,
+            inbox_action: action,
+            reason: `${action} from unified steward inbox`
+          }));
+        }
+        row.append(title, meta, actions);
+        stewardInbox.appendChild(row);
+      }
+    }
+
+    function labelForInboxAction(action) {
+      const labels = {
+        accept_new: 'Accept New',
+        keep_existing: 'Keep Existing',
+        mark_stale: 'Mark Stale',
+        request_evidence: 'Request Evidence'
+      };
+      return labels[action] || action.replace('_', ' ').replace(/^./, c => c.toUpperCase());
     }
 
     function renderSelfModel(model) {
@@ -1240,6 +1330,13 @@ def _live_chat_html() -> str:
     document.getElementById('reflectNow').addEventListener('click', () => {
       steward({action: 'run_reflection', reason: 'manual live cockpit reflection'});
     });
+
+    for (const control of document.querySelectorAll('[data-inbox-filter]')) {
+      control.addEventListener('click', () => {
+        activeInboxFilter = control.getAttribute('data-inbox-filter') || 'all';
+        refresh();
+      });
+    }
 
     refresh();
   </script>

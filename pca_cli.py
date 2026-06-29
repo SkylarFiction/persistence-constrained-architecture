@@ -34,6 +34,7 @@ from pca import (
     add_evidence,
     add_evidence_claim,
     append_ledger_anchor,
+    apply_steward_inbox_action,
     accepted_skills_from_events,
     authorization_policy_from_packs,
     auto_propose_skill_candidates,
@@ -96,6 +97,7 @@ from pca import (
     update_mission_status,
     update_reflection_task,
     start_mission_step,
+    steward_inbox,
     skill_candidates_from_events,
     skill_suggestions_for_mission,
     render_constitution_markdown,
@@ -440,6 +442,28 @@ def main() -> int:
     task_decision_group.add_argument("--resolve", action="store_true")
     task_decision_group.add_argument("--dismiss", action="store_true")
     reflection_task_parser.add_argument("--reason", default="")
+
+    steward_inbox_parser = subparsers.add_parser("steward-inbox")
+    steward_inbox_parser.add_argument("--type")
+    steward_inbox_parser.add_argument("--high", action="store_true")
+
+    steward_action_parser = subparsers.add_parser("steward-action")
+    steward_action_parser.add_argument("inbox_id")
+    steward_action_group = steward_action_parser.add_mutually_exclusive_group(
+        required=True
+    )
+    steward_action_group.add_argument("--accept", action="store_true")
+    steward_action_group.add_argument("--reject", action="store_true")
+    steward_action_group.add_argument("--dismiss", action="store_true")
+    steward_action_group.add_argument("--resolve", action="store_true")
+    steward_action_group.add_argument("--request-evidence", action="store_true")
+    steward_action_group.add_argument("--mark-stale", action="store_true")
+    steward_action_group.add_argument("--keep-existing", action="store_true")
+    steward_action_group.add_argument("--accept-new", action="store_true")
+    steward_action_group.add_argument("--fork", action="store_true")
+    steward_action_parser.add_argument("--reason", default="")
+    steward_action_parser.add_argument("--reviewer", default="steward")
+
     self_model_parser = subparsers.add_parser("self-model")
     self_model_parser.add_argument("--compile", action="store_true")
     self_model_parser.add_argument("--output")
@@ -1344,6 +1368,52 @@ def main() -> int:
             reason=args.reason,
         )
         print_json({"task": task.to_dict()})
+        return 0
+
+    if args.command == "steward-inbox":
+        items = steward_inbox(
+            ledger,
+            source_type=args.type,
+            high_priority=args.high,
+        )
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "count": len(items),
+                "items": [item.to_dict() for item in items],
+            }
+        )
+        return 0
+
+    if args.command == "steward-action":
+        if args.accept:
+            action = "accept"
+        elif args.reject:
+            action = "reject"
+        elif args.dismiss:
+            action = "dismiss"
+        elif args.resolve:
+            action = "resolve"
+        elif args.request_evidence:
+            action = "request_evidence"
+        elif args.mark_stale:
+            action = "mark_stale"
+        elif args.keep_existing:
+            action = "keep_existing"
+        elif args.accept_new:
+            action = "accept_new"
+        else:
+            action = "fork"
+        print_json(
+            apply_steward_inbox_action(
+                ledger,
+                manifest,
+                args.inbox_id,
+                action,
+                reason=args.reason,
+                reviewer=args.reviewer,
+            )
+        )
         return 0
 
     if args.command == "sessions":

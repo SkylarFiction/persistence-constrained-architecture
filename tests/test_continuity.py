@@ -130,6 +130,8 @@ from pca import (
     update_mission_status,
     update_reflection_task,
     start_mission_step,
+    steward_inbox,
+    apply_steward_inbox_action,
     verify_latest_anchor,
     write_constitution_markdown,
     write_session_replay_html,
@@ -615,6 +617,161 @@ def test_live_steward_action_resolves_conflict_and_matching_task(tmp_path):
     assert result["resolved_tasks"]
     assert result["resolved_tasks"][0]["kind"] == "resolve_conflict"
     assert result["resolved_tasks"][0]["status"] == "resolved"
+
+
+def test_steward_inbox_collects_open_governance_pressure(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    memory = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="memory",
+        summary="Remember that evidence must support memory.",
+        identity_impact="medium",
+        reason="memory candidate awaits review",
+    )
+    growth = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="commitment",
+        summary="High impact commitment requires steward review.",
+        identity_impact="high",
+        reason="growth record requires review",
+    )
+    conflict = record_growth_conflict(
+        ledger,
+        manifest.system_id,
+        proposed_growth_id=growth.growth_id,
+        conflicting_growth_ids=[memory.growth_id],
+        conflict_type="test_conflict",
+        severity="high",
+        reason="growth conflict requires steward attention",
+    )
+    evidence = add_evidence(
+        ledger,
+        manifest.system_id,
+        source_type="manual_note",
+        summary="Evidence should be disputed for inbox test.",
+        confidence="low",
+    )
+    review_evidence(
+        ledger,
+        manifest.system_id,
+        evidence.evidence_id,
+        "disputed",
+        reason="conflicting source",
+    )
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Blocked mission",
+        problem_statement="Needs approved step.",
+    )
+    propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Medium-risk mission step.",
+        risk_level="medium",
+        required_tool="manual_review",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Completed low-risk step.",
+        risk_level="low",
+        required_tool="manual_review",
+    )
+    start_mission_step(ledger, manifest.system_id, step.step_id)
+    complete_mission_step(ledger, manifest.system_id, step.step_id, "done")
+    skill = propose_skill_candidate(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        name="Manual review skill",
+        procedure="Review and record result.",
+    )
+    reflection = record_reflection(ledger, manifest)
+    tasks = open_tasks_from_reflection(ledger, reflection)
+
+    items = steward_inbox(ledger)
+    by_type = {item.source_type for item in items}
+
+    assert "growth_review" in by_type
+    assert "memory_review" in by_type
+    assert "skill_candidate" in by_type
+    assert "evidence_review" in by_type
+    assert "mission_review" in by_type
+    assert "conflict_resolution" in by_type
+    assert "reflection_task" in by_type
+    assert any(item.source_id == conflict.conflict_id for item in items)
+    assert any(item.source_id == skill.skill_id for item in items)
+    assert steward_inbox(ledger, source_type="growth")
+    assert steward_inbox(ledger, high_priority=True)
+    assert tasks
+
+
+def test_steward_inbox_action_updates_underlying_growth_record(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    growth = propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="memory",
+        summary="Inbox-routed memory candidate.",
+        identity_impact="medium",
+        reason="memory review",
+    )
+
+    result = apply_steward_inbox_action(
+        ledger,
+        manifest,
+        f"memory_review:{growth.growth_id}",
+        "accept",
+        reason="accepted through unified inbox",
+    )
+    records = growth_records_from_events(ledger.events())
+
+    assert result["growth"]["status"] == "accepted"
+    assert records[-1].status == GrowthStatus.ACCEPTED
+    assert not [
+        item
+        for item in steward_inbox(ledger)
+        if item.source_id == growth.growth_id
+    ]
+
+
+def test_live_steward_action_can_route_unified_inbox_action(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    task_reflection = record_reflection(ledger, manifest)
+    task = open_tasks_from_reflection(ledger, task_reflection, skip_existing=False)
+    if not task:
+        growth = propose_growth(
+            ledger,
+            manifest.system_id,
+            kind="commitment",
+            summary="Create review pressure.",
+            identity_impact="high",
+            reason="growth record requires review",
+        )
+        task_reflection = record_reflection(ledger, manifest)
+        task = open_tasks_from_reflection(ledger, task_reflection, skip_existing=False)
+        assert growth
+
+    result = _apply_steward_action(
+        ledger,
+        manifest,
+        {
+            "action": "steward_inbox_action",
+            "inbox_id": f"reflection_task:{task[0].task_id}",
+            "inbox_action": "dismiss",
+            "reason": "dismissed from unified inbox",
+        },
+    )
+
+    assert result["task"]["status"] == "dismissed"
 
 
 def test_live_steward_action_runs_reflection_and_opens_tasks(tmp_path):
