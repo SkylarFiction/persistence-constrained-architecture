@@ -96,6 +96,7 @@
   },
   "summary": {
     "accepted_growth_count": 0,
+    "accepted_skill_count": 0,
     "active_followups": 0,
     "active_growth_count": 0,
     "active_reflection_task_count": 0,
@@ -127,10 +128,11 @@
     "reasons": [
       "hard constraint breached: runtime_csm_red"
     ],
-    "recorded_claim_id": "claim_6cc5039a-b02c-4caa-b9a1-bb7ac9eed378",
+    "recorded_claim_id": "claim_cd79674b-0b5f-4bc1-8961-68dd956eef9a",
     "recovery_count": 1,
     "reflection_count": 0,
     "reflection_task_count": 0,
+    "skill_candidate_count": 0,
     "state_precedence": [
       "chain_invalid",
       "no_events",

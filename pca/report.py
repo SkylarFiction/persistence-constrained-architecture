@@ -36,6 +36,7 @@ from .reflection_queue import (
 )
 from .reflections import reflection_records_from_events
 from .self_model import derive_self_model
+from .skill_memory import accepted_skills_from_events, skill_candidates_from_events
 from .state import derive_current_claim
 
 
@@ -71,6 +72,8 @@ IMPORTANT_EVENT_TYPES = {
     "mission.step_completed",
     "mission.step_failed",
     "mission.step_blocked",
+    "skill.candidate_proposed",
+    "skill.candidate_reviewed",
     "runtime.csm_state",
     "runtime.output_gate",
     "transform.evaluated",
@@ -111,6 +114,8 @@ class TraceReport:
     missions: list[dict[str, Any]]
     mission_flows: list[dict[str, Any]]
     mission_steps: list[dict[str, Any]]
+    skill_candidates: list[dict[str, Any]]
+    accepted_skills: list[dict[str, Any]]
     self_model: dict[str, Any]
     policy_errors: list[str]
     anchor_verification: dict[str, Any] | None = None
@@ -142,6 +147,8 @@ class TraceReport:
             "missions": self.missions,
             "mission_flows": self.mission_flows,
             "mission_steps": self.mission_steps,
+            "skill_candidates": self.skill_candidates,
+            "accepted_skills": self.accepted_skills,
             "self_model": self.self_model,
             "policy_errors": self.policy_errors,
             "anchor_verification": self.anchor_verification,
@@ -278,6 +285,11 @@ def _event_summary(event: ContinuityEvent) -> str:
             f"risk={payload.get('risk_level')} approval={payload.get('approval_status')} "
             f"execution={payload.get('execution_status')}"
         )
+    if event.event_type in {"skill.candidate_proposed", "skill.candidate_reviewed"}:
+        return (
+            f"skill={payload.get('skill_id')} name={payload.get('name')} "
+            f"status={payload.get('status')} tool={payload.get('required_tool')}"
+        )
     if event.event_type == "transform.evaluated":
         return (
             f"transform={payload.get('transform')} "
@@ -339,6 +351,8 @@ def build_trace_report(
     missions = mission_briefs_from_events(events)
     mission_flows = mission_flows_from_events(events)
     mission_steps = mission_step_records_from_events(events)
+    skill_candidates = skill_candidates_from_events(events)
+    accepted_skills = accepted_skills_from_events(events)
     open_missions = [
         brief for brief in missions if brief.mission.status.value == "open"
     ]
@@ -388,6 +402,8 @@ def build_trace_report(
             [flow for flow in mission_flows if flow.phase.value == "blocked"]
         ),
         "mission_step_count": len(mission_steps),
+        "skill_candidate_count": len(skill_candidates),
+        "accepted_skill_count": len(accepted_skills),
         "accepted_growth_count": self_model.accepted_growth_count,
         "current_recovery_status": (
             current_recovery.status.value if current_recovery is not None else None
@@ -476,6 +492,8 @@ def build_trace_report(
         missions=[brief.to_dict() for brief in missions],
         mission_flows=[flow.to_dict() for flow in mission_flows],
         mission_steps=[step.to_dict() for step in mission_steps],
+        skill_candidates=[record.to_dict() for record in skill_candidates],
+        accepted_skills=[record.to_dict() for record in accepted_skills],
         self_model=self_model.to_dict(),
         policy_errors=manifest.policy_errors,
         anchor_verification=anchor_verification,

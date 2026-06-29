@@ -32,7 +32,9 @@ from pca import (
     RecoveryStatus,
     TransformRequest,
     append_ledger_anchor,
+    accepted_skills_from_events,
     authorization_policy_from_packs,
+    auto_propose_skill_candidates,
     authorize,
     build_manifest_from_policy_results,
     build_trace_report,
@@ -69,6 +71,7 @@ from pca import (
     open_tasks_from_reflection,
     propose_growth,
     propose_mission_step,
+    propose_skill_candidate,
     record_memory_signal,
     record_claim_if_changed,
     recovery_records_from_events,
@@ -79,11 +82,14 @@ from pca import (
     reflection_task_records_from_events,
     reflection_records_from_events,
     review_growth,
+    review_skill_candidate,
     safe_load_policy_directory,
     safe_load_policy_pack,
     update_mission_status,
     update_reflection_task,
     start_mission_step,
+    skill_candidates_from_events,
+    skill_suggestions_for_mission,
     render_constitution_markdown,
     write_dashboard_html,
     write_constitution_markdown,
@@ -307,6 +313,29 @@ def main() -> int:
     step_block_parser = subparsers.add_parser("mission-step-block")
     step_block_parser.add_argument("step_id")
     step_block_parser.add_argument("--reason", required=True)
+
+    subparsers.add_parser("skill-candidates")
+
+    skill_candidate_parser = subparsers.add_parser("skill-candidate")
+    skill_candidate_parser.add_argument("step_id")
+    skill_candidate_parser.add_argument("--name", required=True)
+    skill_candidate_parser.add_argument("--procedure", required=True)
+    skill_candidate_parser.add_argument("--reason", default="")
+
+    skill_auto_parser = subparsers.add_parser("skill-auto-propose")
+    skill_auto_parser.add_argument("--minimum-repetitions", type=int, default=2)
+
+    skill_review_parser = subparsers.add_parser("skill-review")
+    skill_review_parser.add_argument("skill_id")
+    skill_review_group = skill_review_parser.add_mutually_exclusive_group(required=True)
+    skill_review_group.add_argument("--accept", action="store_true")
+    skill_review_group.add_argument("--reject", action="store_true")
+    skill_review_parser.add_argument("--reason", required=True)
+
+    subparsers.add_parser("skills")
+
+    skill_suggestions_parser = subparsers.add_parser("skill-suggestions")
+    skill_suggestions_parser.add_argument("mission_id")
 
     subparsers.add_parser("sessions")
     session_replay_parser = subparsers.add_parser("session-replay")
@@ -999,6 +1028,84 @@ def main() -> int:
         except ValueError as exc:
             raise SystemExit(str(exc))
         print_json({"mission_step": step.to_dict()})
+        return 0
+
+    if args.command == "skill-candidates":
+        candidates = skill_candidates_from_events(ledger.events())
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "count": len(candidates),
+                "skill_candidates": [record.to_dict() for record in candidates],
+            }
+        )
+        return 0
+
+    if args.command == "skill-candidate":
+        try:
+            candidate = propose_skill_candidate(
+                ledger=ledger,
+                identity_id=manifest.system_id,
+                step_id=args.step_id,
+                name=args.name,
+                procedure=args.procedure,
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"skill_candidate": candidate.to_dict()})
+        return 0
+
+    if args.command == "skill-auto-propose":
+        records = auto_propose_skill_candidates(
+            ledger,
+            manifest.system_id,
+            minimum_repetitions=args.minimum_repetitions,
+        )
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "count": len(records),
+                "skill_candidates": [record.to_dict() for record in records],
+            }
+        )
+        return 0
+
+    if args.command == "skill-review":
+        try:
+            candidate = review_skill_candidate(
+                ledger=ledger,
+                identity_id=manifest.system_id,
+                skill_id=args.skill_id,
+                decision="accept" if args.accept else "reject",
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"skill_candidate": candidate.to_dict()})
+        return 0
+
+    if args.command == "skills":
+        skills = accepted_skills_from_events(ledger.events())
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "count": len(skills),
+                "skills": [record.to_dict() for record in skills],
+            }
+        )
+        return 0
+
+    if args.command == "skill-suggestions":
+        suggestions = skill_suggestions_for_mission(ledger.events(), args.mission_id)
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "mission_id": args.mission_id,
+                "count": len(suggestions),
+                "suggestions": suggestions,
+            }
+        )
         return 0
 
     if args.command == "reflect":

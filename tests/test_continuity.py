@@ -44,11 +44,14 @@ from pca import (
     PolicyEngine,
     RecoveryRecord,
     RecoveryStatus,
+    SkillCandidateStatus,
     TransformRequest,
+    accepted_skills_from_events,
     append_ledger_anchor,
     active_followups,
     authorization_policy_from_packs,
     authorize,
+    auto_propose_skill_candidates,
     build_trace_report,
     build_manifest_from_packs,
     build_manifest_from_policy_results,
@@ -95,6 +98,7 @@ from pca import (
     recovery_records_from_events,
     safe_load_policy_pack,
     propose_growth,
+    propose_skill_candidate,
     propose_mission_step,
     record_memory_signal,
     record_growth_conflict,
@@ -103,7 +107,10 @@ from pca import (
     reflection_task_records_from_events,
     resolve_growth_conflict,
     resolve_matching_reflection_tasks,
+    review_skill_candidate,
     review_growth,
+    skill_candidates_from_events,
+    skill_suggestions_for_mission,
     update_mission_status,
     update_reflection_task,
     start_mission_step,
@@ -1148,6 +1155,331 @@ def test_trace_report_and_replay_include_mission_steps(tmp_path):
         for entry in replay.timeline
     )
     assert replay.final_state["mission_step_count"] == 1
+
+
+def test_completed_step_can_seed_skill_candidate(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Skill seed",
+        problem_statement="Successful work can become a skill candidate.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Review a public source and summarize evidence.",
+        risk_level="low",
+        required_tool="research",
+    )
+    start_mission_step(ledger, manifest.system_id, step.step_id)
+    complete_mission_step(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        actual_outcome="Evidence was summarized with source notes.",
+    )
+
+    candidate = propose_skill_candidate(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        name="Summarize public evidence",
+        procedure="Read source, extract claim, record evidence hash, summarize limits.",
+        reason="repeatable research step",
+    )
+    candidates = skill_candidates_from_events(ledger.events())
+
+    assert candidate.status == SkillCandidateStatus.PROPOSED
+    assert candidate.source_step_ids == [step.step_id]
+    assert candidate.procedure_sha256
+    assert candidate.procedure_length > 0
+    assert candidates[-1].skill_id == candidate.skill_id
+
+
+def test_incomplete_step_cannot_seed_skill_candidate(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Incomplete skill seed",
+        problem_statement="Only completed work should become a skill candidate.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Draft a procedure before executing it.",
+        risk_level="low",
+        required_tool="research",
+    )
+
+    try:
+        propose_skill_candidate(
+            ledger,
+            manifest.system_id,
+            step.step_id,
+            name="Premature skill",
+            procedure="This should not become reusable yet.",
+        )
+    except ValueError as exc:
+        assert "Only completed" in str(exc)
+    else:
+        raise AssertionError("incomplete step seeded a skill candidate")
+
+
+def test_skill_review_accepts_and_rejects_candidates(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Review skills",
+        problem_statement="Skill candidates require steward review.",
+    )
+    first_step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Run a local check.",
+        risk_level="low",
+        required_tool="local_check",
+    )
+    start_mission_step(ledger, manifest.system_id, first_step.step_id)
+    complete_mission_step(
+        ledger,
+        manifest.system_id,
+        first_step.step_id,
+        actual_outcome="Local check passed.",
+    )
+    accepted_candidate = propose_skill_candidate(
+        ledger,
+        manifest.system_id,
+        first_step.step_id,
+        name="Run local check",
+        procedure="Run bounded local verification and record the result.",
+    )
+    accepted = review_skill_candidate(
+        ledger,
+        manifest.system_id,
+        accepted_candidate.skill_id,
+        "accept",
+        reason="safe and repeatable",
+    )
+
+    second_step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Perform context-specific outreach.",
+        risk_level="low",
+        required_tool="outreach",
+    )
+    start_mission_step(ledger, manifest.system_id, second_step.step_id)
+    complete_mission_step(
+        ledger,
+        manifest.system_id,
+        second_step.step_id,
+        actual_outcome="Outreach result depended on private context.",
+    )
+    rejected_candidate = propose_skill_candidate(
+        ledger,
+        manifest.system_id,
+        second_step.step_id,
+        name="Reuse outreach context",
+        procedure="Repeat the same outreach pattern.",
+    )
+    rejected = review_skill_candidate(
+        ledger,
+        manifest.system_id,
+        rejected_candidate.skill_id,
+        "reject",
+        reason="too context-dependent",
+    )
+
+    assert accepted.status == SkillCandidateStatus.ACCEPTED
+    assert rejected.status == SkillCandidateStatus.REJECTED
+    assert [skill.skill_id for skill in accepted_skills_from_events(ledger.events())] == [
+        accepted_candidate.skill_id
+    ]
+
+
+def test_accepted_skill_suggests_for_matching_future_mission(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    source_mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Source mission",
+        problem_statement="Create a reusable check.",
+    )
+    source_step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        source_mission.mission_id,
+        description="Run repeatable local verification.",
+        risk_level="low",
+        required_tool="local_check",
+    )
+    start_mission_step(ledger, manifest.system_id, source_step.step_id)
+    complete_mission_step(
+        ledger,
+        manifest.system_id,
+        source_step.step_id,
+        actual_outcome="Verification succeeded.",
+    )
+    candidate = propose_skill_candidate(
+        ledger,
+        manifest.system_id,
+        source_step.step_id,
+        name="Local verification",
+        procedure="Run local verification and record the outcome hash.",
+    )
+    review_skill_candidate(
+        ledger,
+        manifest.system_id,
+        candidate.skill_id,
+        "accept",
+        reason="repeatable across missions",
+    )
+
+    future_mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Future mission",
+        problem_statement="Reuse known bounded work.",
+    )
+    future_step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        future_mission.mission_id,
+        description="Verify the local project state.",
+        risk_level="low",
+        required_tool="local_check",
+    )
+
+    suggestions = skill_suggestions_for_mission(ledger.events(), future_mission.mission_id)
+
+    assert suggestions[0]["skill"]["skill_id"] == candidate.skill_id
+    assert suggestions[0]["matching_step_ids"] == [future_step.step_id]
+
+
+def test_auto_propose_skill_candidates_from_repeated_steps(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Repeated steps",
+        problem_statement="Repeated completed patterns can become candidates.",
+    )
+    step_ids = []
+    for description in ["Check local status.", "Check local status again."]:
+        step = propose_mission_step(
+            ledger,
+            manifest.system_id,
+            mission.mission_id,
+            description=description,
+            risk_level="low",
+            required_tool="local_check",
+        )
+        step_ids.append(step.step_id)
+        start_mission_step(ledger, manifest.system_id, step.step_id)
+        complete_mission_step(
+            ledger,
+            manifest.system_id,
+            step.step_id,
+            actual_outcome="Local check completed.",
+        )
+
+    candidates = auto_propose_skill_candidates(
+        ledger,
+        manifest.system_id,
+        minimum_repetitions=2,
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0].source_step_ids == step_ids
+    assert candidates[0].required_tool == "local_check"
+    assert candidates[0].status == SkillCandidateStatus.PROPOSED
+
+
+def test_trace_report_and_replay_include_skill_memory(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    session = ledger.append(
+        "lucien.chat_session_started",
+        manifest.system_id,
+        {
+            "session_id": "session_skill_test",
+            "identity_id": manifest.system_id,
+            "started_at": "2026-01-01T00:00:00+00:00",
+            "status": "open",
+            "turn_count": 0,
+            "closed_at": None,
+            "reason": "",
+        },
+    )
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Skill replay",
+        problem_statement="Skill events should be replayable.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Replayable skill step.",
+        risk_level="low",
+        required_tool="local",
+    )
+    start_mission_step(ledger, manifest.system_id, step.step_id)
+    complete_mission_step(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        actual_outcome="Skill seed succeeded.",
+    )
+    candidate = propose_skill_candidate(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        name="Replayable local skill",
+        procedure="Complete local replay step and record outcome.",
+    )
+    review_skill_candidate(
+        ledger,
+        manifest.system_id,
+        candidate.skill_id,
+        "accept",
+        reason="replayable procedure",
+    )
+    ledger.append(
+        "lucien.chat_session_closed",
+        manifest.system_id,
+        {
+            "session_id": "session_skill_test",
+            "identity_id": manifest.system_id,
+            "started_at": session.timestamp,
+            "status": "closed",
+            "turn_count": 0,
+            "closed_at": "2026-01-01T00:00:01+00:00",
+            "reason": "done",
+        },
+    )
+
+    report = build_trace_report(ledger, manifest)
+    replay = build_session_replay(ledger, manifest, "session_skill_test")
+
+    assert report.summary["skill_candidate_count"] == 1
+    assert report.summary["accepted_skill_count"] == 1
+    assert report.accepted_skills[0]["skill_id"] == candidate.skill_id
+    assert any(entry.event_type == "skill.candidate_proposed" for entry in replay.timeline)
+    assert replay.final_state["accepted_skill_count"] == 1
 
 
 def test_evaluator_precedence_is_declared():

@@ -238,6 +238,13 @@ python3 pca_cli.py mission-step-complete STEP_ID --actual-outcome "Step complete
 python3 pca_cli.py mission-step-fail STEP_ID --failure-note "Step failed to reach target group"
 python3 pca_cli.py mission-step-block STEP_ID --reason "requires unresolved evidence review"
 python3 pca_cli.py mission-steps --mission MISSION_ID
+python3 pca_cli.py skill-candidate STEP_ID --name "Push GitHub checkpoint" --procedure "Check tests, confirm commit, push, refresh GitHub, verify hash."
+python3 pca_cli.py skill-auto-propose --minimum-repetitions 2
+python3 pca_cli.py skill-candidates
+python3 pca_cli.py skill-review SKILL_ID --accept --reason "repeatable and safe"
+python3 pca_cli.py skill-review SKILL_ID --reject --reason "too context-dependent"
+python3 pca_cli.py skills
+python3 pca_cli.py skill-suggestions MISSION_ID
 python3 pca_cli.py reflect
 python3 pca_cli.py reflections
 python3 pca_cli.py reflection-queue --open
@@ -279,6 +286,11 @@ Mission steps move planning into governed action: each step is proposed,
 approved when risk requires it, started, completed, failed, or blocked. Medium
 and high risk steps cannot start without approval, and failed or blocked steps
 route back into mission reflection pressure.
+Skill memory converts successful mission work into reusable procedural
+candidates without silently modifying Lucien. A completed step may propose a
+skill candidate, repeated completed step patterns can auto-propose candidates,
+and only steward-accepted skills become reusable suggestions for future mission
+steps with matching tool and risk.
 
 For a public walkthrough, run `python3 pca_cli.py demo`. It runs the local
 checks, refreshes the cockpit and replay artifacts, prints reviewer steps, and

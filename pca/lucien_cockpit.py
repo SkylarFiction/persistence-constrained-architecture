@@ -89,6 +89,29 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         "</tr>"
         for step in data.get("mission_steps", [])[-12:]
     ) or _empty_row(7, "No mission steps recorded.")
+    skill_candidate_rows = "\n".join(
+        "<tr>"
+        f"<td>{escape(str(skill['name']))}</td>"
+        f"<td>{escape(str(skill['status']))}</td>"
+        f"<td>{escape(str(skill['required_tool']))}</td>"
+        f"<td>{escape(str(skill['risk_level']))}</td>"
+        f"<td><code>{escape(_short_hash(str(skill['skill_id'])))}</code></td>"
+        f"<td><code>{escape(_short_hash(str(skill['procedure_sha256'])))}</code></td>"
+        f"<td>{escape(str(skill['reason']))}</td>"
+        "</tr>"
+        for skill in data.get("skill_candidates", [])[-10:]
+    ) or _empty_row(7, "No skill candidates recorded.")
+    accepted_skill_rows = "\n".join(
+        "<tr>"
+        f"<td>{escape(str(skill['name']))}</td>"
+        f"<td>{escape(str(skill['required_tool']))}</td>"
+        f"<td>{escape(str(skill['risk_level']))}</td>"
+        f"<td>{escape(str(len(skill['source_step_ids'])))} step(s)</td>"
+        f"<td><code>{escape(_short_hash(str(skill['skill_id'])))}</code></td>"
+        f"<td><code>{escape(_short_hash(str(skill['procedure_sha256'])))}</code></td>"
+        "</tr>"
+        for skill in data.get("accepted_skills", [])[-10:]
+    ) or _empty_row(6, "No accepted skills yet.")
     reflection_rows = "\n".join(
         "<tr>"
         f"<td>{escape(str(reflection['focus']))}</td>"
@@ -235,6 +258,8 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         <div><div class="label">Missions</div><div class="value">{escape(str(summary['mission_count']))}</div></div>
         <div><div class="label">Blocked Missions</div><div class="value">{escape(str(summary['blocked_mission_count']))}</div></div>
         <div><div class="label">Mission Steps</div><div class="value">{escape(str(summary['mission_step_count']))}</div></div>
+        <div><div class="label">Skill Candidates</div><div class="value">{escape(str(summary['skill_candidate_count']))}</div></div>
+        <div><div class="label">Accepted Skills</div><div class="value">{escape(str(summary['accepted_skill_count']))}</div></div>
       </div>
     </section>
     <div class="grid">
@@ -263,6 +288,16 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
       <h2>Mission Steps</h2>
       <table><thead><tr><th>Step</th><th>Mission</th><th>Risk</th><th>Tool</th><th>Approval</th><th>Execution</th><th>Description Hash</th></tr></thead><tbody>{mission_step_rows}</tbody></table>
     </section>
+    <div class="grid">
+      <section>
+        <h2>Skill Candidates</h2>
+        <table><thead><tr><th>Name</th><th>Status</th><th>Tool</th><th>Risk</th><th>ID</th><th>Procedure Hash</th><th>Reason</th></tr></thead><tbody>{skill_candidate_rows}</tbody></table>
+      </section>
+      <section>
+        <h2>Accepted Skills</h2>
+        <table><thead><tr><th>Name</th><th>Tool</th><th>Risk</th><th>Source Steps</th><th>ID</th><th>Procedure Hash</th></tr></thead><tbody>{accepted_skill_rows}</tbody></table>
+      </section>
+    </div>
     <section>
       <h2>Reflection Ledger</h2>
       <table><thead><tr><th>Focus</th><th>Severity</th><th>Observations</th><th>Recommended Actions</th></tr></thead><tbody>{reflection_rows}</tbody></table>

@@ -45,6 +45,7 @@ from .reflections import record_reflection
 from .report import build_trace_report
 from .session_replay import build_session_replay, latest_session_id
 from .self_model import derive_self_model
+from .skill_memory import accepted_skills_from_events, skill_candidates_from_events
 from .state import derive_current_claim
 
 
@@ -463,6 +464,12 @@ def _status_payload(
     mission_steps = [
         step.to_dict() for step in mission_step_records_from_events(ledger.events())
     ]
+    skill_candidates = [
+        candidate.to_dict() for candidate in skill_candidates_from_events(ledger.events())
+    ]
+    accepted_skills = [
+        skill.to_dict() for skill in accepted_skills_from_events(ledger.events())
+    ]
     mission_flows = {
         flow.mission_id: flow.to_dict()
         for flow in mission_flows_from_events(ledger.events())
@@ -495,6 +502,8 @@ def _status_payload(
         "missions": missions,
         "mission_flows": mission_flows,
         "mission_steps": mission_steps,
+        "skill_candidates": skill_candidates,
+        "accepted_skills": accepted_skills,
         "self_model": {
             "accepted_growth_count": self_model.accepted_growth_count,
             "by_kind_counts": {
@@ -655,6 +664,10 @@ def _live_chat_html() -> str:
         <div id="missionSteps" class="queue"></div>
       </section>
       <section>
+        <h2>Skill Memory</h2>
+        <div id="skillMemory" class="queue"></div>
+      </section>
+      <section>
         <h2>Growth Review</h2>
         <div id="growth" class="queue"></div>
       </section>
@@ -684,6 +697,7 @@ def _live_chat_html() -> str:
     const recall = document.getElementById('recall');
     const missions = document.getElementById('missions');
     const missionSteps = document.getElementById('missionSteps');
+    const skillMemory = document.getElementById('skillMemory');
     let lastLucien = '';
 
     function addMessage(kind, text) {
@@ -709,6 +723,7 @@ def _live_chat_html() -> str:
       renderRecall((status.self_model || {}).memory_cards || []);
       renderMissions(status.missions || [], status.mission_flows || {});
       renderMissionSteps(status.mission_steps || []);
+      renderSkillMemory(status.skill_candidates || [], status.accepted_skills || []);
       renderGrowth(status.active_growth || []);
       renderConflicts(status.growth_conflicts || []);
       renderTimeline(status.session_replay);
@@ -884,6 +899,30 @@ def _live_chat_html() -> str:
         meta.textContent = `${step.step_id} / approval ${step.approval_status} / mission ${step.mission_id} / hash ${step.description_sha256.slice(0, 12)}`;
         row.append(title, meta);
         missionSteps.appendChild(row);
+      }
+    }
+
+    function renderSkillMemory(candidates, accepted) {
+      skillMemory.innerHTML = '';
+      const summary = document.createElement('div');
+      summary.className = 'item';
+      summary.innerHTML = `<div class="item-title">Accepted skills: ${accepted.length}</div>
+        <div class="item-meta">Candidates: ${candidates.length}</div>`;
+      skillMemory.appendChild(summary);
+      const recent = candidates.slice(-6);
+      if (!recent.length) {
+        const emptyNode = document.createElement('div');
+        emptyNode.className = 'item-meta';
+        emptyNode.textContent = 'No skill candidates yet.';
+        skillMemory.appendChild(emptyNode);
+        return;
+      }
+      for (const skill of recent) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = `<div class="item-title">${skill.name} / ${skill.status}</div>
+          <div class="item-meta">${skill.skill_id} / tool ${skill.required_tool} / risk ${skill.risk_level} / hash ${skill.procedure_sha256.slice(0, 12)}</div>`;
+        skillMemory.appendChild(row);
       }
     }
 

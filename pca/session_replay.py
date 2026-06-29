@@ -88,6 +88,8 @@ def build_session_replay(
             "unresolved_growth_conflict_count": report.summary.get(
                 "unresolved_growth_conflict_count"
             ),
+            "skill_candidate_count": report.summary.get("skill_candidate_count"),
+            "accepted_skill_count": report.summary.get("accepted_skill_count"),
             "mission_step_count": len(steps),
             "mission_step_statuses": _step_status_counts(steps),
         },
@@ -199,7 +201,9 @@ def _session_event_slice(
     return [
         (index, event)
         for index, event in enumerate(events, start=1)
-        if start_index <= index <= end_index or event.event_type.startswith("mission.step_")
+        if start_index <= index <= end_index
+        or event.event_type.startswith("mission.step_")
+        or event.event_type.startswith("skill.")
     ]
 
 
