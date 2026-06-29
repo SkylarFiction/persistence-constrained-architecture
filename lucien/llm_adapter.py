@@ -17,6 +17,7 @@ class LocalLucienResponder:
         continuity_claim: str,
         memory_cards: list[MemoryCard],
         accepted_growth_count: int,
+        governed_context: str = "",
     ) -> str:
         if continuity_claim == "continuity_break":
             return "Continuity is broken; I can only report recovery and governance status."
@@ -33,11 +34,12 @@ class LocalLucienResponder:
             f"I have {len(memory_cards)} accepted memory card(s) and "
             f"{accepted_growth_count} accepted growth record(s) in the self-model."
         )
+        context_line = _local_context_line(governed_context)
         if _is_status_question(user_message):
-            return f"{prefix} {memory_line}"
+            return f"{prefix} {memory_line}{context_line}"
         return (
             f"{prefix} I can help with that while keeping learning governed. "
-            f"{memory_line}"
+            f"{memory_line}{context_line}"
         )
 
 
@@ -52,6 +54,7 @@ class ModelLucienResponder:
         continuity_claim: str,
         memory_cards: list[MemoryCard],
         accepted_growth_count: int,
+        governed_context: str = "",
     ) -> str:
         response = self.adapter.generate(
             messages=[ModelMessage(role="user", content=user_message)],
@@ -59,6 +62,7 @@ class ModelLucienResponder:
                 continuity_claim,
                 memory_cards,
                 accepted_growth_count,
+                governed_context,
             ),
         )
         return response.text
@@ -82,6 +86,7 @@ def _system_context(
     continuity_claim: str,
     memory_cards: list[MemoryCard],
     accepted_growth_count: int,
+    governed_context: str = "",
 ) -> str:
     return "\n".join(
         [
@@ -91,6 +96,17 @@ def _system_context(
             f"Current continuity claim: {continuity_claim}",
             f"Accepted memory cards: {len(memory_cards)}",
             f"Accepted growth records: {accepted_growth_count}",
+            governed_context,
             "Respond helpfully, briefly, and with appropriate continuity disclosure.",
         ]
     )
+
+
+def _local_context_line(governed_context: str) -> str:
+    if not governed_context:
+        return ""
+    warning_count = 0
+    for line in governed_context.splitlines():
+        if "warning" in line.lower():
+            warning_count += 1
+    return f" Governed context loaded with {warning_count} warning(s)."

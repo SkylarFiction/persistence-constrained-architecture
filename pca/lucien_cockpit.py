@@ -181,6 +181,17 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         for turn in data["chat_turns"][-8:]
     ) or _empty_row(4, "No chat turns yet.")
     self_model_rows = _self_model_rows(data["self_model"])
+    context = data.get("governed_context", {})
+    context_summary = context.get("summary", {})
+    context_section_rows = "\n".join(
+        "<tr>"
+        f"<td>{escape(str(section['name']))}</td>"
+        f"<td>{escape(str(section['status']))}</td>"
+        f"<td>{escape(str(len(section.get('items', []))))}</td>"
+        f"<td>{escape(str(len(section.get('warnings', []))))}</td>"
+        "</tr>"
+        for section in context.get("sections", [])
+    ) or _empty_row(4, "No governed context sections.")
     report_json = json.dumps(data, sort_keys=True).replace("</", "<\\/")
     latest_session_text = (
         f"{latest_session['status']} / {latest_session['turn_count']} turn(s)"
@@ -293,7 +304,13 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         <div><div class="label">Evidence Links</div><div class="value">{escape(str(summary['evidence_link_count']))}</div></div>
         <div><div class="label">Skill Candidates</div><div class="value">{escape(str(summary['skill_candidate_count']))}</div></div>
         <div><div class="label">Accepted Skills</div><div class="value">{escape(str(summary['accepted_skill_count']))}</div></div>
+        <div><div class="label">Context Warnings</div><div class="value">{escape(str(summary['context_warning_count']))}</div></div>
       </div>
+    </section>
+    <section>
+      <h2>Governed Context</h2>
+      <p class="label">Sections: {escape(str(context_summary.get('section_count', 0)))} / Warnings: {escape(str(context_summary.get('warning_count', 0)))}</p>
+      <table><thead><tr><th>Section</th><th>Status</th><th>Items</th><th>Warnings</th></tr></thead><tbody>{context_section_rows}</tbody></table>
     </section>
     <div class="grid">
       <section>

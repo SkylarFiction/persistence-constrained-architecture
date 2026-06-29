@@ -36,6 +36,7 @@ from .missions import (
     update_mission_status,
 )
 from .model_adapter import adapter_from_environment
+from .context_builder import build_governed_context
 from .reflection_queue import (
     open_tasks_from_reflection,
     resolve_matching_reflection_tasks,
@@ -453,6 +454,7 @@ def _status_payload(
         if record.conflict_id not in resolved_conflict_ids
     ]
     self_model = derive_self_model(ledger.events(), manifest.system_id)
+    governed_context = build_governed_context(ledger, manifest)
     memory_cards = [
         card.to_dict()
         for card in memory_cards_from_events(ledger.events(), manifest.system_id)
@@ -504,6 +506,7 @@ def _status_payload(
         "mission_steps": mission_steps,
         "skill_candidates": skill_candidates,
         "accepted_skills": accepted_skills,
+        "governed_context": governed_context.to_dict(),
         "self_model": {
             "accepted_growth_count": self_model.accepted_growth_count,
             "by_kind_counts": {
@@ -642,6 +645,10 @@ def _live_chat_html() -> str:
         <div id="selfModel" class="queue"></div>
       </section>
       <section>
+        <h2>Governed Context</h2>
+        <div id="governedContext" class="queue"></div>
+      </section>
+      <section>
         <h2>Memory Inbox</h2>
         <div id="memoryInbox" class="queue"></div>
       </section>
@@ -693,6 +700,7 @@ def _live_chat_html() -> str:
     const conflictList = document.getElementById('conflictList');
     const timeline = document.getElementById('timeline');
     const selfModel = document.getElementById('selfModel');
+    const governedContext = document.getElementById('governedContext');
     const memoryInbox = document.getElementById('memoryInbox');
     const recall = document.getElementById('recall');
     const missions = document.getElementById('missions');
@@ -719,6 +727,7 @@ def _live_chat_html() -> str:
       document.getElementById('conflicts').textContent = summary.unresolved_growth_conflict_count ?? 0;
       renderQueue(status.open_reflection_tasks || []);
       renderSelfModel(status.self_model || {});
+      renderGovernedContext(status.governed_context || {});
       renderMemoryInbox(status.memory_inbox || []);
       renderRecall((status.self_model || {}).memory_cards || []);
       renderMissions(status.missions || [], status.mission_flows || {});
@@ -758,6 +767,23 @@ def _live_chat_html() -> str:
         row.innerHTML = `<div class="item-title">${card.memory_id}</div>
           <div class="item-meta">confidence ${card.effective_confidence} / impact ${card.identity_impact} / hash ${card.summary_sha256.slice(0, 12)}</div>`;
         selfModel.appendChild(row);
+      }
+    }
+
+    function renderGovernedContext(context) {
+      governedContext.innerHTML = '';
+      const summary = context.summary || {};
+      const top = document.createElement('div');
+      top.className = 'item';
+      top.innerHTML = `<div class="item-title">${context.continuity_claim || 'unknown'} / ${context.output_mode || 'unknown'}</div>
+        <div class="item-meta">sections ${summary.section_count || 0} / warnings ${summary.warning_count || 0}</div>`;
+      governedContext.appendChild(top);
+      for (const section of (context.sections || []).slice(0, 6)) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = `<div class="item-title">${section.name} / ${section.status}</div>
+          <div class="item-meta">items ${(section.items || []).length} / warnings ${(section.warnings || []).length}</div>`;
+        governedContext.appendChild(row);
       }
     }
 

@@ -96,6 +96,9 @@ what move the claim to `continuity_break`.
 - `EvidenceLocker`: stores evidence items, reviews, claims, and links so memories,
   missions, skills, and conclusions can cite governed sources instead of loose
   references.
+- `ContextBuilder`: assembles the bounded working context Lucien may use before
+  answering, including continuity state, accepted memory, evidence review states,
+  mission state, skill suggestions, open governance tasks, and warnings.
 - `ReflectionRecord`: records Lucien's own maintenance agenda by inspecting
   continuity state, pending growth, conflicts, and memory confidence pressure.
 - `ReflectionTaskRecord`: turns reflection recommendations into ledger-backed
@@ -262,6 +265,9 @@ python3 pca_cli.py reflection-task TASK_ID --resolve --reason "reviewed by stewa
 python3 pca_cli.py reflection-task TASK_ID --dismiss --reason "not needed"
 python3 pca_cli.py constitution
 python3 pca_cli.py --ledger data/lucien_chat.log constitution --write
+python3 pca_cli.py context
+python3 pca_cli.py context --mission MISSION_ID
+python3 pca_cli.py context --mission MISSION_ID --prompt
 python3 pca_cli.py chat-once "Lucien, what changed in your state?"
 python3 pca_cli.py live-chat
 python3 pca_cli.py sessions
@@ -283,6 +289,10 @@ contradicted, or stale.
 The Evidence Locker grounds Lucien's work: evidence can be added, reviewed,
 disputed, marked stale, rejected, linked to missions/memories/skills/claims, and
 shown in the cockpit without storing raw source text in the ledger.
+The Context Builder turns ledger state into bounded working context before Lucien
+answers. It includes accepted memory, evidence status, mission flow, skill
+suggestions, open governance work, recovery state, and warnings while keeping raw
+private source text out of prompts.
 The Mission Workspace lets Lucien open governed problem-solving missions and
 separate hypotheses, evidence, interventions, risks, plan steps, outcomes, and
 lessons into ledger-backed records. Mission text is stored by hash and length so

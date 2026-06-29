@@ -38,6 +38,7 @@ from pca import (
     authorization_policy_from_packs,
     auto_propose_skill_candidates,
     authorize,
+    build_governed_context,
     build_manifest_from_policy_results,
     build_trace_report,
     claims_from_events,
@@ -234,6 +235,10 @@ def main() -> int:
     constitution_parser = subparsers.add_parser("constitution")
     constitution_parser.add_argument("--write", action="store_true")
     constitution_parser.add_argument("--output", default="LUCIEN_CONSTITUTION.md")
+
+    context_parser = subparsers.add_parser("context")
+    context_parser.add_argument("--mission")
+    context_parser.add_argument("--prompt", action="store_true")
 
     subparsers.add_parser("status")
     chat_once_parser = subparsers.add_parser("chat-once")
@@ -761,6 +766,18 @@ def main() -> int:
             )
             return 0
         print(render_constitution_markdown(report, manifest), end="")
+        return 0
+
+    if args.command == "context":
+        context = build_governed_context(
+            ledger,
+            manifest,
+            mission_id=args.mission,
+        )
+        if args.prompt:
+            print(context.render_prompt_context())
+            return 0
+        print_json(context.to_dict())
         return 0
 
     if args.command == "check":

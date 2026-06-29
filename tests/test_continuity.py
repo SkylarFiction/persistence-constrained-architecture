@@ -54,6 +54,7 @@ from pca import (
     authorization_policy_from_packs,
     authorize,
     auto_propose_skill_candidates,
+    build_governed_context,
     build_trace_report,
     build_manifest_from_packs,
     build_manifest_from_policy_results,
@@ -725,6 +726,112 @@ def test_trace_report_and_cockpit_include_evidence_locker(tmp_path):
     assert report.evidence_records[0]["review_status"] == "disputed"
     assert "Evidence Locker" in html
     assert "Disputed Evidence" in html
+
+
+def test_context_builder_assembles_governed_working_context(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Context mission",
+        problem_statement="Build grounded working context.",
+    )
+    evidence = add_evidence(
+        ledger,
+        manifest.system_id,
+        source_type="manual_note",
+        summary="Context requires reviewed evidence.",
+        confidence="medium",
+    )
+    review_evidence(
+        ledger,
+        manifest.system_id,
+        evidence.evidence_id,
+        "reviewed",
+        confidence="high",
+        reason="verified context evidence",
+    )
+    link_evidence(
+        ledger,
+        manifest.system_id,
+        evidence.evidence_id,
+        "mission",
+        mission.mission_id,
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Run a local context check.",
+        risk_level="low",
+        required_tool="local_check",
+    )
+    start_mission_step(ledger, manifest.system_id, step.step_id)
+    complete_mission_step(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        actual_outcome="Context check completed.",
+    )
+    candidate = propose_skill_candidate(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        name="Local context check",
+        procedure="Run context check and record result.",
+    )
+    review_skill_candidate(
+        ledger,
+        manifest.system_id,
+        candidate.skill_id,
+        "accept",
+        reason="repeatable context check",
+    )
+    future_step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Run another local context check.",
+        risk_level="low",
+        required_tool="local_check",
+    )
+
+    context = build_governed_context(ledger, manifest, mission_id=mission.mission_id)
+    by_name = {section.name: section for section in context.sections}
+
+    assert context.continuity_claim in {"review_required", "certified_continuity"}
+    assert by_name["evidence_locker"].items[0]["status"] == "reviewed"
+    assert by_name["missions"].items[0]["evidence_links"] == 1
+    assert by_name["mission_steps"].items[-1]["step_id"] == future_step.step_id
+    assert by_name["skill_suggestions"].items[0]["skill_id"] == candidate.skill_id
+
+
+def test_context_builder_prompt_context_is_hash_and_status_based(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    private_summary = "Private evidence summary should not enter prompt."
+    evidence = add_evidence(
+        ledger,
+        manifest.system_id,
+        source_type="manual_note",
+        summary=private_summary,
+        confidence="low",
+    )
+    review_evidence(
+        ledger,
+        manifest.system_id,
+        evidence.evidence_id,
+        "disputed",
+        reason="conflicting source",
+    )
+
+    rendered = build_governed_context(ledger, manifest).render_prompt_context()
+
+    assert "Governed PCA context for Lucien." in rendered
+    assert "disputed evidence must not be treated as settled" in rendered
+    assert evidence.evidence_id in rendered
+    assert private_summary not in rendered
 
 
 def test_live_steward_action_opens_mission_and_adds_item(tmp_path):
@@ -3074,6 +3181,8 @@ def test_lucien_chat_shell_accepts_low_impact_memory_growth(tmp_path):
     assert result.accepted_growth["status"] == "accepted"
     assert result.accepted_growth_count == 1
     assert result.memory_card_count == 1
+    assert result.context_summary["section_count"] >= 6
+    assert "evidence_locker" in result.context_summary["item_counts"]
     assert (tmp_path / "dashboard.html").exists()
     assert "Remember that PCA learning must be governed" not in serialized_events
 

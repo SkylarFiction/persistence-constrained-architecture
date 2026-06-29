@@ -40,6 +40,11 @@ from .chat_sessions import (
 )
 from .csm_bridge import CSMRuntimeBridge, PCAAuditLoggerAdapter
 from .constitution import render_constitution_markdown, write_constitution_markdown
+from .context_builder import (
+    ContextSection,
+    GovernedContext,
+    build_governed_context,
+)
 from .dashboard import render_dashboard_html, write_dashboard_html
 from .evaluator import (
     EVALUATION_PRECEDENCE,
@@ -267,6 +272,7 @@ __all__ = [
     "ContinuityLedger",
     "ContinuityClaimRecord",
     "ContinuityStatus",
+    "ContextSection",
     "CSMRuntimeBridge",
     "EVALUATION_PRECEDENCE",
     "AuditEngine",
@@ -294,6 +300,7 @@ __all__ = [
     "GrowthReviewDecision",
     "GrowthReviewRecord",
     "GrowthStatus",
+    "GovernedContext",
     "IdentityManifest",
     "IdentityImpact",
     "IdentityState",
@@ -378,6 +385,7 @@ __all__ = [
     "authorize",
     "build_manifest_from_packs",
     "build_manifest_from_policy_results",
+    "build_governed_context",
     "build_session_replay",
     "build_trace_report",
     "block_mission_step",

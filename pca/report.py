@@ -9,6 +9,7 @@ from typing import Any
 from .anchors import verify_latest_anchor
 from .claims import claims_from_events, current_claim_record
 from .chat_sessions import chat_sessions_from_events, chat_turns_from_events
+from .context_builder import build_governed_context
 from .evaluator import EVALUATION_PRECEDENCE, ContinuityEvaluator
 from .evidence_locker import (
     evidence_claim_records_from_events,
@@ -131,6 +132,7 @@ class TraceReport:
     evidence_reviews: list[dict[str, Any]]
     skill_candidates: list[dict[str, Any]]
     accepted_skills: list[dict[str, Any]]
+    governed_context: dict[str, Any]
     self_model: dict[str, Any]
     policy_errors: list[str]
     anchor_verification: dict[str, Any] | None = None
@@ -168,6 +170,7 @@ class TraceReport:
             "evidence_reviews": self.evidence_reviews,
             "skill_candidates": self.skill_candidates,
             "accepted_skills": self.accepted_skills,
+            "governed_context": self.governed_context,
             "self_model": self.self_model,
             "policy_errors": self.policy_errors,
             "anchor_verification": self.anchor_verification,
@@ -400,6 +403,7 @@ def build_trace_report(
         brief for brief in missions if brief.mission.status.value == "open"
     ]
     self_model = derive_self_model(events, manifest.system_id)
+    governed_context = build_governed_context(ledger, manifest)
     active_followup_records = active_followups(events)
     anchor_verification = (
         verify_latest_anchor(ledger, anchor_path).to_dict()
@@ -459,6 +463,7 @@ def build_trace_report(
         "evidence_claim_count": len(evidence_claims),
         "skill_candidate_count": len(skill_candidates),
         "accepted_skill_count": len(accepted_skills),
+        "context_warning_count": governed_context.summary()["warning_count"],
         "accepted_growth_count": self_model.accepted_growth_count,
         "current_recovery_status": (
             current_recovery.status.value if current_recovery is not None else None
@@ -553,6 +558,7 @@ def build_trace_report(
         evidence_reviews=[record.to_dict() for record in evidence_reviews],
         skill_candidates=[record.to_dict() for record in skill_candidates],
         accepted_skills=[record.to_dict() for record in accepted_skills],
+        governed_context=governed_context.to_dict(),
         self_model=self_model.to_dict(),
         policy_errors=manifest.policy_errors,
         anchor_verification=anchor_verification,

@@ -13,6 +13,7 @@ from pca import (
     IdentityManifest,
     LucienGovernedRuntime,
     accept_growth,
+    build_governed_context,
     build_trace_report,
     close_chat_session,
     derive_current_claim,
@@ -45,6 +46,7 @@ class LucienChatResult:
     conflict: dict[str, Any] | None
     memory_signal: dict[str, Any] | None
     growth_gate: dict[str, Any] | None
+    context_summary: dict[str, Any]
     session_id: str
     turn_id: str
     dashboard_path: str | None
@@ -62,6 +64,7 @@ class LucienChatResult:
             "conflict": self.conflict,
             "memory_signal": self.memory_signal,
             "growth_gate": self.growth_gate,
+            "context_summary": self.context_summary,
             "session_id": self.session_id,
             "turn_id": self.turn_id,
             "dashboard_path": self.dashboard_path,
@@ -154,12 +157,14 @@ class LucienChatShell:
         claim, _, _ = derive_current_claim(self.ledger, self.manifest)
         self_model = derive_self_model(self.ledger.events(), self.manifest.system_id)
         memory_cards = memory_cards_from_self_model(self_model)
+        governed_context = build_governed_context(self.ledger, self.manifest)
         classified = classify_growth(user_message)
         draft = self.responder.generate(
             user_message=user_message,
             continuity_claim=claim,
             memory_cards=memory_cards,
             accepted_growth_count=self_model.accepted_growth_count,
+            governed_context=governed_context.render_prompt_context(),
         )
         self.ledger.append(
             "chat.model_response_generated",
@@ -258,6 +263,7 @@ class LucienChatShell:
             conflict=conflict,
             memory_signal=memory_signal,
             growth_gate=growth_gate,
+            context_summary=governed_context.summary(),
             session_id=session_id,
             turn_id=turn_record.turn_id,
             dashboard_path=str(dashboard_path) if dashboard_path else None,
