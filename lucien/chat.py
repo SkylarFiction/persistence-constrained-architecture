@@ -33,6 +33,7 @@ from .llm_adapter import LocalLucienResponder
 from .memory import MemoryCard, memory_cards_from_self_model
 from .memory_signal_classifier import classify_memory_signal
 from pca.model_adapter import ModelAdapterError
+from pca.model_adapter import estimate_model_usage, normalize_model_mode
 
 
 def _text_hash(text: str) -> str:
@@ -53,6 +54,9 @@ class LucienChatResult:
     memory_signal: dict[str, Any] | None
     growth_gate: dict[str, Any] | None
     context_summary: dict[str, Any]
+    model_usage: dict[str, Any]
+    model_mode: str
+    openai_requested: bool
     session_id: str
     turn_id: str
     dashboard_path: str | None
@@ -71,6 +75,9 @@ class LucienChatResult:
             "memory_signal": self.memory_signal,
             "growth_gate": self.growth_gate,
             "context_summary": self.context_summary,
+            "model_usage": self.model_usage,
+            "model_mode": self.model_mode,
+            "openai_requested": self.openai_requested,
             "session_id": self.session_id,
             "turn_id": self.turn_id,
             "dashboard_path": self.dashboard_path,
@@ -158,8 +165,16 @@ class LucienChatShell:
             f"Growth gate: {gate.mode.value}"
         )
 
-    def handle_message(self, user_message: str) -> LucienChatResult:
+    def handle_message(
+        self,
+        user_message: str,
+        model_mode: str | None = None,
+        use_openai: bool = False,
+        responder: LocalLucienResponder | None = None,
+    ) -> LucienChatResult:
         session_id = self.start_session()
+        active_model_mode = normalize_model_mode(model_mode)
+        active_responder = responder or self.responder
         claim, _, _ = derive_current_claim(self.ledger, self.manifest)
         self_model = derive_self_model(self.ledger.events(), self.manifest.system_id)
         memory_cards = memory_cards_from_self_model(self_model)
@@ -168,7 +183,7 @@ class LucienChatShell:
         prompt_context = governed_context.render_prompt_context()
         model_error = None
         try:
-            draft = self.responder.generate(
+            draft = active_responder.generate(
                 user_message=user_message,
                 continuity_claim=claim,
                 memory_cards=memory_cards,
@@ -194,7 +209,34 @@ class LucienChatShell:
                     "context_length": len(prompt_context),
                 },
             )
-        model_response = getattr(self.responder, "last_model_response", None)
+        model_response = getattr(active_responder, "last_model_response", None)
+        raw_usage = (
+            (model_response.raw or {}).get("usage", {})
+            if model_response is not None
+            else {}
+        )
+        model_name = (
+            model_response.model
+            if model_response is not None
+            else ("unavailable" if model_error else "local")
+        )
+        usage_estimate = estimate_model_usage(
+            context_length=len(prompt_context),
+            response_length=len(draft),
+            raw_usage=raw_usage,
+            model=model_name,
+        )
+        provider_name = (
+            model_response.provider
+            if model_response is not None
+            else ("error" if model_error else "local")
+        )
+        if provider_name != "openai":
+            usage_estimate = {
+                **usage_estimate,
+                "estimated_cost_usd": 0.0,
+                "source": "local_no_cost",
+            }
         self.ledger.append(
             "chat.model_response_generated",
             self.manifest.system_id,
@@ -202,18 +244,15 @@ class LucienChatShell:
                 "response_length": len(draft),
                 "surface": "lucien_chat_shell",
                 "continuity_claim": claim,
-                "provider": (
-                    model_response.provider
-                    if model_response is not None
-                    else ("error" if model_error else "local")
-                ),
-                "model": (
-                    model_response.model
-                    if model_response is not None
-                    else ("unavailable" if model_error else "local")
-                ),
+                "model_mode": active_model_mode,
+                "openai_requested": bool(use_openai),
+                "provider": provider_name,
+                "model": model_name,
                 "context_sha256": _text_hash(prompt_context),
                 "context_length": len(prompt_context),
+                "estimated_total_tokens": usage_estimate["total_tokens"],
+                "estimated_cost_usd": usage_estimate["estimated_cost_usd"],
+                "usage_source": usage_estimate["source"],
             },
         )
         runtime = LucienGovernedRuntime(self.manifest, self.ledger)
@@ -305,6 +344,9 @@ class LucienChatShell:
             memory_signal=memory_signal,
             growth_gate=growth_gate,
             context_summary=governed_context.summary(),
+            model_usage=usage_estimate,
+            model_mode=active_model_mode,
+            openai_requested=bool(use_openai),
             session_id=session_id,
             turn_id=turn_record.turn_id,
             dashboard_path=str(dashboard_path) if dashboard_path else None,

@@ -245,6 +245,12 @@ def main() -> int:
     subparsers.add_parser("model-diagnostic")
     chat_once_parser = subparsers.add_parser("chat-once")
     chat_once_parser.add_argument("message")
+    chat_once_parser.add_argument(
+        "--model-mode",
+        choices=["echo", "openai", "serious_only"],
+        default="serious_only",
+    )
+    chat_once_parser.add_argument("--use-openai", action="store_true")
 
     live_chat_parser = subparsers.add_parser("live-chat")
     live_chat_parser.add_argument("--host", default="127.0.0.1")
@@ -692,6 +698,8 @@ def main() -> int:
                 args.message,
                 manifest_path=args.manifest,
                 ledger_path=_chat_ledger_path(args.ledger),
+                model_mode=args.model_mode,
+                use_openai=args.use_openai,
             )
         )
         return 0

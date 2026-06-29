@@ -167,8 +167,11 @@ from .model_adapter import (
     ModelMessage,
     ModelResponse,
     OpenAICompatibleAdapter,
+    adapter_for_model_mode,
     adapter_from_environment,
+    estimate_model_usage,
     model_environment_diagnostic,
+    normalize_model_mode,
 )
 from .override import OverrideEngine, OverrideRecord, OverrideRequest
 from .output_gate import OutputGate, OutputGateDecision, OutputMode
@@ -384,8 +387,11 @@ __all__ = [
     "approve_mission_step",
     "auto_propose_skill_candidates",
     "authorization_policy_from_packs",
+    "adapter_for_model_mode",
     "adapter_from_environment",
+    "estimate_model_usage",
     "model_environment_diagnostic",
+    "normalize_model_mode",
     "authorize",
     "build_manifest_from_packs",
     "build_manifest_from_policy_results",

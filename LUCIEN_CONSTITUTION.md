@@ -2,7 +2,7 @@
 
 > Generated from PCA ledger evidence. This file is a review artifact, not a manual identity override.
 
-Generated at: 2026-06-29T22:11:11.756553+00:00
+Generated at: 2026-06-29T23:20:10.483612+00:00
 Ledger: `data/lucien_live_chat.log`
 
 ## Identity Baseline
@@ -75,7 +75,6 @@ Ledger: `data/lucien_live_chat.log`
 
 ## Current Steward Queue
 
-- `review_growth` severity=`medium` status=`open` reason=1 growth record(s) await review action=Review pending growth records.
 - `review_growth` severity=`medium` status=`open` reason=2 growth record(s) await review action=Review pending growth records.
 
 ## Last Reflection

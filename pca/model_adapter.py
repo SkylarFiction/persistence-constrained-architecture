@@ -7,6 +7,14 @@ from pathlib import Path
 from typing import Any
 from urllib import error, request
 
+MODEL_MODE_ECHO = "echo"
+MODEL_MODE_OPENAI = "openai"
+MODEL_MODE_SERIOUS_ONLY = "serious_only"
+MODEL_MODES = {MODEL_MODE_ECHO, MODEL_MODE_OPENAI, MODEL_MODE_SERIOUS_ONLY}
+DEFAULT_MODEL_MODE = MODEL_MODE_SERIOUS_ONLY
+DEFAULT_INPUT_COST_PER_M_TOKEN = 0.40
+DEFAULT_OUTPUT_COST_PER_M_TOKEN = 1.60
+
 
 @dataclass(frozen=True)
 class ModelMessage:
@@ -166,6 +174,29 @@ def adapter_from_environment(env_path: str = ".env") -> ModelAdapter:
     )
 
 
+def adapter_for_model_mode(
+    mode: str | None,
+    use_openai: bool = False,
+    env_path: str = ".env",
+) -> ModelAdapter:
+    normalized = normalize_model_mode(mode)
+    if normalized == MODEL_MODE_ECHO:
+        return EchoAdapter()
+    if normalized == MODEL_MODE_SERIOUS_ONLY and not use_openai:
+        return EchoAdapter()
+    return adapter_from_environment(env_path)
+
+
+def normalize_model_mode(mode: str | None) -> str:
+    normalized = (mode or os.environ.get("LUCIEN_MODEL_MODE") or DEFAULT_MODEL_MODE).strip()
+    normalized = normalized.lower().replace("-", "_")
+    if normalized in {"serious", "serious_replies", "openai_serious"}:
+        normalized = MODEL_MODE_SERIOUS_ONLY
+    if normalized not in MODEL_MODES:
+        return DEFAULT_MODEL_MODE
+    return normalized
+
+
 def model_environment_diagnostic(env_path: str = ".env") -> dict[str, Any]:
     _load_dotenv(env_path)
     env_file = Path(env_path)
@@ -191,6 +222,38 @@ def model_environment_diagnostic(env_path: str = ".env") -> dict[str, Any]:
         ),
         "configured_model": model,
         "configured_provider": "openai" if key_present else "echo",
+        "default_model_mode": normalize_model_mode(None),
+    }
+
+
+def estimate_model_usage(
+    context_length: int,
+    response_length: int,
+    raw_usage: dict[str, Any] | None = None,
+    model: str = "gpt-4.1-mini",
+) -> dict[str, Any]:
+    usage = raw_usage or {}
+    input_tokens = _usage_int(usage, "input_tokens")
+    output_tokens = _usage_int(usage, "output_tokens")
+    used_api_usage = input_tokens is not None or output_tokens is not None
+    if input_tokens is None:
+        input_tokens = _estimate_tokens_from_chars(context_length)
+    if output_tokens is None:
+        output_tokens = _estimate_tokens_from_chars(response_length)
+    input_rate, output_rate = _pricing_rates()
+    estimated_cost = (
+        (input_tokens / 1_000_000) * input_rate
+        + (output_tokens / 1_000_000) * output_rate
+    )
+    return {
+        "model": model,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": input_tokens + output_tokens,
+        "estimated_cost_usd": round(estimated_cost, 6),
+        "input_cost_per_m_token": input_rate,
+        "output_cost_per_m_token": output_rate,
+        "source": "api_usage" if used_api_usage else "char_estimate",
     }
 
 
@@ -247,3 +310,35 @@ def _strip_env_value(value: str) -> str:
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
         return value[1:-1]
     return value
+
+
+def _estimate_tokens_from_chars(length: int) -> int:
+    return max(1, int((max(0, length) + 3) / 4))
+
+
+def _usage_int(usage: dict[str, Any], key: str) -> int | None:
+    value = usage.get(key)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    return None
+
+
+def _pricing_rates() -> tuple[float, float]:
+    input_rate = _env_float(
+        "LUCIEN_INPUT_COST_PER_M_TOKEN",
+        DEFAULT_INPUT_COST_PER_M_TOKEN,
+    )
+    output_rate = _env_float(
+        "LUCIEN_OUTPUT_COST_PER_M_TOKEN",
+        DEFAULT_OUTPUT_COST_PER_M_TOKEN,
+    )
+    return input_rate, output_rate
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default

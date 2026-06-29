@@ -56,6 +56,7 @@ from pca import (
     append_ledger_anchor,
     active_followups,
     authorization_policy_from_packs,
+    adapter_for_model_mode,
     adapter_from_environment,
     authorize,
     auto_propose_skill_candidates,
@@ -72,6 +73,7 @@ from pca import (
     current_claim_record,
     derive_current_claim,
     derive_self_model,
+    estimate_model_usage,
     evidence_for_target,
     evidence_locker_snapshot,
     evidence_records_from_events,
@@ -349,6 +351,75 @@ def test_adapter_from_environment_loads_local_dotenv(tmp_path):
 
     assert isinstance(adapter, OpenAICompatibleAdapter)
     assert adapter.model == "test-model"
+
+
+def test_serious_only_model_mode_uses_echo_until_openai_requested(tmp_path):
+    old_key = os.environ.pop("OPENAI_API_KEY", None)
+    old_model = os.environ.pop("LUCIEN_MODEL", None)
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "OPENAI_API_KEY=sk-proj-local-test-key\nLUCIEN_MODEL=test-model\n",
+        encoding="utf-8",
+    )
+    try:
+        adapter = adapter_for_model_mode(
+            "serious_only",
+            use_openai=False,
+            env_path=str(env_path),
+        )
+    finally:
+        if old_key is not None:
+            os.environ["OPENAI_API_KEY"] = old_key
+        else:
+            os.environ.pop("OPENAI_API_KEY", None)
+        if old_model is not None:
+            os.environ["LUCIEN_MODEL"] = old_model
+        else:
+            os.environ.pop("LUCIEN_MODEL", None)
+
+    assert isinstance(adapter, EchoAdapter)
+
+
+def test_openai_model_mode_uses_openai_adapter_when_key_exists(tmp_path):
+    old_key = os.environ.pop("OPENAI_API_KEY", None)
+    old_model = os.environ.pop("LUCIEN_MODEL", None)
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "OPENAI_API_KEY=sk-proj-local-test-key\nLUCIEN_MODEL=test-model\n",
+        encoding="utf-8",
+    )
+    try:
+        adapter = adapter_for_model_mode(
+            "openai",
+            use_openai=False,
+            env_path=str(env_path),
+        )
+    finally:
+        if old_key is not None:
+            os.environ["OPENAI_API_KEY"] = old_key
+        else:
+            os.environ.pop("OPENAI_API_KEY", None)
+        if old_model is not None:
+            os.environ["LUCIEN_MODEL"] = old_model
+        else:
+            os.environ.pop("LUCIEN_MODEL", None)
+
+    assert isinstance(adapter, OpenAICompatibleAdapter)
+    assert adapter.model == "test-model"
+
+
+def test_model_usage_estimate_uses_api_usage_when_available():
+    usage = estimate_model_usage(
+        context_length=4000,
+        response_length=400,
+        raw_usage={"input_tokens": 10, "output_tokens": 5},
+        model="test-model",
+    )
+
+    assert usage["input_tokens"] == 10
+    assert usage["output_tokens"] == 5
+    assert usage["total_tokens"] == 15
+    assert usage["source"] == "api_usage"
 
 
 def test_model_environment_diagnostic_reports_openai_without_leaking_key(tmp_path):

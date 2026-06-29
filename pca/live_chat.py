@@ -35,7 +35,12 @@ from .missions import (
     open_mission,
     update_mission_status,
 )
-from .model_adapter import adapter_from_environment, model_environment_diagnostic
+from .model_adapter import (
+    adapter_for_model_mode,
+    adapter_from_environment,
+    model_environment_diagnostic,
+    normalize_model_mode,
+)
 from .context_builder import build_governed_context
 from .reflection_queue import (
     open_tasks_from_reflection,
@@ -109,13 +114,27 @@ def run_live_chat_server(
             if not message:
                 _send_json(self, {"error": "message is required"}, status=400)
                 return
+            model_mode = normalize_model_mode(str(payload.get("model_mode", "")))
+            use_openai = bool(payload.get("use_openai"))
             before_count = len(ledger.events())
             received_event = ledger.append(
                 "chat.user_message_received",
                 manifest.system_id,
-                {"message_length": len(message), "surface": "live_chat"},
+                {
+                    "message_length": len(message),
+                    "surface": "live_chat",
+                    "model_mode": model_mode,
+                    "openai_requested": use_openai,
+                },
             )
-            result = shell.handle_message(message)
+            result = shell.handle_message(
+                message,
+                model_mode=model_mode,
+                use_openai=use_openai,
+                responder=ModelLucienResponder(
+                    adapter_for_model_mode(model_mode, use_openai=use_openai)
+                ),
+            )
             reflection = None
             opened_tasks = []
             if _should_auto_reflect(result.to_dict()):
@@ -386,6 +405,8 @@ def chat_once(
     message: str,
     manifest_path: str | Path = "examples/minimal_identity.json",
     ledger_path: str | Path = "data/lucien_live_chat.log",
+    model_mode: str | None = None,
+    use_openai: bool = False,
 ) -> dict[str, Any]:
     manifest = IdentityManifest.from_dict(
         json.loads(Path(manifest_path).read_text(encoding="utf-8"))
@@ -396,7 +417,9 @@ def chat_once(
     shell = LucienChatShell(
         manifest=manifest,
         ledger=ledger,
-        responder=ModelLucienResponder(adapter_from_environment()),
+        responder=ModelLucienResponder(
+            adapter_for_model_mode(model_mode, use_openai=use_openai)
+        ),
         dashboard_path="reports/lucien_chat_dashboard.html",
         cockpit_path="reports/lucien_cockpit.html",
     )
@@ -406,7 +429,11 @@ def chat_once(
         manifest.system_id,
         {"message_length": len(message), "surface": "chat_once"},
     )
-    result = shell.handle_message(message)
+    result = shell.handle_message(
+        message,
+        model_mode=model_mode,
+        use_openai=use_openai,
+    )
     shell.close_session()
     report = build_trace_report(ledger, manifest)
     write_constitution_markdown(report, manifest, "LUCIEN_CONSTITUTION.md")
@@ -489,6 +516,7 @@ def _status_payload(
     ]
     latest_signal = report.runtime_signals[-1] if report.runtime_signals else None
     latest_gate = report.output_gate_events[-1] if report.output_gate_events else None
+    model_usage = _model_usage_summary(ledger.events())
     session_id = latest_session_id(ledger)
     session_replay = (
         build_session_replay(ledger, manifest, session_id).to_dict()
@@ -498,6 +526,7 @@ def _status_payload(
     return {
         "summary": summary,
         "model_adapter": model_environment_diagnostic(),
+        "model_usage": model_usage,
         "csm_state": latest_signal["state"] if latest_signal else "unknown",
         "output_gate": latest_gate or {},
         "open_reflection_tasks": report.active_reflection_tasks,
@@ -544,6 +573,36 @@ def _format_model_startup_diagnostic(diagnostic: dict[str, Any]) -> str:
         f".env={env_file} plain_text={plain_text} "
         f"OPENAI_API_KEY_present={key_present} key_prefix_ok={prefix_ok}"
     )
+
+
+def _model_usage_summary(events) -> dict[str, Any]:
+    model_events = [
+        event
+        for event in events
+        if event.event_type == "chat.model_response_generated"
+    ]
+    openai_events = [
+        event
+        for event in model_events
+        if event.payload.get("provider") == "openai"
+    ]
+    session_cost = sum(
+        float(event.payload.get("estimated_cost_usd") or 0.0)
+        for event in openai_events
+    )
+    latest = model_events[-1].payload if model_events else {}
+    return {
+        "model_call_count": len(model_events),
+        "openai_call_count": len(openai_events),
+        "estimated_session_cost_usd": round(session_cost, 6),
+        "latest_provider": latest.get("provider", "none"),
+        "latest_model": latest.get("model", "none"),
+        "latest_total_tokens": latest.get("estimated_total_tokens", 0),
+        "latest_cost_usd": latest.get("estimated_cost_usd", 0.0),
+        "latest_usage_source": latest.get("usage_source", "none"),
+        "latest_model_mode": latest.get("model_mode", "none"),
+        "latest_openai_requested": bool(latest.get("openai_requested", False)),
+    }
 
 
 def _should_auto_reflect(result: dict[str, Any]) -> bool:
@@ -607,6 +666,9 @@ def _live_chat_html() -> str:
     form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; margin-top: 12px; }
     input, select, textarea { padding: 10px; font: inherit; border: 1px solid var(--line); background: white; color: var(--ink); min-width: 0; }
     textarea { min-height: 72px; resize: vertical; }
+    .model-controls { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(170px, 220px) minmax(0, 1fr); gap: 8px; align-items: center; }
+    .checkline { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 13px; font-weight: 700; }
+    .checkline input { width: auto; }
     button { min-height: 40px; border: 1px solid var(--deep); background: var(--deep); color: white; padding: 0 14px; font-weight: 700; cursor: pointer; }
     button.secondary { background: white; color: var(--deep); }
     .side { display: grid; gap: 18px; }
@@ -639,6 +701,14 @@ def _live_chat_html() -> str:
         <textarea id="message" placeholder="Ask Lucien what changed in his state..."></textarea>
         <button type="submit">Send</button>
         <button type="button" id="speak" class="secondary">Speak</button>
+        <div class="model-controls">
+          <select id="modelMode">
+            <option value="serious_only" selected>OpenAI only when checked</option>
+            <option value="echo">Echo Local</option>
+            <option value="openai">OpenAI</option>
+          </select>
+          <label class="checkline"><input id="useOpenAI" type="checkbox"> Use OpenAI for this message</label>
+        </div>
       </form>
     </section>
     <div class="side">
@@ -653,6 +723,15 @@ def _live_chat_html() -> str:
           <div class="metric"><div class="label">Conflicts</div><div id="conflicts" class="value">loading</div></div>
           <div class="metric"><div class="label">Model Provider</div><div id="modelProvider" class="value">loading</div></div>
           <div class="metric"><div class="label">API Key</div><div id="apiKey" class="value">loading</div></div>
+        </div>
+      </section>
+      <section>
+        <h2>OpenAI Usage</h2>
+        <div class="metrics">
+          <div class="metric"><div class="label">Latest Provider</div><div id="usageProvider" class="value">loading</div></div>
+          <div class="metric"><div class="label">Latest Tokens</div><div id="usageTokens" class="value">loading</div></div>
+          <div class="metric"><div class="label">Latest Cost</div><div id="usageCost" class="value">loading</div></div>
+          <div class="metric"><div class="label">Session Cost</div><div id="sessionCost" class="value">loading</div></div>
         </div>
       </section>
       <section>
@@ -748,6 +827,11 @@ def _live_chat_html() -> str:
       const modelAdapter = status.model_adapter || {};
       document.getElementById('modelProvider').textContent = `${modelAdapter.configured_provider || 'unknown'} / ${modelAdapter.configured_model || 'unknown'}`;
       document.getElementById('apiKey').textContent = modelAdapter.openai_key_present ? 'present' : 'missing';
+      const usage = status.model_usage || {};
+      document.getElementById('usageProvider').textContent = `${usage.latest_provider || 'none'} / ${usage.latest_model || 'none'}`;
+      document.getElementById('usageTokens').textContent = usage.latest_total_tokens || 0;
+      document.getElementById('usageCost').textContent = `$${Number(usage.latest_cost_usd || 0).toFixed(6)}`;
+      document.getElementById('sessionCost').textContent = `$${Number(usage.estimated_session_cost_usd || 0).toFixed(6)}`;
       renderQueue(status.open_reflection_tasks || []);
       renderSelfModel(status.self_model || {});
       renderGovernedContext(status.governed_context || {});
@@ -1103,12 +1187,18 @@ def _live_chat_html() -> str:
       const box = document.getElementById('message');
       const text = box.value.trim();
       if (!text) return;
+      const modelMode = document.getElementById('modelMode').value;
+      const useOpenAI = document.getElementById('useOpenAI').checked;
       box.value = '';
       addMessage('user', text);
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({message: text})
+        body: JSON.stringify({
+          message: text,
+          model_mode: modelMode,
+          use_openai: useOpenAI
+        })
       });
       const data = await res.json();
       if (data.error) {
