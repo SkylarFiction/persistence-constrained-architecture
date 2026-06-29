@@ -35,7 +35,7 @@ from .missions import (
     open_mission,
     update_mission_status,
 )
-from .model_adapter import adapter_from_environment
+from .model_adapter import adapter_from_environment, model_environment_diagnostic
 from .context_builder import build_governed_context
 from .reflection_queue import (
     open_tasks_from_reflection,
@@ -62,6 +62,8 @@ def run_live_chat_server(
     ledger = ContinuityLedger(ledger_path)
     if not ledger.events():
         _seed_required_evidence(ledger, manifest)
+    model_diagnostic = model_environment_diagnostic()
+    print(_format_model_startup_diagnostic(model_diagnostic), flush=True)
     shell = LucienChatShell(
         manifest=manifest,
         ledger=ledger,
@@ -495,6 +497,7 @@ def _status_payload(
     )
     return {
         "summary": summary,
+        "model_adapter": model_environment_diagnostic(),
         "csm_state": latest_signal["state"] if latest_signal else "unknown",
         "output_gate": latest_gate or {},
         "open_reflection_tasks": report.active_reflection_tasks,
@@ -526,6 +529,21 @@ def _event_detail(payload: dict[str, Any]) -> str:
         if key in payload:
             parts.append(f"{key}={payload[key]}")
     return " ".join(parts) if parts else ", ".join(sorted(payload.keys())[:3])
+
+
+def _format_model_startup_diagnostic(diagnostic: dict[str, Any]) -> str:
+    provider = diagnostic.get("configured_provider", "unknown")
+    model = diagnostic.get("configured_model", "unknown")
+    env_file = "yes" if diagnostic.get("env_file_exists") else "no"
+    plain_text = "yes" if diagnostic.get("env_file_plain_text") else "no"
+    key_present = "yes" if diagnostic.get("openai_key_present") else "no"
+    prefix_ok = "yes" if diagnostic.get("openai_key_prefix_ok") else "no"
+    return (
+        "Model adapter: "
+        f"provider={provider} model={model} "
+        f".env={env_file} plain_text={plain_text} "
+        f"OPENAI_API_KEY_present={key_present} key_prefix_ok={prefix_ok}"
+    )
 
 
 def _should_auto_reflect(result: dict[str, Any]) -> bool:
@@ -633,6 +651,8 @@ def _live_chat_html() -> str:
           <div class="metric"><div class="label">Recovery</div><div id="recovery" class="value">loading</div></div>
           <div class="metric"><div class="label">Open Tasks</div><div id="tasks" class="value">loading</div></div>
           <div class="metric"><div class="label">Conflicts</div><div id="conflicts" class="value">loading</div></div>
+          <div class="metric"><div class="label">Model Provider</div><div id="modelProvider" class="value">loading</div></div>
+          <div class="metric"><div class="label">API Key</div><div id="apiKey" class="value">loading</div></div>
         </div>
       </section>
       <section>
@@ -725,6 +745,9 @@ def _live_chat_html() -> str:
       document.getElementById('recovery').textContent = summary.current_recovery_status || 'none';
       document.getElementById('tasks').textContent = summary.active_reflection_task_count ?? 0;
       document.getElementById('conflicts').textContent = summary.unresolved_growth_conflict_count ?? 0;
+      const modelAdapter = status.model_adapter || {};
+      document.getElementById('modelProvider').textContent = `${modelAdapter.configured_provider || 'unknown'} / ${modelAdapter.configured_model || 'unknown'}`;
+      document.getElementById('apiKey').textContent = modelAdapter.openai_key_present ? 'present' : 'missing';
       renderQueue(status.open_reflection_tasks || []);
       renderSelfModel(status.self_model || {});
       renderGovernedContext(status.governed_context || {});

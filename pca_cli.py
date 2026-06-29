@@ -67,6 +67,7 @@ from pca import (
     fail_mission_step,
     memory_cards_from_events,
     memory_signal_records_from_events,
+    model_environment_diagnostic,
     mission_briefs_from_events,
     mission_flow,
     mission_flows_from_events,
@@ -241,6 +242,7 @@ def main() -> int:
     context_parser.add_argument("--prompt", action="store_true")
 
     subparsers.add_parser("status")
+    subparsers.add_parser("model-diagnostic")
     chat_once_parser = subparsers.add_parser("chat-once")
     chat_once_parser.add_argument("message")
 
@@ -678,6 +680,10 @@ def main() -> int:
                 "claim_record": claim.to_dict() if claim else None,
             }
         )
+        return 0
+
+    if args.command == "model-diagnostic":
+        print_json({"model_adapter": model_environment_diagnostic()})
         return 0
 
     if args.command == "chat-once":

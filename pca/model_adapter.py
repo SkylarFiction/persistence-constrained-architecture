@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import os
+from pathlib import Path
 from typing import Any
 from urllib import error, request
 
@@ -163,6 +164,34 @@ def adapter_from_environment(env_path: str = ".env") -> ModelAdapter:
         model=os.environ.get("LUCIEN_MODEL", "gpt-4.1-mini"),
         base_url=os.environ.get("LUCIEN_MODEL_BASE_URL", "https://api.openai.com/v1"),
     )
+
+
+def model_environment_diagnostic(env_path: str = ".env") -> dict[str, Any]:
+    _load_dotenv(env_path)
+    env_file = Path(env_path)
+    raw = b""
+    env_file_exists = env_file.exists()
+    if env_file_exists:
+        try:
+            raw = env_file.read_bytes()
+        except OSError:
+            raw = b""
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    model = os.environ.get("LUCIEN_MODEL", "gpt-4.1-mini")
+    key_present = bool(api_key.strip())
+    return {
+        "env_path": str(env_file),
+        "env_file_exists": env_file_exists,
+        "env_file_plain_text": not raw.startswith(b"{\\rtf"),
+        "openai_key_present": key_present,
+        "openai_key_prefix_ok": (
+            api_key.startswith("sk-") or api_key.startswith("sk-proj-")
+            if key_present
+            else False
+        ),
+        "configured_model": model,
+        "configured_provider": "openai" if key_present else "echo",
+    }
 
 
 def _latest_user_message(messages: list[ModelMessage]) -> str:

@@ -91,6 +91,7 @@ from pca import (
     lineage_records,
     memory_cards_from_events,
     memory_signal_records_from_events,
+    model_environment_diagnostic,
     mission_briefs_from_events,
     mission_flow,
     mission_flows_from_events,
@@ -299,6 +300,33 @@ def test_adapter_from_environment_uses_echo_without_api_key(tmp_path):
     assert isinstance(adapter, EchoAdapter)
 
 
+def test_model_environment_diagnostic_reports_blank_local_env_without_key(tmp_path):
+    old_key = os.environ.pop("OPENAI_API_KEY", None)
+    old_model = os.environ.pop("LUCIEN_MODEL", None)
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "OPENAI_API_KEY=\nLUCIEN_MODEL=gpt-4.1-mini\n",
+        encoding="utf-8",
+    )
+    try:
+        diagnostic = model_environment_diagnostic(env_path=str(env_path))
+    finally:
+        if old_key is not None:
+            os.environ["OPENAI_API_KEY"] = old_key
+        else:
+            os.environ.pop("OPENAI_API_KEY", None)
+        if old_model is not None:
+            os.environ["LUCIEN_MODEL"] = old_model
+        else:
+            os.environ.pop("LUCIEN_MODEL", None)
+
+    assert diagnostic["env_file_exists"] is True
+    assert diagnostic["env_file_plain_text"] is True
+    assert diagnostic["openai_key_present"] is False
+    assert diagnostic["configured_provider"] == "echo"
+    assert "sk-" not in json.dumps(diagnostic)
+
+
 def test_adapter_from_environment_loads_local_dotenv(tmp_path):
     old_key = os.environ.pop("OPENAI_API_KEY", None)
     old_model = os.environ.pop("LUCIEN_MODEL", None)
@@ -321,6 +349,35 @@ def test_adapter_from_environment_loads_local_dotenv(tmp_path):
 
     assert isinstance(adapter, OpenAICompatibleAdapter)
     assert adapter.model == "test-model"
+
+
+def test_model_environment_diagnostic_reports_openai_without_leaking_key(tmp_path):
+    old_key = os.environ.pop("OPENAI_API_KEY", None)
+    old_model = os.environ.pop("LUCIEN_MODEL", None)
+    env_path = tmp_path / ".env"
+    secret_key = "sk-proj-local-secret-not-for-output"
+    env_path.write_text(
+        f"OPENAI_API_KEY={secret_key}\nLUCIEN_MODEL=test-model\n",
+        encoding="utf-8",
+    )
+    try:
+        diagnostic = model_environment_diagnostic(env_path=str(env_path))
+    finally:
+        if old_key is not None:
+            os.environ["OPENAI_API_KEY"] = old_key
+        else:
+            os.environ.pop("OPENAI_API_KEY", None)
+        if old_model is not None:
+            os.environ["LUCIEN_MODEL"] = old_model
+        else:
+            os.environ.pop("LUCIEN_MODEL", None)
+
+    dumped = json.dumps(diagnostic)
+    assert diagnostic["openai_key_present"] is True
+    assert diagnostic["openai_key_prefix_ok"] is True
+    assert diagnostic["configured_provider"] == "openai"
+    assert diagnostic["configured_model"] == "test-model"
+    assert secret_key not in dumped
 
 
 def test_openai_adapter_uses_responses_api_without_raw_prompt_in_result():
