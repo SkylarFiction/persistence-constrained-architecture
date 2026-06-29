@@ -100,6 +100,7 @@
     "active_growth_count": 0,
     "active_reflection_task_count": 0,
     "anchor_valid": null,
+    "blocked_mission_count": 0,
     "blocking_followups": 2,
     "chain_valid": true,
     "chat_session_count": 0,
@@ -125,7 +126,7 @@
     "reasons": [
       "Lucien Persistence Kernel satisfies recorded persistence constraints"
     ],
-    "recorded_claim_id": "claim_8870ce77-36ea-46ec-bc89-6659fa7a65a4",
+    "recorded_claim_id": "claim_fd6309dd-44c7-41db-a0e1-00e4ac09fa0d",
     "recovery_count": 0,
     "reflection_count": 0,
     "reflection_task_count": 0,

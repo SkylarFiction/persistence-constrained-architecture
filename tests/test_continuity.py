@@ -26,6 +26,7 @@ from pca import (
     IdentityManifest,
     IdentityState,
     LucienGovernedRuntime,
+    MissionPhase,
     MissionItemKind,
     MissionStatus,
     ModelMessage,
@@ -70,6 +71,8 @@ from pca import (
     memory_cards_from_events,
     memory_signal_records_from_events,
     mission_briefs_from_events,
+    mission_flow,
+    mission_flows_from_events,
     mission_items_from_events,
     mission_records_from_events,
     merge_policy_packs,
@@ -725,6 +728,172 @@ def test_mission_lesson_becomes_growth_candidate(tmp_path):
     assert growth[-1].kind.value == "memory"
     assert growth[-1].status.value == "proposed"
     assert growth[-1].reason == f"mission lesson from {mission.mission_id}"
+
+
+def test_mission_flow_starts_at_intake(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Mission intake",
+        problem_statement="Define the first testable hypothesis.",
+    )
+
+    flow = mission_flow(ledger, mission.mission_id)
+
+    assert flow.phase == MissionPhase.INTAKE
+    assert flow.next_action == "Add a first hypothesis that can be tested."
+    assert flow.ready_to_advance is False
+
+
+def test_mission_flow_progresses_to_planning(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Evidence-backed planning",
+        problem_statement="Move from hypothesis to plan.",
+    )
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "hypothesis",
+        "A focused pilot can test the idea.",
+        confidence="medium",
+    )
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "evidence",
+        "Public evidence supports testing a low-risk pilot.",
+        confidence="high",
+    )
+
+    flow = mission_flow(ledger, mission.mission_id)
+
+    assert flow.phase == MissionPhase.PLANNING
+    assert flow.ready_to_advance is True
+    assert flow.next_action == "Draft plan steps and risk review."
+
+
+def test_mission_flow_blocks_on_open_mission_review_task(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Risk blocked mission",
+        problem_statement="A mission with unresolved risk should not advance.",
+    )
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "risk",
+        "Risk requires steward review.",
+        confidence="medium",
+    )
+
+    flow = mission_flow(ledger, mission.mission_id)
+
+    assert flow.phase == MissionPhase.BLOCKED
+    assert flow.open_task_ids
+    assert flow.ready_to_advance is False
+    assert "Resolve mission review tasks" in flow.next_action
+
+
+def test_resolved_mission_review_allows_flow_to_continue(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Risk reviewed mission",
+        problem_statement="Resolve risk review before intervention readiness.",
+    )
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "hypothesis",
+        "Pilot can be tested.",
+        confidence="medium",
+    )
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "evidence",
+        "Evidence is strong enough to plan.",
+        confidence="high",
+    )
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "plan_step",
+        "Start with one bounded pilot.",
+        confidence="medium",
+    )
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "risk",
+        "Risk requires review before intervention.",
+        confidence="medium",
+    )
+    task_id = mission_flow(ledger, mission.mission_id).open_task_ids[0]
+    update_reflection_task(
+        ledger,
+        manifest.system_id,
+        task_id,
+        "resolved",
+        reason="risk reviewed",
+    )
+
+    flow = mission_flow(ledger, mission.mission_id)
+
+    assert flow.phase == MissionPhase.INTERVENTION_READY
+    assert flow.ready_to_advance is True
+    assert flow.open_task_ids == []
+
+
+def test_mission_flow_reports_all_missions(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    first = open_mission(
+        ledger,
+        manifest.system_id,
+        title="First mission",
+        problem_statement="First problem.",
+    )
+    second = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Second mission",
+        problem_statement="Second problem.",
+    )
+    update_mission_status(
+        ledger,
+        manifest.system_id,
+        second.mission_id,
+        "completed",
+        reason="done",
+    )
+
+    flows = mission_flows_from_events(ledger.events())
+
+    assert [flow.mission_id for flow in flows] == [
+        first.mission_id,
+        second.mission_id,
+    ]
+    assert flows[0].phase == MissionPhase.INTAKE
+    assert flows[1].phase == MissionPhase.COMPLETED
 
 
 def test_evaluator_precedence_is_declared():

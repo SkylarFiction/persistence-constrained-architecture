@@ -228,6 +228,9 @@ python3 pca_cli.py mission-add MISSION_ID risk --summary "Automation could crowd
 python3 pca_cli.py mission-status MISSION_ID completed --reason "pilot review complete"
 python3 pca_cli.py missions
 python3 pca_cli.py missions --open
+python3 pca_cli.py mission-flow MISSION_ID
+python3 pca_cli.py mission-flow --all
+python3 pca_cli.py mission-advance MISSION_ID
 python3 pca_cli.py reflect
 python3 pca_cli.py reflections
 python3 pca_cli.py reflection-queue --open
@@ -261,6 +264,10 @@ raw scratchpad.
 Mission pressure is routed back into governance: risk items, unresolved evidence,
 and failed outcomes create mission-review reflection tasks, while mission lessons
 become governed growth candidates that still require the normal review path.
+Mission flow derives a phase, blockers, and next action from the ledger, so a
+mission can be in intake, evidence review, planning, intervention readiness,
+outcome review, lesson review, completed, or blocked without manually declaring
+false progress.
 
 For a public walkthrough, run `python3 pca_cli.py demo`. It runs the local
 checks, refreshes the cockpit and replay artifacts, prints reviewer steps, and

@@ -61,6 +61,7 @@
     "active_growth_count": 0,
     "active_reflection_task_count": 0,
     "anchor_valid": null,
+    "blocked_mission_count": 0,
     "blocking_followups": 0,
     "chain_valid": true,
     "chat_session_count": 0,
@@ -86,7 +87,7 @@
     "reasons": [
       "ledger contains an identity fork event"
     ],
-    "recorded_claim_id": "claim_2b630feb-3115-425f-bfba-0e311f957f0c",
+    "recorded_claim_id": "claim_fad0ccc7-a71a-4668-bca6-51261c5fb8d7",
     "recovery_count": 0,
     "reflection_count": 0,
     "reflection_task_count": 0,

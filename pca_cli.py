@@ -56,6 +56,8 @@ from pca import (
     memory_cards_from_events,
     memory_signal_records_from_events,
     mission_briefs_from_events,
+    mission_flow,
+    mission_flows_from_events,
     add_mission_item,
     open_mission,
     open_tasks_from_reflection,
@@ -253,6 +255,13 @@ def main() -> int:
         choices=[status.value for status in MissionStatus],
     )
     mission_status_parser.add_argument("--reason", default="")
+
+    mission_flow_parser = subparsers.add_parser("mission-flow")
+    mission_flow_parser.add_argument("mission_id", nargs="?")
+    mission_flow_parser.add_argument("--all", action="store_true")
+
+    mission_advance_parser = subparsers.add_parser("mission-advance")
+    mission_advance_parser.add_argument("mission_id")
 
     subparsers.add_parser("sessions")
     session_replay_parser = subparsers.add_parser("session-replay")
@@ -823,6 +832,36 @@ def main() -> int:
             reason=args.reason,
         )
         print_json({"mission": mission.to_dict()})
+        return 0
+
+    if args.command == "mission-flow":
+        if args.all:
+            flows = mission_flows_from_events(ledger.events())
+            print_json(
+                {
+                    "system_id": manifest.system_id,
+                    "count": len(flows),
+                    "flows": [flow.to_dict() for flow in flows],
+                }
+            )
+            return 0
+        if not args.mission_id:
+            raise SystemExit("mission-flow requires MISSION_ID unless --all is used.")
+        flow = mission_flow(ledger, args.mission_id)
+        print_json({"mission_flow": flow.to_dict()})
+        return 0
+
+    if args.command == "mission-advance":
+        flow = mission_flow(ledger, args.mission_id)
+        print_json(
+            {
+                "mission_id": args.mission_id,
+                "can_advance": flow.ready_to_advance,
+                "phase": flow.phase.value,
+                "blockers": flow.blockers,
+                "next_action": flow.next_action,
+            }
+        )
         return 0
 
     if args.command == "reflect":

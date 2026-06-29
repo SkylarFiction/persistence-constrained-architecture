@@ -62,16 +62,21 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         "</tr>"
         for resolution in data["growth_conflict_resolutions"][-8:]
     ) or _empty_row(4, "No conflict resolutions recorded.")
+    flow_by_mission_id = {
+        flow["mission_id"]: flow for flow in data.get("mission_flows", [])
+    }
     mission_rows = "\n".join(
         "<tr>"
         f"<td>{escape(str(brief['mission']['title']))}</td>"
         f"<td>{escape(str(brief['mission']['status']))}</td>"
+        f"<td>{escape(str(flow_by_mission_id.get(brief['mission']['mission_id'], {}).get('phase', 'unknown')))}</td>"
         f"<td><code>{escape(_short_hash(str(brief['mission']['mission_id'])))}</code></td>"
         f"<td>{escape(_mission_counts(brief))}</td>"
+        f"<td>{escape(str(flow_by_mission_id.get(brief['mission']['mission_id'], {}).get('next_action', '')))}</td>"
         f"<td>{escape(_joined(brief['mission'].get('values', [])))}</td>"
         "</tr>"
         for brief in data["missions"][-8:]
-    ) or _empty_row(5, "No missions opened yet.")
+    ) or _empty_row(7, "No missions opened yet.")
     reflection_rows = "\n".join(
         "<tr>"
         f"<td>{escape(str(reflection['focus']))}</td>"
@@ -216,6 +221,7 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
         <div><div class="label">Conflict Resolutions</div><div class="value">{escape(str(summary['growth_conflict_resolution_count']))}</div></div>
         <div><div class="label">Open Growth</div><div class="value">{escape(str(len(pending_growth)))}</div></div>
         <div><div class="label">Missions</div><div class="value">{escape(str(summary['mission_count']))}</div></div>
+        <div><div class="label">Blocked Missions</div><div class="value">{escape(str(summary['blocked_mission_count']))}</div></div>
       </div>
     </section>
     <div class="grid">
@@ -238,7 +244,7 @@ def render_lucien_cockpit_html(report: TraceReport) -> str:
     </section>
     <section>
       <h2>Mission Workspace</h2>
-      <table><thead><tr><th>Title</th><th>Status</th><th>ID</th><th>Items</th><th>Values</th></tr></thead><tbody>{mission_rows}</tbody></table>
+      <table><thead><tr><th>Title</th><th>Status</th><th>Phase</th><th>ID</th><th>Items</th><th>Next Action</th><th>Values</th></tr></thead><tbody>{mission_rows}</tbody></table>
     </section>
     <section>
       <h2>Reflection Ledger</h2>

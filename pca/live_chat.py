@@ -25,6 +25,7 @@ from .ledger import ContinuityLedger
 from .manifest import IdentityManifest
 from .memory_cards import memory_cards_from_events
 from .memory_signals import record_memory_signal
+from .mission_flow import mission_flows_from_events
 from .missions import (
     MissionItemKind,
     MissionStatus,
@@ -458,6 +459,10 @@ def _status_payload(
         brief.to_dict()
         for brief in mission_briefs_from_events(ledger.events())
     ]
+    mission_flows = {
+        flow.mission_id: flow.to_dict()
+        for flow in mission_flows_from_events(ledger.events())
+    }
     latest_events = [
         {
             "event_type": event.event_type,
@@ -484,6 +489,7 @@ def _status_payload(
         "memory_inbox": memory_inbox,
         "growth_conflicts": unresolved_conflicts,
         "missions": missions,
+        "mission_flows": mission_flows,
         "self_model": {
             "accepted_growth_count": self_model.accepted_growth_count,
             "by_kind_counts": {
@@ -691,7 +697,7 @@ def _live_chat_html() -> str:
       renderSelfModel(status.self_model || {});
       renderMemoryInbox(status.memory_inbox || []);
       renderRecall((status.self_model || {}).memory_cards || []);
-      renderMissions(status.missions || []);
+      renderMissions(status.missions || [], status.mission_flows || {});
       renderGrowth(status.active_growth || []);
       renderConflicts(status.growth_conflicts || []);
       renderTimeline(status.session_replay);
@@ -779,7 +785,7 @@ def _live_chat_html() -> str:
       }
     }
 
-    function renderMissions(records) {
+    function renderMissions(records, flows) {
       if (!records.length) {
         empty(missions, 'No missions opened yet.');
         return;
@@ -787,6 +793,7 @@ def _live_chat_html() -> str:
       missions.innerHTML = '';
       for (const brief of records) {
         const mission = brief.mission || {};
+        const flow = flows[mission.mission_id] || {};
         const counts = brief.counts || {};
         const row = document.createElement('div');
         row.className = 'item';
@@ -795,7 +802,11 @@ def _live_chat_html() -> str:
         title.textContent = `${mission.title || 'Untitled mission'} / ${mission.status}`;
         const meta = document.createElement('div');
         meta.className = 'item-meta';
-        meta.textContent = `${mission.mission_id} / problem hash ${(mission.problem_sha256 || '').slice(0, 12)} / H ${counts.hypothesis || 0} E ${counts.evidence || 0} R ${counts.risk || 0} P ${counts.plan_step || 0} O ${counts.outcome || 0} L ${counts.lesson || 0}`;
+        meta.textContent = `${mission.mission_id} / phase ${flow.phase || 'unknown'} / problem hash ${(mission.problem_sha256 || '').slice(0, 12)} / H ${counts.hypothesis || 0} E ${counts.evidence || 0} R ${counts.risk || 0} P ${counts.plan_step || 0} O ${counts.outcome || 0} L ${counts.lesson || 0}`;
+
+        const next = document.createElement('div');
+        next.className = 'item-meta';
+        next.textContent = `${(flow.blockers || []).length ? 'blocked: ' + flow.blockers.join(' / ') : 'next: ' + (flow.next_action || 'none')}`;
 
         const itemForm = document.createElement('form');
         itemForm.addEventListener('submit', (event) => {
@@ -840,7 +851,7 @@ def _live_chat_html() -> str:
         }
         actions.appendChild(button('Archive', {action: 'update_mission_status', mission_id: mission.mission_id, status: 'archived', reason: 'archived in live mission workspace'}));
 
-        row.append(title, meta, itemForm, actions);
+        row.append(title, meta, next, itemForm, actions);
         missions.appendChild(row);
       }
     }
