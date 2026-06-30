@@ -1,7 +1,11 @@
 # Persistence-Constrained Architecture
 
-This project is the working implementation of a persistence-constrained architecture
-for identity-bearing systems.
+Modern AI systems can sound continuous even when their memory, commitments,
+permissions, or identity state have changed underneath the conversation.
+Persistence-Constrained Architecture is a local governance layer that treats
+continuity as a claim that must be earned, logged, checked, and sometimes revoked.
+
+Smooth speech is not proof of continuity.
 
 For a guided public walkthrough, see [PUBLIC_DEMO.md](PUBLIC_DEMO.md).
 For milestone details, see [RELEASE_NOTES.md](RELEASE_NOTES.md).
@@ -15,6 +19,44 @@ transformation rules remain within admissible bounds.
 PCA is not an AI personality framework. It is an identity-change control system.
 Any system that claims continuity through change must be able to prove what was
 preserved, what was altered, what was lost, and who authorized the transformation.
+
+```text
+User / Event
+     |
+     v
+Identity Manifest
+     |
+     v
+Policy Gate
+     |
+     v
+Continuity Ledger
+     |
+     v
+Evidence / Trace
+     |
+     v
+Allowed Claim or Constrained Claim
+```
+
+Most AI safety asks whether the system obeys. PCA asks whether the system is still
+the same system making the claim.
+
+## What PCA Is Not
+
+PCA is not a chatbot personality system.
+
+PCA is not memory alone.
+
+PCA is not a claim of consciousness.
+
+PCA is not AGI.
+
+PCA is a continuity governance layer for systems that make identity claims through
+change.
+
+## Current Scope
+
 PCA does not treat governance decisions as one-time events. High-risk identity
 transformations create continuing obligations. Until those obligations are completed,
 failed, or formally resolved, the system's continuity claim remains constrained.
