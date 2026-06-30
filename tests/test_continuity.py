@@ -132,6 +132,10 @@ from pca import (
     start_mission_step,
     steward_inbox,
     apply_steward_inbox_action,
+    run_tool_for_step,
+    tool_execution_records_from_events,
+    tool_permission_records_from_events,
+    tool_specs,
     workbench_status,
     verify_latest_anchor,
     write_constitution_markdown,
@@ -1750,6 +1754,130 @@ def test_medium_risk_mission_step_requires_approval_before_start(tmp_path):
 
     assert approved.approval_status == MissionStepApprovalStatus.APPROVED
     assert started.execution_status == MissionStepExecutionStatus.RUNNING
+
+
+def test_tool_router_lists_governed_tools():
+    specs = {spec.name: spec for spec in tool_specs()}
+
+    assert specs["read_file"].risk.value == "low"
+    assert specs["git_status"].risk.value == "low"
+    assert specs["run_check_all"].risk.value == "medium"
+    assert specs["run_check_all"].requires_approval is True
+
+
+def test_low_risk_tool_executes_and_creates_evidence(tmp_path):
+    manifest = load_manifest()
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    (project_root / "note.txt").write_text("bounded tool evidence", encoding="utf-8")
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Tool mission",
+        problem_statement="Run a safe read.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Read a local note.",
+        risk_level="low",
+        required_tool="read_file",
+        expected_outcome="A bounded preview.",
+    )
+
+    result = run_tool_for_step(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        tool_args={"path": "note.txt"},
+        project_root=project_root,
+    )
+    events = ledger.events()
+    permissions = tool_permission_records_from_events(events)
+    executions = tool_execution_records_from_events(events)
+    evidence = evidence_for_target(events, "mission", mission.mission_id)
+    steps = mission_step_records_from_events(events, mission.mission_id)
+
+    assert result["permission"]["decision"] == "allowed"
+    assert result["execution"]["status"] == "completed"
+    assert permissions[-1].decision.value == "allowed"
+    assert executions[-1].evidence_id
+    assert len(evidence) == 1
+    assert steps[-1].execution_status == MissionStepExecutionStatus.COMPLETED
+    assert "bounded tool evidence" in result["output"]
+
+
+def test_medium_risk_tool_is_denied_until_step_approved(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Approval tool mission",
+        problem_statement="Check approval before tests.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Run full verification.",
+        risk_level="medium",
+        required_tool="run_check_all",
+        expected_outcome="Verification result.",
+    )
+
+    result = run_tool_for_step(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        project_root=tmp_path,
+    )
+    permissions = tool_permission_records_from_events(ledger.events())
+    executions = tool_execution_records_from_events(ledger.events())
+
+    assert result["permission"]["decision"] == "denied"
+    assert "approval" in result["permission"]["reason"]
+    assert permissions[-1].decision.value == "denied"
+    assert executions[-1].status.value == "denied"
+
+
+def test_tool_router_rejects_paths_outside_project(tmp_path):
+    manifest = load_manifest()
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Path safety mission",
+        problem_statement="Do not read outside the project.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Try to read outside the project.",
+        risk_level="low",
+        required_tool="read_file",
+    )
+
+    result = run_tool_for_step(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        tool_args={"path": "../secret.txt"},
+        project_root=project_root,
+    )
+    executions = tool_execution_records_from_events(ledger.events())
+    steps = mission_step_records_from_events(ledger.events(), mission.mission_id)
+
+    assert result["permission"]["decision"] == "allowed"
+    assert result["execution"]["status"] == "failed"
+    assert "inside the project root" in result["output"]
+    assert executions[-1].status.value == "failed"
+    assert steps[-1].execution_status == MissionStepExecutionStatus.FAILED
 
 
 def test_completed_mission_step_records_outcome_item(tmp_path):

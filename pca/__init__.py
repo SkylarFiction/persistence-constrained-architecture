@@ -144,6 +144,19 @@ from .mission_steps import (
     require_mission_step,
     start_mission_step,
 )
+from .tool_router import (
+    ToolExecutionRecord,
+    ToolExecutionStatus,
+    ToolPermissionDecision,
+    ToolPermissionRecord,
+    ToolRisk,
+    ToolSpec,
+    check_tool_permission,
+    run_tool_for_step,
+    tool_execution_records_from_events,
+    tool_permission_records_from_events,
+    tool_specs,
+)
 from .missions import (
     MissionBrief,
     MissionItemKind,

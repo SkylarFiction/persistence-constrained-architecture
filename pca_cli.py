@@ -100,7 +100,12 @@ from pca import (
     steward_inbox,
     skill_candidates_from_events,
     skill_suggestions_for_mission,
+    check_tool_permission,
     render_constitution_markdown,
+    run_tool_for_step,
+    tool_execution_records_from_events,
+    tool_permission_records_from_events,
+    tool_specs,
     write_dashboard_html,
     write_constitution_markdown,
     write_lucien_cockpit_html,
@@ -402,6 +407,19 @@ def main() -> int:
     step_block_parser = subparsers.add_parser("mission-step-block")
     step_block_parser.add_argument("step_id")
     step_block_parser.add_argument("--reason", required=True)
+
+    subparsers.add_parser("tools")
+
+    tool_permission_parser = subparsers.add_parser("tool-permission")
+    tool_permission_parser.add_argument("step_id")
+    tool_permission_parser.add_argument("--reason", default="")
+
+    tool_run_parser = subparsers.add_parser("tool-run")
+    tool_run_parser.add_argument("step_id")
+    tool_run_parser.add_argument("--arg", action="append", default=[])
+    tool_run_parser.add_argument("--reason", default="")
+
+    subparsers.add_parser("tool-history")
 
     subparsers.add_parser("skill-candidates")
 
@@ -1249,6 +1267,60 @@ def main() -> int:
         except ValueError as exc:
             raise SystemExit(str(exc))
         print_json({"mission_step": step.to_dict()})
+        return 0
+
+    if args.command == "tools":
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "tools": [spec.to_dict() for spec in tool_specs()],
+            }
+        )
+        return 0
+
+    if args.command == "tool-permission":
+        try:
+            permission = check_tool_permission(
+                ledger,
+                manifest.system_id,
+                args.step_id,
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"tool_permission": permission.to_dict()})
+        return 0
+
+    if args.command == "tool-run":
+        try:
+            result = run_tool_for_step(
+                ledger,
+                manifest.system_id,
+                args.step_id,
+                tool_args=parse_key_values(args.arg),
+                project_root=Path.cwd(),
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"tool_run": result})
+        return 0
+
+    if args.command == "tool-history":
+        events = ledger.events()
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "permissions": [
+                    record.to_dict()
+                    for record in tool_permission_records_from_events(events)
+                ],
+                "executions": [
+                    record.to_dict()
+                    for record in tool_execution_records_from_events(events)
+                ],
+            }
+        )
         return 0
 
     if args.command == "skill-candidates":
