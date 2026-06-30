@@ -133,8 +133,10 @@ from pca import (
     steward_inbox,
     apply_steward_inbox_action,
     run_tool_for_step,
+    dry_run_tool_for_step,
     tool_execution_records_from_events,
     tool_permission_records_from_events,
+    tool_preview_records_from_events,
     tool_specs,
     workbench_status,
     verify_latest_anchor,
@@ -810,7 +812,10 @@ def test_live_chat_html_contains_mission_first_home():
     assert "homeNextAction" in html
     assert "homeModelMode" in html
     assert "Run Tool" in html
+    assert "Dry Run" in html
     assert "tool risk" in html
+    assert "safety:" in html
+    assert "dry_run_tool" in html
     assert "run_tool" in html
 
 
@@ -823,8 +828,11 @@ def test_live_status_includes_tool_router_state(tmp_path):
     status = _status_payload(ledger, manifest)
 
     assert status["tools"]["read_file"]["risk"] == "low"
+    assert status["tools"]["read_file"]["safety_profile"]["read_only"] is True
     assert status["tools"]["run_check_all"]["requires_approval"] is True
+    assert status["tools"]["run_check_all"]["safety_profile"]["runs_tests"] is True
     assert status["tool_executions"] == []
+    assert status["tool_previews"] == []
 
 
 def test_live_steward_action_runs_reflection_and_opens_tasks(tmp_path):
@@ -1417,6 +1425,57 @@ def test_live_steward_action_runs_governed_tool(tmp_path):
     assert steps[-1].execution_status == MissionStepExecutionStatus.COMPLETED
 
 
+def test_live_steward_action_dry_runs_tool_without_execution(tmp_path):
+    manifest = load_manifest()
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    (project_root / "note.txt").write_text("dry run should not read into evidence", encoding="utf-8")
+    old_cwd = os.getcwd()
+    os.chdir(project_root)
+    try:
+        ledger = ContinuityLedger(tmp_path / "continuity.log")
+        mission = open_mission(
+            ledger,
+            manifest.system_id,
+            title="Live dry run mission",
+            problem_statement="Preview a safe live tool.",
+        )
+        step = propose_mission_step(
+            ledger,
+            manifest.system_id,
+            mission.mission_id,
+            description="Preview reading a note from the live UI.",
+            risk_level="low",
+            required_tool="read_file",
+        )
+
+        result = _apply_steward_action(
+            ledger,
+            manifest,
+            {
+                "action": "dry_run_tool",
+                "step_id": step.step_id,
+                "tool_args": {"path": "note.txt"},
+                "reason": "dry run from live mission step panel",
+            },
+        )
+    finally:
+        os.chdir(old_cwd)
+
+    previews = tool_preview_records_from_events(ledger.events())
+    executions = tool_execution_records_from_events(ledger.events())
+    evidence = evidence_for_target(ledger.events(), "mission", mission.mission_id)
+    steps = mission_step_records_from_events(ledger.events(), mission.mission_id)
+
+    assert result["permission"]["decision"] == "allowed"
+    assert result["preview"]["would_execute"] is True
+    assert result["preview"]["safety_profile"]["read_only"] is True
+    assert previews[-1].tool_name == "read_file"
+    assert executions == []
+    assert evidence == []
+    assert steps[-1].execution_status == MissionStepExecutionStatus.READY
+
+
 def test_mission_risk_opens_mission_review_task(tmp_path):
     manifest = load_manifest()
     ledger = ContinuityLedger(tmp_path / "continuity.log")
@@ -1871,6 +1930,50 @@ def test_low_risk_tool_executes_and_creates_evidence(tmp_path):
     assert len(evidence) == 1
     assert steps[-1].execution_status == MissionStepExecutionStatus.COMPLETED
     assert "bounded tool evidence" in result["output"]
+
+
+def test_tool_dry_run_records_preview_without_execution_or_evidence(tmp_path):
+    manifest = load_manifest()
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    (project_root / "note.txt").write_text("preview only", encoding="utf-8")
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Dry run mission",
+        problem_statement="Preview a safe read.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Preview a local note.",
+        risk_level="low",
+        required_tool="read_file",
+        expected_outcome="A dry-run preview.",
+    )
+
+    result = dry_run_tool_for_step(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        tool_args={"path": "note.txt"},
+        project_root=project_root,
+    )
+    events = ledger.events()
+    previews = tool_preview_records_from_events(events)
+    executions = tool_execution_records_from_events(events)
+    evidence = evidence_for_target(events, "mission", mission.mission_id)
+    steps = mission_step_records_from_events(events, mission.mission_id)
+
+    assert result["permission"]["decision"] == "allowed"
+    assert result["preview"]["would_execute"] is True
+    assert "Read a bounded preview" in result["preview"]["planned_action"]
+    assert previews[-1].tool_name == "read_file"
+    assert executions == []
+    assert evidence == []
+    assert steps[-1].execution_status == MissionStepExecutionStatus.READY
 
 
 def test_medium_risk_tool_is_denied_until_step_approved(tmp_path):

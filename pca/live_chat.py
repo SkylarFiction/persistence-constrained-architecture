@@ -55,8 +55,10 @@ from .skill_memory import accepted_skills_from_events, skill_candidates_from_eve
 from .state import derive_current_claim
 from .steward_inbox import apply_steward_inbox_action, steward_inbox
 from .tool_router import (
+    dry_run_tool_for_step,
     run_tool_for_step,
     tool_execution_records_from_events,
+    tool_preview_records_from_events,
     tool_specs,
 )
 from .workbench import workbench_status
@@ -423,6 +425,24 @@ def _apply_steward_action(
             reason=reason,
         )
 
+    if action == "dry_run_tool":
+        step_id = str(payload.get("step_id", "")).strip()
+        if not step_id:
+            raise ValueError("step_id is required")
+        tool_args = {
+            str(key): str(value)
+            for key, value in dict(payload.get("tool_args", {})).items()
+            if str(key).strip()
+        }
+        return dry_run_tool_for_step(
+            ledger,
+            manifest.system_id,
+            step_id,
+            tool_args=tool_args,
+            project_root=Path.cwd(),
+            reason=reason,
+        )
+
     raise ValueError(f"unknown steward action: {action}")
 
 
@@ -540,6 +560,9 @@ def _status_payload(
     tool_executions = [
         record.to_dict() for record in tool_execution_records_from_events(ledger.events())
     ]
+    tool_previews = [
+        record.to_dict() for record in tool_preview_records_from_events(ledger.events())
+    ]
     skill_candidates = [
         candidate.to_dict() for candidate in skill_candidates_from_events(ledger.events())
     ]
@@ -585,6 +608,7 @@ def _status_payload(
         "mission_steps": mission_steps,
         "tools": tool_spec_map,
         "tool_executions": tool_executions,
+        "tool_previews": tool_previews,
         "skill_candidates": skill_candidates,
         "accepted_skills": accepted_skills,
         "governed_context": governed_context.to_dict(),
@@ -934,7 +958,7 @@ def _live_chat_html() -> str:
       renderMemoryInbox(status.memory_inbox || []);
       renderRecall((status.self_model || {}).memory_cards || []);
       renderMissions(status.missions || [], status.mission_flows || {});
-      renderMissionSteps(status.mission_steps || [], status.tools || {}, status.tool_executions || []);
+      renderMissionSteps(status.mission_steps || [], status.tools || {}, status.tool_executions || [], status.tool_previews || []);
       renderSkillMemory(status.skill_candidates || [], status.accepted_skills || []);
       renderStewardInbox(status.steward_inbox || []);
       renderGrowth(status.active_growth || []);
@@ -1194,7 +1218,7 @@ def _live_chat_html() -> str:
       }
     }
 
-    function renderMissionSteps(records, tools, executions) {
+    function renderMissionSteps(records, tools, executions, previews) {
       if (!records.length) {
         empty(missionSteps, 'No mission steps recorded.');
         return;
@@ -1204,20 +1228,29 @@ def _live_chat_html() -> str:
       for (const execution of executions || []) {
         latestExecution[execution.step_id] = execution;
       }
+      const latestPreview = {};
+      for (const preview of previews || []) {
+        latestPreview[preview.step_id] = preview;
+      }
       for (const step of records.slice(-8)) {
         const row = document.createElement('div');
         row.className = 'item';
         const spec = tools[step.required_tool] || {};
         const execution = latestExecution[step.step_id] || null;
+        const preview = latestPreview[step.step_id] || null;
+        const profile = spec.safety_profile || {};
         const title = document.createElement('div');
         title.className = 'item-title';
         title.textContent = `${step.execution_status} / ${step.risk_level} / ${step.required_tool}`;
         const meta = document.createElement('div');
         meta.className = 'item-meta';
         meta.textContent = `${step.step_id} / approval ${step.approval_status} / tool risk ${spec.risk || 'unknown'} / mission ${step.mission_id} / hash ${step.description_sha256.slice(0, 12)}`;
+        const safety = document.createElement('div');
+        safety.className = 'item-meta';
+        safety.textContent = `safety: ${formatSafetyProfile(profile)}`;
         const latest = document.createElement('div');
         latest.className = 'item-meta';
-        latest.textContent = execution ? `latest tool execution: ${execution.status} / evidence ${execution.evidence_id || 'none'}` : (spec.description || 'No governed tool execution yet.');
+        latest.textContent = execution ? `latest tool execution: ${execution.status} / evidence ${execution.evidence_id || 'none'}` : (preview ? `latest dry run: ${preview.permission_decision} / would_execute ${preview.would_execute}` : (spec.description || 'No governed tool execution yet.'));
         const actions = document.createElement('div');
         actions.className = 'actions';
         const canRun = ['proposed', 'ready'].includes(step.execution_status);
@@ -1231,24 +1264,35 @@ def _live_chat_html() -> str:
           const blocked = document.createElement('div');
           blocked.className = 'item-meta';
           blocked.textContent = 'Approval required before tool execution.';
+          actions.appendChild(toolButton(step, spec, true));
           actions.appendChild(blocked);
         } else if (canRun) {
-          actions.appendChild(toolButton(step, spec));
+          actions.appendChild(toolButton(step, spec, true));
+          actions.appendChild(toolButton(step, spec, false));
         } else {
           const done = document.createElement('div');
           done.className = 'item-meta';
           done.textContent = `No run action available from ${step.execution_status}.`;
           actions.appendChild(done);
         }
-        row.append(title, meta, latest, actions);
+        row.append(title, meta, safety, latest, actions);
         missionSteps.appendChild(row);
       }
     }
 
-    function toolButton(step, spec) {
+    function formatSafetyProfile(profile) {
+      const labels = [];
+      for (const key of ['read_only', 'writes_files', 'runs_tests', 'uses_network', 'creates_evidence', 'can_fail_step', 'requires_approval', 'blocked_if_recovery', 'blocked_if_high_risk']) {
+        if (profile[key]) labels.push(key);
+      }
+      return labels.length ? labels.join(', ') : 'none declared';
+    }
+
+    function toolButton(step, spec, dryRun) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.textContent = `Run Tool (${spec.risk})`;
+      btn.className = dryRun ? 'secondary' : '';
+      btn.textContent = dryRun ? `Dry Run (${spec.risk})` : `Run Tool (${spec.risk})`;
       btn.addEventListener('click', () => {
         const toolArgs = {};
         if (step.required_tool === 'read_file' || step.required_tool === 'list_files' || step.required_tool === 'open_dashboard') {
@@ -1258,10 +1302,10 @@ def _live_chat_html() -> str:
           toolArgs.path = value;
         }
         steward({
-          action: 'run_tool',
+          action: dryRun ? 'dry_run_tool' : 'run_tool',
           step_id: step.step_id,
           tool_args: toolArgs,
-          reason: `ran ${step.required_tool} from live mission step panel`
+          reason: `${dryRun ? 'dry-ran' : 'ran'} ${step.required_tool} from live mission step panel`
         });
       });
       return btn;

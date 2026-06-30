@@ -149,12 +149,15 @@ from .tool_router import (
     ToolExecutionStatus,
     ToolPermissionDecision,
     ToolPermissionRecord,
+    ToolPreviewRecord,
     ToolRisk,
     ToolSpec,
     check_tool_permission,
+    dry_run_tool_for_step,
     run_tool_for_step,
     tool_execution_records_from_events,
     tool_permission_records_from_events,
+    tool_preview_records_from_events,
     tool_specs,
 )
 from .missions import (

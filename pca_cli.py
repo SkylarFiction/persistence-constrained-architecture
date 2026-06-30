@@ -101,10 +101,12 @@ from pca import (
     skill_candidates_from_events,
     skill_suggestions_for_mission,
     check_tool_permission,
+    dry_run_tool_for_step,
     render_constitution_markdown,
     run_tool_for_step,
     tool_execution_records_from_events,
     tool_permission_records_from_events,
+    tool_preview_records_from_events,
     tool_specs,
     write_dashboard_html,
     write_constitution_markdown,
@@ -413,6 +415,11 @@ def main() -> int:
     tool_permission_parser = subparsers.add_parser("tool-permission")
     tool_permission_parser.add_argument("step_id")
     tool_permission_parser.add_argument("--reason", default="")
+
+    tool_dry_run_parser = subparsers.add_parser("tool-dry-run")
+    tool_dry_run_parser.add_argument("step_id")
+    tool_dry_run_parser.add_argument("--arg", action="append", default=[])
+    tool_dry_run_parser.add_argument("--reason", default="")
 
     tool_run_parser = subparsers.add_parser("tool-run")
     tool_run_parser.add_argument("step_id")
@@ -1291,6 +1298,21 @@ def main() -> int:
         print_json({"tool_permission": permission.to_dict()})
         return 0
 
+    if args.command == "tool-dry-run":
+        try:
+            result = dry_run_tool_for_step(
+                ledger,
+                manifest.system_id,
+                args.step_id,
+                tool_args=parse_key_values(args.arg),
+                project_root=Path.cwd(),
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"tool_dry_run": result})
+        return 0
+
     if args.command == "tool-run":
         try:
             result = run_tool_for_step(
@@ -1318,6 +1340,10 @@ def main() -> int:
                 "executions": [
                     record.to_dict()
                     for record in tool_execution_records_from_events(events)
+                ],
+                "previews": [
+                    record.to_dict()
+                    for record in tool_preview_records_from_events(events)
                 ],
             }
         )

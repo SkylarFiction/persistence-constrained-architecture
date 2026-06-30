@@ -50,6 +50,14 @@ class ToolSpec:
     risk: ToolRisk
     description: str
     requires_approval: bool = False
+    read_only: bool = True
+    writes_files: bool = False
+    runs_tests: bool = False
+    uses_network: bool = False
+    creates_evidence: bool = True
+    can_fail_step: bool = True
+    blocked_if_recovery: bool = False
+    blocked_if_high_risk: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -57,6 +65,17 @@ class ToolSpec:
             "risk": self.risk.value,
             "description": self.description,
             "requires_approval": self.requires_approval,
+            "safety_profile": {
+                "read_only": self.read_only,
+                "writes_files": self.writes_files,
+                "runs_tests": self.runs_tests,
+                "uses_network": self.uses_network,
+                "creates_evidence": self.creates_evidence,
+                "can_fail_step": self.can_fail_step,
+                "requires_approval": self.requires_approval,
+                "blocked_if_recovery": self.blocked_if_recovery,
+                "blocked_if_high_risk": self.blocked_if_high_risk,
+            },
         }
 
 
@@ -198,6 +217,86 @@ class ToolExecutionRecord:
         }
 
 
+@dataclass(frozen=True)
+class ToolPreviewRecord:
+    preview_id: str
+    identity_id: str
+    step_id: str
+    mission_id: str
+    tool_name: str
+    tool_risk: ToolRisk
+    permission_decision: ToolPermissionDecision
+    would_execute: bool
+    planned_action: str
+    safety_profile: dict[str, Any]
+    args_hash: str
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    reason: str = ""
+
+    @classmethod
+    def create(
+        cls,
+        identity_id: str,
+        step_id: str,
+        mission_id: str,
+        spec: ToolSpec,
+        permission_decision: str | ToolPermissionDecision,
+        planned_action: str,
+        tool_args: dict[str, str] | None = None,
+        reason: str = "",
+    ) -> "ToolPreviewRecord":
+        decision = _parse_decision(permission_decision)
+        return cls(
+            preview_id=f"tool_preview_{uuid.uuid4()}",
+            identity_id=identity_id,
+            step_id=step_id,
+            mission_id=mission_id,
+            tool_name=spec.name,
+            tool_risk=spec.risk,
+            permission_decision=decision,
+            would_execute=decision == ToolPermissionDecision.ALLOWED,
+            planned_action=planned_action,
+            safety_profile=spec.to_dict()["safety_profile"],
+            args_hash=_text_hash(str(sorted((tool_args or {}).items()))),
+            reason=reason,
+        )
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ToolPreviewRecord":
+        return cls(
+            preview_id=str(data["preview_id"]),
+            identity_id=str(data["identity_id"]),
+            step_id=str(data["step_id"]),
+            mission_id=str(data["mission_id"]),
+            tool_name=str(data["tool_name"]),
+            tool_risk=_parse_risk(data["tool_risk"]),
+            permission_decision=_parse_decision(data["permission_decision"]),
+            would_execute=bool(data["would_execute"]),
+            planned_action=str(data["planned_action"]),
+            safety_profile=dict(data.get("safety_profile", {})),
+            args_hash=str(data["args_hash"]),
+            created_at=str(data["created_at"]),
+            reason=str(data.get("reason", "")),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "preview_id": self.preview_id,
+            "identity_id": self.identity_id,
+            "step_id": self.step_id,
+            "mission_id": self.mission_id,
+            "tool_name": self.tool_name,
+            "tool_risk": self.tool_risk.value,
+            "permission_decision": self.permission_decision.value,
+            "would_execute": self.would_execute,
+            "planned_action": self.planned_action,
+            "safety_profile": self.safety_profile,
+            "args_hash": self.args_hash,
+            "created_at": self.created_at,
+            "reason": self.reason,
+        }
+
+
 TOOL_REGISTRY: dict[str, ToolSpec] = {
     "list_files": ToolSpec(
         name="list_files",
@@ -219,6 +318,7 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
         risk=ToolRisk.MEDIUM,
         description="Run the project verification script.",
         requires_approval=True,
+        runs_tests=True,
     ),
     "open_dashboard": ToolSpec(
         name="open_dashboard",
@@ -250,6 +350,52 @@ def tool_execution_records_from_events(
         for event in events
         if event.event_type == "tool.execution_recorded"
     ]
+
+
+def tool_preview_records_from_events(
+    events: list[ContinuityEvent],
+) -> list[ToolPreviewRecord]:
+    return [
+        ToolPreviewRecord.from_dict(event.payload)
+        for event in events
+        if event.event_type == "tool.preview_recorded"
+    ]
+
+
+def dry_run_tool_for_step(
+    ledger: ContinuityLedger,
+    identity_id: str,
+    step_id: str,
+    tool_args: dict[str, str] | None = None,
+    project_root: str | Path = ".",
+    reason: str = "",
+) -> dict[str, Any]:
+    tool_args = tool_args or {}
+    root = Path(project_root).resolve()
+    step = require_mission_step(ledger.events(), step_id)
+    spec = _require_tool(step.required_tool)
+    permission = check_tool_permission(
+        ledger=ledger,
+        identity_id=identity_id,
+        step_id=step_id,
+        reason=reason or "dry run permission check",
+    )
+    planned_action = _planned_tool_action(spec.name, tool_args, root)
+    preview = ToolPreviewRecord.create(
+        identity_id=identity_id,
+        step_id=step.step_id,
+        mission_id=step.mission_id,
+        spec=spec,
+        permission_decision=permission.decision,
+        planned_action=planned_action,
+        tool_args=tool_args,
+        reason=reason,
+    )
+    ledger.append("tool.preview_recorded", identity_id, preview.to_dict())
+    return {
+        "permission": permission.to_dict(),
+        "preview": preview.to_dict(),
+    }
 
 
 def run_tool_for_step(
@@ -439,6 +585,25 @@ def _execute_tool(
             return f"dashboard not found: {_display_path(project_root, safe_dashboard)}", 1
         return f"http://127.0.0.1:8787/{_display_path(project_root, safe_dashboard)}", 0
     return f"unknown tool: {tool_name}", 1
+
+
+def _planned_tool_action(
+    tool_name: str,
+    tool_args: dict[str, str],
+    project_root: Path,
+) -> str:
+    if tool_name == "list_files":
+        return f"List project files under {tool_args.get('path', '.')!r}."
+    if tool_name == "read_file":
+        return f"Read a bounded preview from {tool_args.get('path', '')!r}."
+    if tool_name == "git_status":
+        return "Run git status --short --branch without changing repository state."
+    if tool_name == "run_check_all":
+        return "Run python3 scripts/check_all.py from the project root."
+    if tool_name == "open_dashboard":
+        path = tool_args.get("path", "reports/lucien_cockpit.html")
+        return f"Return a local dashboard URL for {path!r}; no GUI will be opened."
+    return f"Unknown planned action for {tool_name!r} in {project_root}."
 
 
 def _run_command(command: list[str], project_root: Path) -> tuple[str, int]:
