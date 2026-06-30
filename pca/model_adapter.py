@@ -79,12 +79,28 @@ class EchoAdapter(ModelAdapter):
         system_context: str,
     ) -> ModelResponse:
         user_message = _latest_user_message(messages)
+        claim = _context_value(system_context, "Current continuity claim") or _context_value(
+            system_context,
+            "Continuity claim",
+        )
+        claim = claim or "unknown"
+        memory_count = _context_value(system_context, "Accepted memory cards") or "0"
+        growth_count = _context_value(system_context, "Accepted growth records") or "0"
+        inbox_count = _section_count(system_context, "steward_inbox")
+        mission_count = _section_count(system_context, "missions")
+        if claim == "continuity_break":
+            text = "Continuity is broken; I can only report recovery and governance status."
+        else:
+            prefix = _continuity_prefix(claim)
+            text = (
+                f"{prefix} I received: {user_message}. "
+                f"I have {memory_count} accepted memory card(s) and "
+                f"{growth_count} accepted growth record(s). "
+                f"{_next_action_sentence(inbox_count, mission_count)} "
+                "I will keep working through PCA rather than changing identity directly."
+            )
         return ModelResponse(
-            text=(
-                "Continuity is being governed. "
-                f"I received: {user_message} "
-                "I will answer through PCA rather than changing identity directly."
-            ),
+            text=text,
             provider="echo",
             model="echo-local",
             raw={"system_context_length": len(system_context)},
@@ -262,6 +278,53 @@ def _latest_user_message(messages: list[ModelMessage]) -> str:
         if message.role == "user":
             return message.content
     return ""
+
+
+def _continuity_prefix(claim: str) -> str:
+    if claim == "certified_continuity":
+        return "Continuity is certified."
+    if claim == "review_required":
+        return "I will keep identity claims qualified while review is open."
+    if claim == "uncertified_continuity":
+        return "Continuity is uncertified, so I will answer operationally."
+    if claim == "declared_fork":
+        return "I am speaking as a declared fork lineage."
+    return "Continuity is being governed."
+
+
+def _next_action_sentence(inbox_count: int, mission_count: int) -> str:
+    if inbox_count:
+        return (
+            f"Next safe move: review {inbox_count} Steward Inbox item(s) "
+            "before treating pending growth, evidence, or conflicts as settled."
+        )
+    if mission_count:
+        return "Next safe move: continue the active mission through its governed phase."
+    return "Next safe move: open a mission or ask for a governed status summary."
+
+
+def _context_value(context: str, label: str) -> str:
+    prefix = f"{label}:"
+    for line in context.splitlines():
+        if line.startswith(prefix):
+            return line.split(":", 1)[1].strip()
+    return ""
+
+
+def _section_count(context: str, section_name: str) -> int:
+    prefix = f"{section_name} ("
+    for line in context.splitlines():
+        if not line.startswith(prefix):
+            continue
+        marker = "): "
+        if marker not in line:
+            continue
+        number = line.split(marker, 1)[1].split(" ", 1)[0]
+        try:
+            return int(number)
+        except ValueError:
+            return 0
+    return 0
 
 
 def _compact_raw(data: dict[str, Any]) -> dict[str, Any]:

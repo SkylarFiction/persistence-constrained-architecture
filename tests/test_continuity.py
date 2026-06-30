@@ -290,6 +290,27 @@ def test_echo_adapter_generates_without_external_credentials():
     assert "PCA" in response.text
 
 
+def test_echo_adapter_uses_governed_context_for_next_action():
+    adapter = EchoAdapter()
+
+    response = adapter.generate(
+        messages=[ModelMessage(role="user", content="what is your status?")],
+        system_context="\n".join(
+            [
+                "Current continuity claim: review_required",
+                "Accepted memory cards: 2",
+                "Accepted growth records: 3",
+                "steward_inbox (unified_review_pressure): 4 item(s)",
+            ]
+        ),
+    )
+
+    assert "identity claims qualified" in response.text
+    assert "2 accepted memory card" in response.text
+    assert "3 accepted growth record" in response.text
+    assert "Steward Inbox" in response.text
+
+
 def test_adapter_from_environment_uses_echo_without_api_key(tmp_path):
     old_key = os.environ.pop("OPENAI_API_KEY", None)
     old_model = os.environ.pop("LUCIEN_MODEL", None)
@@ -1206,6 +1227,50 @@ def test_context_builder_assembles_governed_working_context(tmp_path):
     assert by_name["missions"].items[0]["evidence_links"] == 1
     assert by_name["mission_steps"].items[-1]["step_id"] == future_step.step_id
     assert by_name["skill_suggestions"].items[0]["skill_id"] == candidate.skill_id
+
+
+def test_governed_context_includes_unified_steward_inbox(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="commitment",
+        summary="High-impact commitment needs review.",
+        identity_impact="high",
+        reason="steward inbox context test",
+    )
+
+    context = build_governed_context(ledger, manifest)
+    sections = {section.name: section for section in context.sections}
+    rendered = context.render_prompt_context()
+
+    assert "steward_inbox" in sections
+    assert sections["steward_inbox"].items
+    assert sections["steward_inbox"].items[0]["type"] == "growth_review"
+    assert "steward_inbox" in rendered
+    assert "High-impact commitment needs review" not in rendered
+
+
+def test_local_lucien_responder_uses_steward_inbox_next_action(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    shell = LucienChatShell(manifest=manifest, ledger=ledger)
+    shell.seed_required_evidence()
+    propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="commitment",
+        summary="Review before identity acceptance.",
+        identity_impact="high",
+        reason="steward inbox local voice test",
+    )
+
+    result = shell.handle_message("what is your status?")
+
+    assert "Steward Inbox" in result.response_text
+    assert "Next safe move" in result.response_text
+    assert result.output_allowed is True
 
 
 def test_context_builder_prompt_context_is_hash_and_status_based(tmp_path):

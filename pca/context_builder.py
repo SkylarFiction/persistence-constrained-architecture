@@ -26,6 +26,7 @@ from .reflection_queue import active_reflection_tasks
 from .self_model import derive_self_model
 from .skill_memory import skill_suggestions_for_mission
 from .state import derive_current_claim
+from .steward_inbox import steward_inbox
 
 
 @dataclass(frozen=True)
@@ -111,6 +112,7 @@ def build_governed_context(
     followups = active_followups(events)
     unresolved_conflicts = _unresolved_conflicts(events)
     mission_sections = _mission_context_sections(events, mission_id)
+    inbox_items = steward_inbox(ledger)
     context = GovernedContext(
         identity_id=manifest.system_id,
         continuity_claim=claim,
@@ -191,6 +193,26 @@ def build_governed_context(
                         if followups
                         else []
                     ),
+                ],
+            ),
+            ContextSection(
+                name="steward_inbox",
+                status="unified_review_pressure",
+                items=[
+                    {
+                        "inbox_id": item.inbox_id,
+                        "type": item.source_type,
+                        "severity": item.severity,
+                        "status": item.status,
+                        "title": item.title,
+                        "actions": ",".join(item.recommended_actions),
+                    }
+                    for item in inbox_items[:8]
+                ],
+                warnings=[
+                    f"{len(inbox_items)} steward inbox item(s) need review"
+                    for _ in [None]
+                    if inbox_items
                 ],
             ),
             ContextSection(
