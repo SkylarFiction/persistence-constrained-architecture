@@ -809,6 +809,22 @@ def test_live_chat_html_contains_mission_first_home():
     assert "homeMission" in html
     assert "homeNextAction" in html
     assert "homeModelMode" in html
+    assert "Run Tool" in html
+    assert "tool risk" in html
+    assert "run_tool" in html
+
+
+def test_live_status_includes_tool_router_state(tmp_path):
+    from pca.live_chat import _status_payload
+
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    status = _status_payload(ledger, manifest)
+
+    assert status["tools"]["read_file"]["risk"] == "low"
+    assert status["tools"]["run_check_all"]["requires_approval"] is True
+    assert status["tool_executions"] == []
 
 
 def test_live_steward_action_runs_reflection_and_opens_tasks(tmp_path):
@@ -1351,6 +1367,54 @@ def test_live_steward_action_opens_mission_and_adds_item(tmp_path):
     assert opened["mission"]["status"] == "open"
     assert added["mission_item"]["kind"] == "evidence"
     assert counts["evidence"] == 1
+
+
+def test_live_steward_action_runs_governed_tool(tmp_path):
+    manifest = load_manifest()
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    (project_root / "note.txt").write_text("live governed tool output", encoding="utf-8")
+    old_cwd = os.getcwd()
+    os.chdir(project_root)
+    try:
+        ledger = ContinuityLedger(tmp_path / "continuity.log")
+        mission = open_mission(
+            ledger,
+            manifest.system_id,
+            title="Live tool mission",
+            problem_statement="Run a safe live tool.",
+        )
+        step = propose_mission_step(
+            ledger,
+            manifest.system_id,
+            mission.mission_id,
+            description="Read a note from the live UI.",
+            risk_level="low",
+            required_tool="read_file",
+        )
+
+        result = _apply_steward_action(
+            ledger,
+            manifest,
+            {
+                "action": "run_tool",
+                "step_id": step.step_id,
+                "tool_args": {"path": "note.txt"},
+                "reason": "ran from live mission step panel",
+            },
+        )
+    finally:
+        os.chdir(old_cwd)
+
+    executions = tool_execution_records_from_events(ledger.events())
+    evidence = evidence_for_target(ledger.events(), "mission", mission.mission_id)
+    steps = mission_step_records_from_events(ledger.events(), mission.mission_id)
+
+    assert result["permission"]["decision"] == "allowed"
+    assert result["execution"]["status"] == "completed"
+    assert executions[-1].tool_name == "read_file"
+    assert evidence
+    assert steps[-1].execution_status == MissionStepExecutionStatus.COMPLETED
 
 
 def test_mission_risk_opens_mission_review_task(tmp_path):

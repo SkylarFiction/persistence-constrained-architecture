@@ -54,6 +54,11 @@ from .self_model import derive_self_model
 from .skill_memory import accepted_skills_from_events, skill_candidates_from_events
 from .state import derive_current_claim
 from .steward_inbox import apply_steward_inbox_action, steward_inbox
+from .tool_router import (
+    run_tool_for_step,
+    tool_execution_records_from_events,
+    tool_specs,
+)
 from .workbench import workbench_status
 
 
@@ -400,6 +405,24 @@ def _apply_steward_action(
             reviewer=str(payload.get("reviewer", "steward")),
         )
 
+    if action == "run_tool":
+        step_id = str(payload.get("step_id", "")).strip()
+        if not step_id:
+            raise ValueError("step_id is required")
+        tool_args = {
+            str(key): str(value)
+            for key, value in dict(payload.get("tool_args", {})).items()
+            if str(key).strip()
+        }
+        return run_tool_for_step(
+            ledger,
+            manifest.system_id,
+            step_id,
+            tool_args=tool_args,
+            project_root=Path.cwd(),
+            reason=reason,
+        )
+
     raise ValueError(f"unknown steward action: {action}")
 
 
@@ -513,6 +536,10 @@ def _status_payload(
     mission_steps = [
         step.to_dict() for step in mission_step_records_from_events(ledger.events())
     ]
+    tool_spec_map = {spec.name: spec.to_dict() for spec in tool_specs()}
+    tool_executions = [
+        record.to_dict() for record in tool_execution_records_from_events(ledger.events())
+    ]
     skill_candidates = [
         candidate.to_dict() for candidate in skill_candidates_from_events(ledger.events())
     ]
@@ -556,6 +583,8 @@ def _status_payload(
         "missions": missions,
         "mission_flows": mission_flows,
         "mission_steps": mission_steps,
+        "tools": tool_spec_map,
+        "tool_executions": tool_executions,
         "skill_candidates": skill_candidates,
         "accepted_skills": accepted_skills,
         "governed_context": governed_context.to_dict(),
@@ -905,7 +934,7 @@ def _live_chat_html() -> str:
       renderMemoryInbox(status.memory_inbox || []);
       renderRecall((status.self_model || {}).memory_cards || []);
       renderMissions(status.missions || [], status.mission_flows || {});
-      renderMissionSteps(status.mission_steps || []);
+      renderMissionSteps(status.mission_steps || [], status.tools || {}, status.tool_executions || []);
       renderSkillMemory(status.skill_candidates || [], status.accepted_skills || []);
       renderStewardInbox(status.steward_inbox || []);
       renderGrowth(status.active_growth || []);
@@ -1165,24 +1194,77 @@ def _live_chat_html() -> str:
       }
     }
 
-    function renderMissionSteps(records) {
+    function renderMissionSteps(records, tools, executions) {
       if (!records.length) {
         empty(missionSteps, 'No mission steps recorded.');
         return;
       }
       missionSteps.innerHTML = '';
+      const latestExecution = {};
+      for (const execution of executions || []) {
+        latestExecution[execution.step_id] = execution;
+      }
       for (const step of records.slice(-8)) {
         const row = document.createElement('div');
         row.className = 'item';
+        const spec = tools[step.required_tool] || {};
+        const execution = latestExecution[step.step_id] || null;
         const title = document.createElement('div');
         title.className = 'item-title';
         title.textContent = `${step.execution_status} / ${step.risk_level} / ${step.required_tool}`;
         const meta = document.createElement('div');
         meta.className = 'item-meta';
-        meta.textContent = `${step.step_id} / approval ${step.approval_status} / mission ${step.mission_id} / hash ${step.description_sha256.slice(0, 12)}`;
-        row.append(title, meta);
+        meta.textContent = `${step.step_id} / approval ${step.approval_status} / tool risk ${spec.risk || 'unknown'} / mission ${step.mission_id} / hash ${step.description_sha256.slice(0, 12)}`;
+        const latest = document.createElement('div');
+        latest.className = 'item-meta';
+        latest.textContent = execution ? `latest tool execution: ${execution.status} / evidence ${execution.evidence_id || 'none'}` : (spec.description || 'No governed tool execution yet.');
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        const canRun = ['proposed', 'ready'].includes(step.execution_status);
+        const needsApproval = ['medium', 'high'].includes(step.risk_level) && step.approval_status !== 'approved';
+        if (!spec.name) {
+          const blocked = document.createElement('div');
+          blocked.className = 'item-meta';
+          blocked.textContent = 'Tool is not registered in the governed router.';
+          actions.appendChild(blocked);
+        } else if (needsApproval) {
+          const blocked = document.createElement('div');
+          blocked.className = 'item-meta';
+          blocked.textContent = 'Approval required before tool execution.';
+          actions.appendChild(blocked);
+        } else if (canRun) {
+          actions.appendChild(toolButton(step, spec));
+        } else {
+          const done = document.createElement('div');
+          done.className = 'item-meta';
+          done.textContent = `No run action available from ${step.execution_status}.`;
+          actions.appendChild(done);
+        }
+        row.append(title, meta, latest, actions);
         missionSteps.appendChild(row);
       }
+    }
+
+    function toolButton(step, spec) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = `Run Tool (${spec.risk})`;
+      btn.addEventListener('click', () => {
+        const toolArgs = {};
+        if (step.required_tool === 'read_file' || step.required_tool === 'list_files' || step.required_tool === 'open_dashboard') {
+          const fallback = step.required_tool === 'read_file' ? 'README.md' : '.';
+          const value = window.prompt(`Path for ${step.required_tool}`, fallback);
+          if (value === null) return;
+          toolArgs.path = value;
+        }
+        steward({
+          action: 'run_tool',
+          step_id: step.step_id,
+          tool_args: toolArgs,
+          reason: `ran ${step.required_tool} from live mission step panel`
+        });
+      });
+      return btn;
     }
 
     function renderSkillMemory(candidates, accepted) {
