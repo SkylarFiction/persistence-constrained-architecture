@@ -54,6 +54,7 @@ from .self_model import derive_self_model
 from .skill_memory import accepted_skills_from_events, skill_candidates_from_events
 from .state import derive_current_claim
 from .steward_inbox import apply_steward_inbox_action, steward_inbox
+from .workbench import workbench_status
 
 
 def run_live_chat_server(
@@ -542,6 +543,7 @@ def _status_payload(
     )
     return {
         "summary": summary,
+        "workbench": workbench_status(ledger, manifest),
         "model_adapter": model_environment_diagnostic(),
         "model_usage": model_usage,
         "steward_inbox": [item.to_dict() for item in steward_inbox(ledger)],
@@ -675,6 +677,11 @@ def _live_chat_html() -> str:
     h1 { margin: 0 0 6px; font-size: 30px; }
     h2 { margin: 0 0 12px; font-size: 18px; }
     main { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); gap: 18px; max-width: 1320px; margin: 0 auto; padding: 18px; }
+    .home { grid-column: 1 / -1; display: grid; gap: 14px; }
+    .home-top { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: 12px; }
+    .home-title { font-size: 24px; font-weight: 900; margin: 0 0 4px; }
+    .home-subtitle { color: var(--muted); font-size: 14px; }
+    .home-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     section { background: var(--panel); border: 1px solid var(--line); padding: 16px; }
     .chat { min-height: 560px; display: flex; flex-direction: column; }
     .messages { flex: 1; overflow-y: auto; border: 1px solid #e8ece8; padding: 12px; background: #fbfcf8; }
@@ -712,6 +719,30 @@ def _live_chat_html() -> str:
     <div>Talk to Lucien through PCA. The model speaks; governance decides what can become identity.</div>
   </header>
   <main>
+    <section class="home">
+      <div class="home-top">
+        <div>
+          <h2 class="home-title">Lucien Workbench</h2>
+          <div id="homeSubtitle" class="home-subtitle">What are we working on today?</div>
+        </div>
+        <div class="home-actions">
+          <button type="button" id="homeStartMission">Start Mission</button>
+          <button type="button" id="homeReviewInbox" class="secondary">Review Inbox</button>
+          <button type="button" id="homeSessionReplay" class="secondary">View Session Replay</button>
+        </div>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="label">Active Mission</div><div id="homeMission" class="value">loading</div></div>
+        <div class="metric"><div class="label">Mission Phase</div><div id="homePhase" class="value">loading</div></div>
+        <div class="metric"><div class="label">Next Safe Action</div><div id="homeNextAction" class="value">loading</div></div>
+        <div class="metric"><div class="label">Blockers</div><div id="homeBlockers" class="value">loading</div></div>
+        <div class="metric"><div class="label">Steward Inbox</div><div id="homeInbox" class="value">loading</div></div>
+        <div class="metric"><div class="label">Model Mode</div><div id="homeModelMode" class="value">loading</div></div>
+        <div class="metric"><div class="label">Session Cost</div><div id="homeCost" class="value">loading</div></div>
+        <div class="metric"><div class="label">Continuity / Gate</div><div id="homeContinuity" class="value">loading</div></div>
+      </div>
+      <div id="homeBlockerList" class="queue"></div>
+    </section>
     <section class="chat">
       <h2>Chat</h2>
       <div id="messages" class="messages"></div>
@@ -852,6 +883,7 @@ def _live_chat_html() -> str:
 
     function renderStatus(status) {
       const summary = status.summary || {};
+      renderWorkbenchHome(status.workbench || {}, status);
       document.getElementById('claim').textContent = summary.current_continuity_claim || 'unknown';
       document.getElementById('csm').textContent = status.csm_state || 'unknown';
       const gate = status.output_gate || {};
@@ -885,6 +917,34 @@ def _live_chat_html() -> str:
         row.className = 'event';
         row.innerHTML = `<code>${event.event_type}</code><br>${event.detail || ''}`;
         events.appendChild(row);
+      }
+    }
+
+    function renderWorkbenchHome(workbench, status) {
+      const mission = workbench.active_mission || null;
+      document.getElementById('homeSubtitle').textContent = mission ? 'Current governed mission' : 'What are we working on today?';
+      document.getElementById('homeMission').textContent = mission ? mission.title : 'No active mission';
+      document.getElementById('homePhase').textContent = mission ? mission.phase : 'none';
+      document.getElementById('homeNextAction').textContent = workbench.recommended_next_action || 'Open a mission before using Lucien for work.';
+      document.getElementById('homeBlockers').textContent = mission ? mission.blocker_count || 0 : 0;
+      document.getElementById('homeInbox').textContent = `${workbench.open_steward_inbox_count || 0} open / ${workbench.high_priority_inbox_count || 0} high`;
+      document.getElementById('homeModelMode').textContent = workbench.model_mode || 'serious_only';
+      document.getElementById('homeCost').textContent = `$${Number(workbench.estimated_session_cost_usd || 0).toFixed(6)}`;
+      document.getElementById('homeContinuity').textContent = `${workbench.continuity_state || 'unknown'} / ${workbench.output_gate_mode || 'unknown'}`;
+      const blockerList = document.getElementById('homeBlockerList');
+      blockerList.innerHTML = '';
+      if (mission && mission.blockers && mission.blockers.length) {
+        for (const blocker of mission.blockers.slice(0, 3)) {
+          const row = document.createElement('div');
+          row.className = 'item';
+          row.textContent = blocker;
+          blockerList.appendChild(row);
+        }
+      } else {
+        const row = document.createElement('div');
+        row.className = 'item-meta';
+        row.textContent = mission ? 'No mission blockers detected.' : 'No active mission. Start one to turn chat into governed work.';
+        blockerList.appendChild(row);
       }
     }
 
@@ -1329,6 +1389,19 @@ def _live_chat_html() -> str:
 
     document.getElementById('reflectNow').addEventListener('click', () => {
       steward({action: 'run_reflection', reason: 'manual live cockpit reflection'});
+    });
+
+    document.getElementById('homeStartMission').addEventListener('click', () => {
+      document.getElementById('missionTitle').focus();
+      document.getElementById('missionTitle').scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
+
+    document.getElementById('homeReviewInbox').addEventListener('click', () => {
+      stewardInbox.scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
+
+    document.getElementById('homeSessionReplay').addEventListener('click', () => {
+      timeline.scrollIntoView({behavior: 'smooth', block: 'center'});
     });
 
     for (const control of document.querySelectorAll('[data-inbox-filter]')) {

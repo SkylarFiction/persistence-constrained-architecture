@@ -275,6 +275,7 @@ from .steward_inbox import (
     find_steward_inbox_item,
     steward_inbox,
 )
+from .workbench import workbench_status
 
 __all__ = [
     "ContinuityEvaluation",
@@ -514,4 +515,5 @@ __all__ = [
     "write_lucien_cockpit_html",
     "write_session_replay_html",
     "write_trace_report_html",
+    "workbench_status",
 ]

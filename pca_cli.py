@@ -105,6 +105,7 @@ from pca import (
     write_constitution_markdown,
     write_lucien_cockpit_html,
     write_trace_report_html,
+    workbench_status,
     verify_latest_anchor,
     build_session_replay,
     latest_session_id,
@@ -245,6 +246,7 @@ def main() -> int:
 
     subparsers.add_parser("status")
     subparsers.add_parser("model-diagnostic")
+    subparsers.add_parser("workbench-status")
     chat_once_parser = subparsers.add_parser("chat-once")
     chat_once_parser.add_argument("message")
     chat_once_parser.add_argument(
@@ -714,6 +716,10 @@ def main() -> int:
 
     if args.command == "model-diagnostic":
         print_json({"model_adapter": model_environment_diagnostic()})
+        return 0
+
+    if args.command == "workbench-status":
+        print_json({"workbench": workbench_status(ledger, manifest)})
         return 0
 
     if args.command == "chat-once":

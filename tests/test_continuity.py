@@ -132,6 +132,7 @@ from pca import (
     start_mission_step,
     steward_inbox,
     apply_steward_inbox_action,
+    workbench_status,
     verify_latest_anchor,
     write_constitution_markdown,
     write_session_replay_html,
@@ -793,6 +794,17 @@ def test_live_steward_action_can_route_unified_inbox_action(tmp_path):
     )
 
     assert result["task"]["status"] == "dismissed"
+
+
+def test_live_chat_html_contains_mission_first_home():
+    from pca.live_chat import _live_chat_html
+
+    html = _live_chat_html()
+
+    assert "Lucien Workbench" in html
+    assert "homeMission" in html
+    assert "homeNextAction" in html
+    assert "homeModelMode" in html
 
 
 def test_live_steward_action_runs_reflection_and_opens_tasks(tmp_path):
@@ -1609,6 +1621,71 @@ def test_mission_flow_reports_all_missions(tmp_path):
     ]
     assert flows[0].phase == MissionPhase.INTAKE
     assert flows[1].phase == MissionPhase.COMPLETED
+
+
+def test_workbench_status_recommends_opening_mission_when_none_exists(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    status = workbench_status(ledger, manifest)
+
+    assert status["active_mission"] is None
+    assert status["active_mission_count"] == 0
+    assert status["recommended_next_action"] == "Open a mission before using Lucien for work."
+    assert status["model_mode"] == "serious_only"
+
+
+def test_workbench_status_shows_active_mission_intake(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Workbench mission",
+        problem_statement="Make Lucien easier to use.",
+    )
+
+    status = workbench_status(ledger, manifest)
+
+    assert status["active_mission"]["mission_id"] == mission.mission_id
+    assert status["active_mission"]["phase"] == "intake"
+    assert status["active_mission"]["next_action"]
+    assert status["active_mission_count"] == 1
+
+
+def test_workbench_status_counts_blocked_mission_and_inbox(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Blocked workbench mission",
+        problem_statement="Needs approval before execution.",
+    )
+    propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Medium-risk step.",
+        risk_level="medium",
+        required_tool="manual_review",
+    )
+    propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="commitment",
+        summary="High-impact inbox item.",
+        identity_impact="high",
+        reason="workbench inbox item",
+    )
+
+    status = workbench_status(ledger, manifest)
+
+    assert status["active_mission"]["phase"] == "blocked"
+    assert status["blocked_mission_count"] == 1
+    assert status["open_steward_inbox_count"] >= 1
+    assert status["high_priority_inbox_count"] >= 1
+    assert "Review high-priority" in status["recommended_next_action"]
 
 
 def test_low_risk_mission_step_can_start_without_approval(tmp_path):
