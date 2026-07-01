@@ -26,6 +26,10 @@ from .manifest import IdentityManifest
 from .memory_cards import memory_cards_from_events
 from .memory_signals import record_memory_signal
 from .mission_flow import mission_flows_from_events
+from .mission_autonomy import (
+    mission_autonomy_recommendations_from_events,
+    propose_autonomous_mission_step,
+)
 from .mission_steps import mission_step_records_from_events
 from .missions import (
     MissionItemKind,
@@ -443,6 +447,16 @@ def _apply_steward_action(
             reason=reason,
         )
 
+    if action == "propose_next_step":
+        mission_id = str(payload.get("mission_id", "")).strip()
+        if not mission_id:
+            raise ValueError("mission_id is required")
+        return propose_autonomous_mission_step(
+            ledger,
+            manifest.system_id,
+            mission_id,
+        )
+
     raise ValueError(f"unknown steward action: {action}")
 
 
@@ -573,6 +587,10 @@ def _status_payload(
         flow.mission_id: flow.to_dict()
         for flow in mission_flows_from_events(ledger.events())
     }
+    mission_autonomy = [
+        record.to_dict()
+        for record in mission_autonomy_recommendations_from_events(ledger.events())
+    ]
     latest_events = [
         {
             "event_type": event.event_type,
@@ -605,6 +623,7 @@ def _status_payload(
         "growth_conflicts": unresolved_conflicts,
         "missions": missions,
         "mission_flows": mission_flows,
+        "mission_autonomy": mission_autonomy,
         "mission_steps": mission_steps,
         "tools": tool_spec_map,
         "tool_executions": tool_executions,
@@ -957,7 +976,7 @@ def _live_chat_html() -> str:
       renderGovernedContext(status.governed_context || {});
       renderMemoryInbox(status.memory_inbox || []);
       renderRecall((status.self_model || {}).memory_cards || []);
-      renderMissions(status.missions || [], status.mission_flows || {});
+      renderMissions(status.missions || [], status.mission_flows || {}, status.mission_autonomy || []);
       renderMissionSteps(status.mission_steps || [], status.tools || {}, status.tool_executions || [], status.tool_previews || []);
       renderSkillMemory(status.skill_candidates || [], status.accepted_skills || []);
       renderStewardInbox(status.steward_inbox || []);
@@ -1147,15 +1166,20 @@ def _live_chat_html() -> str:
       }
     }
 
-    function renderMissions(records, flows) {
+    function renderMissions(records, flows, autonomy) {
       if (!records.length) {
         empty(missions, 'No missions opened yet.');
         return;
       }
       missions.innerHTML = '';
+      const latestAutonomy = {};
+      for (const recommendation of autonomy || []) {
+        latestAutonomy[recommendation.mission_id] = recommendation;
+      }
       for (const brief of records) {
         const mission = brief.mission || {};
         const flow = flows[mission.mission_id] || {};
+        const recommendation = latestAutonomy[mission.mission_id] || null;
         const counts = brief.counts || {};
         const row = document.createElement('div');
         row.className = 'item';
@@ -1169,6 +1193,9 @@ def _live_chat_html() -> str:
         const next = document.createElement('div');
         next.className = 'item-meta';
         next.textContent = `${(flow.blockers || []).length ? 'blocked: ' + flow.blockers.join(' / ') : 'next: ' + (flow.next_action || 'none')}`;
+        const autonomyLine = document.createElement('div');
+        autonomyLine.className = 'item-meta';
+        autonomyLine.textContent = recommendation ? `latest autonomous proposal: ${recommendation.can_propose ? recommendation.required_tool + ' / ' + recommendation.risk_level : 'blocked'} / ${recommendation.reason}` : 'No autonomous step proposal yet.';
 
         const itemForm = document.createElement('form');
         itemForm.addEventListener('submit', (event) => {
@@ -1206,6 +1233,7 @@ def _live_chat_html() -> str:
         const actions = document.createElement('div');
         actions.className = 'actions';
         if (mission.status === 'open') {
+          actions.appendChild(button('Suggest Next Step', {action: 'propose_next_step', mission_id: mission.mission_id, reason: 'live autonomous mission loop'}));
           actions.appendChild(button('Pause', {action: 'update_mission_status', mission_id: mission.mission_id, status: 'paused', reason: 'paused in live mission workspace'}));
           actions.appendChild(button('Complete', {action: 'update_mission_status', mission_id: mission.mission_id, status: 'completed', reason: 'completed in live mission workspace'}));
         } else if (mission.status === 'paused') {
@@ -1213,7 +1241,7 @@ def _live_chat_html() -> str:
         }
         actions.appendChild(button('Archive', {action: 'update_mission_status', mission_id: mission.mission_id, status: 'archived', reason: 'archived in live mission workspace'}));
 
-        row.append(title, meta, next, itemForm, actions);
+        row.append(title, meta, next, autonomyLine, itemForm, actions);
         missions.appendChild(row);
       }
     }

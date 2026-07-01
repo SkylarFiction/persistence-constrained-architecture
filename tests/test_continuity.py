@@ -95,6 +95,9 @@ from pca import (
     memory_signal_records_from_events,
     model_environment_diagnostic,
     mission_briefs_from_events,
+    recommend_next_mission_step,
+    propose_autonomous_mission_step,
+    mission_autonomy_recommendations_from_events,
     mission_flow,
     mission_flows_from_events,
     mission_items_from_events,
@@ -817,6 +820,8 @@ def test_live_chat_html_contains_mission_first_home():
     assert "safety:" in html
     assert "dry_run_tool" in html
     assert "run_tool" in html
+    assert "Suggest Next Step" in html
+    assert "propose_next_step" in html
 
 
 def test_live_status_includes_tool_router_state(tmp_path):
@@ -1474,6 +1479,119 @@ def test_live_steward_action_dry_runs_tool_without_execution(tmp_path):
     assert executions == []
     assert evidence == []
     assert steps[-1].execution_status == MissionStepExecutionStatus.READY
+
+
+def test_autonomous_mission_loop_proposes_intake_step(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Autonomous intake",
+        problem_statement="Find the first safe move.",
+    )
+
+    result = propose_autonomous_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+    )
+    recommendations = mission_autonomy_recommendations_from_events(ledger.events())
+    steps = mission_step_records_from_events(ledger.events(), mission.mission_id)
+
+    assert result["recommendation"]["can_propose"] is True
+    assert result["mission_step"]["required_tool"] == "list_files"
+    assert result["mission_step"]["risk_level"] == "low"
+    assert result["mission_step"]["execution_status"] == "ready"
+    assert recommendations[-1].mission_id == mission.mission_id
+    assert steps[-1].required_tool == "list_files"
+
+
+def test_autonomous_mission_loop_does_not_duplicate_active_step(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="No duplicate steps",
+        problem_statement="Avoid spamming proposed work.",
+    )
+    propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Existing safe step.",
+        risk_level="low",
+        required_tool="git_status",
+    )
+
+    recommendation = recommend_next_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+    )
+    steps = mission_step_records_from_events(ledger.events(), mission.mission_id)
+
+    assert recommendation.can_propose is False
+    assert "already has an active" in recommendation.reason
+    assert len(steps) == 1
+
+
+def test_autonomous_mission_loop_respects_mission_blockers(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Blocked autonomy",
+        problem_statement="Do not advance through risk.",
+    )
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "risk",
+        "Risk requires steward review before action.",
+        status="open",
+        confidence="medium",
+        reason="autonomy blocker test",
+    )
+
+    result = propose_autonomous_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+    )
+    steps = mission_step_records_from_events(ledger.events(), mission.mission_id)
+
+    assert result["recommendation"]["can_propose"] is False
+    assert result["mission_step"] is None
+    assert "blockers" in result["recommendation"]["reason"]
+    assert steps == []
+
+
+def test_live_steward_action_proposes_next_mission_step(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Live autonomous step",
+        problem_statement="Suggest a safe next step from the UI.",
+    )
+
+    result = _apply_steward_action(
+        ledger,
+        manifest,
+        {
+            "action": "propose_next_step",
+            "mission_id": mission.mission_id,
+            "reason": "test live autonomous loop",
+        },
+    )
+
+    assert result["recommendation"]["can_propose"] is True
+    assert result["mission_step"]["required_tool"] == "list_files"
 
 
 def test_mission_risk_opens_mission_review_task(tmp_path):

@@ -70,6 +70,8 @@ from pca import (
     memory_signal_records_from_events,
     model_environment_diagnostic,
     mission_briefs_from_events,
+    recommend_next_mission_step,
+    propose_autonomous_mission_step,
     mission_flow,
     mission_flows_from_events,
     mission_step_records_from_events,
@@ -372,6 +374,10 @@ def main() -> int:
 
     mission_advance_parser = subparsers.add_parser("mission-advance")
     mission_advance_parser.add_argument("mission_id")
+
+    mission_next_parser = subparsers.add_parser("mission-next-step")
+    mission_next_parser.add_argument("mission_id")
+    mission_next_parser.add_argument("--apply", action="store_true")
 
     mission_steps_parser = subparsers.add_parser("mission-steps")
     mission_steps_parser.add_argument("--mission")
@@ -1207,6 +1213,29 @@ def main() -> int:
             reason=args.reason,
         )
         print_json({"mission_step": step.to_dict()})
+        return 0
+
+    if args.command == "mission-next-step":
+        try:
+            if args.apply:
+                result = propose_autonomous_mission_step(
+                    ledger,
+                    manifest.system_id,
+                    args.mission_id,
+                )
+            else:
+                recommendation = recommend_next_mission_step(
+                    ledger,
+                    manifest.system_id,
+                    args.mission_id,
+                )
+                result = {
+                    "recommendation": recommendation.to_dict(),
+                    "mission_step": None,
+                }
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"mission_next_step": result})
         return 0
 
     if args.command == "mission-step-approve":

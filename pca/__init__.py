@@ -130,6 +130,13 @@ from .mission_flow import (
     mission_flow_from_events,
     mission_flows_from_events,
 )
+from .mission_autonomy import (
+    MissionAutonomyRecommendation,
+    mission_autonomy_recommendations_from_events,
+    propose_autonomous_mission_step,
+    recommend_next_mission_step,
+    recommend_next_mission_step_from_events,
+)
 from .mission_steps import (
     MissionStepApprovalStatus,
     MissionStepExecutionStatus,
