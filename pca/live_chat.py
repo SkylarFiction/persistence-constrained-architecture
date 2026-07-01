@@ -780,51 +780,137 @@ def _live_chat_html() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Lucien Live Chat</title>
   <style>
-    :root { --ink:#17201b; --muted:#60706a; --line:#d8ded9; --paper:#f7f8f4; --panel:#fff; --deep:#11231b; --green:#136f45; --amber:#9a6412; }
+    :root {
+      --ink:#ecf2ee;
+      --muted:#9fb0a8;
+      --line:#2f3d37;
+      --paper:#0d1210;
+      --panel:#141c18;
+      --panel-2:#19241f;
+      --deep:#09100d;
+      --green:#42c57a;
+      --teal:#54c4b3;
+      --amber:#d8a13a;
+      --red:#e06464;
+      --input:#0f1714;
+      --shadow: 0 18px 48px rgba(0,0,0,.32);
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--paper); color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 0; }
-    header { padding: 24px clamp(18px, 4vw, 48px); background: var(--deep); color: white; }
-    h1 { margin: 0 0 6px; font-size: 30px; }
-    h2 { margin: 0 0 12px; font-size: 18px; }
-    main { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); gap: 18px; max-width: 1320px; margin: 0 auto; padding: 18px; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 18% 0%, rgba(84,196,179,.12), transparent 32rem),
+        radial-gradient(circle at 82% 10%, rgba(216,161,58,.10), transparent 28rem),
+        linear-gradient(180deg, #101713 0%, var(--paper) 42%, #090d0b 100%);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+    header {
+      padding: 28px clamp(18px, 4vw, 52px);
+      background:
+        linear-gradient(135deg, rgba(10,18,14,.96), rgba(18,35,29,.92)),
+        var(--deep);
+      color: var(--ink);
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      box-shadow: 0 8px 32px rgba(0,0,0,.34);
+    }
+    h1 { margin: 0 0 6px; font-size: 30px; line-height: 1.08; }
+    h2 { margin: 0 0 12px; font-size: 17px; line-height: 1.2; color: #f4f8f5; }
+    main { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); gap: 18px; max-width: 1360px; margin: 0 auto; padding: 18px; }
     .home { grid-column: 1 / -1; display: grid; gap: 14px; }
     .home-top { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: 12px; }
-    .home-title { font-size: 24px; font-weight: 900; margin: 0 0 4px; }
+    .home-title { font-size: 25px; font-weight: 900; margin: 0 0 4px; }
     .home-subtitle { color: var(--muted); font-size: 14px; }
     .home-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .mission-dashboard { grid-column: 1 / -1; display: grid; gap: 12px; }
     .mission-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
     .mission-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
-    .mission-card.active { border-color: var(--green); box-shadow: inset 4px 0 0 var(--green); }
-    section { background: var(--panel); border: 1px solid var(--line); padding: 16px; }
+    .mission-card.active { border-color: rgba(66,197,122,.72); box-shadow: inset 4px 0 0 var(--green), 0 0 0 1px rgba(66,197,122,.08); }
+    section {
+      background: linear-gradient(180deg, rgba(25,36,31,.96), rgba(18,26,22,.96));
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
     .chat { min-height: 560px; display: flex; flex-direction: column; }
-    .messages { flex: 1; overflow-y: auto; border: 1px solid #e8ece8; padding: 12px; background: #fbfcf8; }
-    .msg { margin: 0 0 12px; padding: 10px; border-left: 4px solid var(--line); background: white; }
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 8px;
+      padding: 12px;
+      background: linear-gradient(180deg, rgba(8,13,11,.78), rgba(12,18,15,.92));
+    }
+    .msg {
+      margin: 0 0 12px;
+      padding: 12px;
+      border: 1px solid rgba(255,255,255,.08);
+      border-left: 4px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.045);
+      color: #edf4f0;
+      overflow-wrap: anywhere;
+    }
     .msg.user { border-left-color: var(--amber); }
     .msg.lucien { border-left-color: var(--green); }
     form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; margin-top: 12px; }
-    input, select, textarea { padding: 10px; font: inherit; border: 1px solid var(--line); background: white; color: var(--ink); min-width: 0; }
+    input, select, textarea {
+      padding: 10px;
+      font: inherit;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 8px;
+      background: var(--input);
+      color: var(--ink);
+      min-width: 0;
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: rgba(84,196,179,.75); box-shadow: 0 0 0 3px rgba(84,196,179,.14); }
     textarea { min-height: 72px; resize: vertical; }
     .model-controls { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(170px, 220px) minmax(0, 1fr); gap: 8px; align-items: center; }
     .checkline { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 13px; font-weight: 700; }
     .checkline input { width: auto; }
-    button { min-height: 40px; border: 1px solid var(--deep); background: var(--deep); color: white; padding: 0 14px; font-weight: 700; cursor: pointer; }
-    button.secondary { background: white; color: var(--deep); }
+    button {
+      min-height: 40px;
+      border: 1px solid rgba(84,196,179,.42);
+      border-radius: 8px;
+      background: linear-gradient(180deg, #28765d, #1e5b49);
+      color: white;
+      padding: 0 14px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 10px 26px rgba(0,0,0,.26);
+    }
+    button:hover { border-color: rgba(84,196,179,.78); filter: brightness(1.08); }
+    button.secondary { background: rgba(255,255,255,.055); color: #dce8e2; border-color: rgba(255,255,255,.14); box-shadow: none; }
     .side { display: grid; gap: 18px; }
     .metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-    .metric { border: 1px solid #e8ece8; padding: 10px; background: #fbfcf8; }
+    .metric {
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 8px;
+      padding: 11px;
+      background: rgba(255,255,255,.045);
+    }
     .label { color: var(--muted); text-transform: uppercase; font-size: 11px; font-weight: 800; }
     .value { margin-top: 5px; font-size: 18px; font-weight: 800; overflow-wrap: anywhere; }
     .queue { display: grid; gap: 10px; }
-    .item { border: 1px solid #e8ece8; background: #fbfcf8; padding: 10px; }
+    .item {
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 8px;
+      background: rgba(255,255,255,.045);
+      padding: 11px;
+    }
     .item-title { font-weight: 800; overflow-wrap: anywhere; }
     .item-meta { color: var(--muted); font-size: 12px; margin-top: 4px; overflow-wrap: anywhere; }
     .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
     .actions button { min-height: 32px; font-size: 12px; padding: 0 10px; }
     .events { max-height: 360px; overflow-y: auto; }
-    .event { border-bottom: 1px solid #e8ece8; padding: 8px 0; }
-    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
-    @media (max-width: 900px) { main { grid-template-columns: 1fr; } form { grid-template-columns: 1fr; } }
+    .event { border-bottom: 1px solid rgba(255,255,255,.08); padding: 8px 0; color: #d6e0da; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #9ee7c0; }
+    ::placeholder { color: #73867d; }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px; } form { grid-template-columns: 1fr; } .home-top, .model-controls, .mission-controls { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
