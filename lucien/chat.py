@@ -29,11 +29,17 @@ from pca import (
 
 from .conflict_detector import detect_growth_conflict
 from .growth_classifier import ClassifiedGrowth, classify_growth
-from .llm_adapter import LocalLucienResponder
+from .llm_adapter import LocalLucienResponder, ModelLucienResponder
 from .memory import MemoryCard, memory_cards_from_self_model
 from .memory_signal_classifier import classify_memory_signal
+from pca.brain_router import select_brain_route
 from pca.model_adapter import ModelAdapterError
-from pca.model_adapter import estimate_model_usage, normalize_model_mode
+from pca.model_adapter import (
+    adapter_for_model_mode,
+    estimate_model_usage,
+    model_environment_diagnostic,
+    normalize_model_mode,
+)
 
 
 def _text_hash(text: str) -> str:
@@ -57,6 +63,7 @@ class LucienChatResult:
     model_usage: dict[str, Any]
     model_mode: str
     openai_requested: bool
+    brain_route: dict[str, Any]
     session_id: str
     turn_id: str
     dashboard_path: str | None
@@ -78,6 +85,7 @@ class LucienChatResult:
             "model_usage": self.model_usage,
             "model_mode": self.model_mode,
             "openai_requested": self.openai_requested,
+            "brain_route": self.brain_route,
             "session_id": self.session_id,
             "turn_id": self.turn_id,
             "dashboard_path": self.dashboard_path,
@@ -173,14 +181,36 @@ class LucienChatShell:
         responder: LocalLucienResponder | None = None,
     ) -> LucienChatResult:
         session_id = self.start_session()
-        active_model_mode = normalize_model_mode(model_mode)
-        active_responder = responder or self.responder
+        requested_model_mode = normalize_model_mode(model_mode)
         claim, _, _ = derive_current_claim(self.ledger, self.manifest)
         self_model = derive_self_model(self.ledger.events(), self.manifest.system_id)
         memory_cards = memory_cards_from_self_model(self_model)
         governed_context = build_governed_context(self.ledger, self.manifest)
         classified = classify_growth(user_message)
         prompt_context = governed_context.render_prompt_context()
+        brain_route = select_brain_route(
+            user_message,
+            requested_model_mode=requested_model_mode,
+            use_openai=use_openai,
+            model_diagnostic=model_environment_diagnostic(),
+        )
+        active_model_mode = brain_route.selected_model_mode
+        active_responder = responder or ModelLucienResponder(
+            adapter_for_model_mode(
+                active_model_mode,
+                use_openai=brain_route.openai_allowed,
+            )
+        )
+        self.ledger.append(
+            "chat.brain_route_selected",
+            self.manifest.system_id,
+            {
+                **brain_route.to_dict(),
+                "surface": "lucien_chat_shell",
+                "context_sha256": _text_hash(prompt_context),
+                "context_length": len(prompt_context),
+            },
+        )
         model_error = None
         try:
             draft = active_responder.generate(
@@ -245,7 +275,11 @@ class LucienChatShell:
                 "surface": "lucien_chat_shell",
                 "continuity_claim": claim,
                 "model_mode": active_model_mode,
+                "requested_model_mode": requested_model_mode,
                 "openai_requested": bool(use_openai),
+                "brain_route_id": brain_route.route_id,
+                "brain_route_task_type": brain_route.task_type,
+                "brain_route_reason": brain_route.reason,
                 "provider": provider_name,
                 "model": model_name,
                 "context_sha256": _text_hash(prompt_context),
@@ -347,6 +381,7 @@ class LucienChatShell:
             model_usage=usage_estimate,
             model_mode=active_model_mode,
             openai_requested=bool(use_openai),
+            brain_route=brain_route.to_dict(),
             session_id=session_id,
             turn_id=turn_record.turn_id,
             dashboard_path=str(dashboard_path) if dashboard_path else None,

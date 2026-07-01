@@ -23,6 +23,11 @@ from .authorization import (
     authorize,
     parse_authority,
 )
+from .brain_router import (
+    BrainRouteDecision,
+    classify_brain_task,
+    select_brain_route,
+)
 from .claims import (
     ContinuityClaimRecord,
     claim_reason,
@@ -328,6 +333,7 @@ __all__ = [
     "AuthorityClass",
     "AuthorizationDecision",
     "AuthorizationPolicy",
+    "BrainRouteDecision",
     "ChatSessionRecord",
     "ChatTurnRecord",
     "FollowUpRecord",
@@ -437,6 +443,7 @@ __all__ = [
     "model_environment_diagnostic",
     "normalize_model_mode",
     "authorize",
+    "classify_brain_task",
     "build_manifest_from_packs",
     "build_manifest_from_policy_results",
     "build_governed_context",
@@ -534,6 +541,7 @@ __all__ = [
     "safe_load_policy_directory",
     "safe_load_policy_pack",
     "scenario_ids",
+    "select_brain_route",
     "skill_candidates_from_events",
     "skill_suggestions_for_mission",
     "start_chat_session",

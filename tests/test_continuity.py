@@ -118,6 +118,7 @@ from pca import (
     render_trace_report_html,
     recovery_records_from_events,
     safe_load_policy_pack,
+    select_brain_route,
     propose_growth,
     propose_skill_candidate,
     propose_mission_step,
@@ -488,6 +489,55 @@ def test_local_ollama_mode_does_not_require_openai_key(tmp_path):
     assert diagnostic["local_model"] == "test-local-model"
 
 
+def test_brain_router_uses_echo_for_simple_status():
+    route = select_brain_route(
+        "status",
+        requested_model_mode="auto",
+        use_openai=False,
+        model_diagnostic={"local_model_configured": True},
+    )
+
+    assert route.requested_model_mode == "auto"
+    assert route.selected_model_mode == "echo"
+    assert route.task_type == "simple_status"
+    assert route.openai_allowed is False
+    assert route.estimated_cost_class == "zero"
+
+
+def test_brain_router_uses_local_first_for_normal_work():
+    route = select_brain_route(
+        "Help me continue the Lucien project in a careful way.",
+        requested_model_mode="auto",
+        use_openai=False,
+        model_diagnostic={"local_model_configured": True},
+    )
+
+    assert route.selected_model_mode == "local_first"
+    assert route.task_type == "normal_conversation"
+    assert route.fallback_allowed is True
+
+
+def test_brain_router_requires_openai_permission_for_hard_reasoning():
+    blocked_route = select_brain_route(
+        "Design a strategy to solve this complex mission.",
+        requested_model_mode="auto",
+        use_openai=False,
+        model_diagnostic={"local_model_configured": True},
+    )
+    allowed_route = select_brain_route(
+        "Design a strategy to solve this complex mission.",
+        requested_model_mode="auto",
+        use_openai=True,
+        model_diagnostic={"local_model_configured": True},
+    )
+
+    assert blocked_route.task_type == "hard_reasoning"
+    assert blocked_route.openai_recommended is True
+    assert blocked_route.selected_model_mode == "local_first"
+    assert allowed_route.selected_model_mode == "openai"
+    assert allowed_route.openai_allowed is True
+
+
 def test_model_usage_estimate_uses_api_usage_when_available():
     usage = estimate_model_usage(
         context_length=4000,
@@ -739,6 +789,24 @@ def test_chat_once_local_ollama_records_zero_cost_and_output_gate(tmp_path):
     assert model_events[-1]["payload"]["model"] == "test-local-model"
     assert model_events[-1]["payload"]["estimated_cost_usd"] == 0.0
     assert "runtime.output_gate" in event_types
+
+
+def test_chat_once_auto_records_brain_route_before_generation(tmp_path):
+    result = chat_once(
+        "status",
+        ledger_path=tmp_path / "lucien_live_chat.log",
+        model_mode="auto",
+    )
+    event_types = [event["event_type"] for event in result["events"]]
+    route_index = event_types.index("chat.brain_route_selected")
+    generated_index = event_types.index("chat.model_response_generated")
+    model_event = result["events"][generated_index]
+
+    assert route_index < generated_index
+    assert model_event["payload"]["requested_model_mode"] == "auto"
+    assert model_event["payload"]["model_mode"] == "echo"
+    assert model_event["payload"]["brain_route_task_type"] == "simple_status"
+    assert result["result"]["brain_route"]["selected_model_mode"] == "echo"
 
 
 def test_live_steward_action_resolves_reflection_task(tmp_path):
@@ -1000,6 +1068,10 @@ def test_live_chat_html_contains_mission_first_home():
     assert "Review Session for Learning" in html
     assert "Review Mission for Learning" in html
     assert "learning_review" in html
+    assert "Brain Router" in html
+    assert "brainRoute" in html
+    assert "brainTask" in html
+    assert "auto" in html
     assert "Local Model" in html
     assert "local_ollama" in html
     assert "local_first" in html
@@ -2059,7 +2131,7 @@ def test_workbench_status_recommends_opening_mission_when_none_exists(tmp_path):
     assert status["active_mission"] is None
     assert status["active_mission_count"] == 0
     assert status["recommended_next_action"] == "Open a mission before using Lucien for work."
-    assert status["model_mode"] == "serious_only"
+    assert status["model_mode"] == "auto"
 
 
 def test_workbench_status_shows_active_mission_intake(tmp_path):

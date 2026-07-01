@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from lucien import LucienChatShell, ModelLucienResponder
+from lucien import LucienChatShell
 
 from .constitution import write_constitution_markdown
 from .growth import (
@@ -44,12 +44,7 @@ from .missions import (
     open_mission,
     update_mission_status,
 )
-from .model_adapter import (
-    adapter_for_model_mode,
-    adapter_from_environment,
-    model_environment_diagnostic,
-    normalize_model_mode,
-)
+from .model_adapter import model_environment_diagnostic, normalize_model_mode
 from .context_builder import build_governed_context
 from .reflection_queue import (
     open_tasks_from_reflection,
@@ -90,7 +85,6 @@ def run_live_chat_server(
     shell = LucienChatShell(
         manifest=manifest,
         ledger=ledger,
-        responder=ModelLucienResponder(adapter_from_environment()),
         dashboard_path="reports/lucien_chat_dashboard.html",
         cockpit_path="reports/lucien_cockpit.html",
     )
@@ -149,9 +143,6 @@ def run_live_chat_server(
                 message,
                 model_mode=model_mode,
                 use_openai=use_openai,
-                responder=ModelLucienResponder(
-                    adapter_for_model_mode(model_mode, use_openai=use_openai)
-                ),
             )
             reflection = None
             opened_tasks = []
@@ -533,9 +524,6 @@ def chat_once(
     shell = LucienChatShell(
         manifest=manifest,
         ledger=ledger,
-        responder=ModelLucienResponder(
-            adapter_for_model_mode(model_mode, use_openai=use_openai)
-        ),
         dashboard_path="reports/lucien_chat_dashboard.html",
         cockpit_path="reports/lucien_cockpit.html",
     )
@@ -739,6 +727,10 @@ def _model_usage_summary(events) -> dict[str, Any]:
         "latest_cost_usd": latest.get("estimated_cost_usd", 0.0),
         "latest_usage_source": latest.get("usage_source", "none"),
         "latest_model_mode": latest.get("model_mode", "none"),
+        "latest_requested_model_mode": latest.get("requested_model_mode", "none"),
+        "latest_brain_route_id": latest.get("brain_route_id", "none"),
+        "latest_brain_task_type": latest.get("brain_route_task_type", "none"),
+        "latest_brain_route_reason": latest.get("brain_route_reason", "none"),
         "latest_openai_requested": bool(latest.get("openai_requested", False)),
     }
 
@@ -885,7 +877,8 @@ def _live_chat_html() -> str:
         <button type="button" id="speak" class="secondary">Speak</button>
         <div class="model-controls">
           <select id="modelMode">
-            <option value="serious_only" selected>OpenAI only when checked</option>
+            <option value="auto" selected>Brain Router</option>
+            <option value="serious_only">OpenAI only when checked</option>
             <option value="local_ollama">Local Model</option>
             <option value="local_first">Local Model with fallback</option>
             <option value="echo">Echo Local</option>
@@ -918,6 +911,8 @@ def _live_chat_html() -> str:
           <div class="metric"><div class="label">Latest Tokens</div><div id="usageTokens" class="value">loading</div></div>
           <div class="metric"><div class="label">Latest Cost</div><div id="usageCost" class="value">loading</div></div>
           <div class="metric"><div class="label">Session Cost</div><div id="sessionCost" class="value">loading</div></div>
+          <div class="metric"><div class="label">Brain Route</div><div id="brainRoute" class="value">loading</div></div>
+          <div class="metric"><div class="label">Brain Task</div><div id="brainTask" class="value">loading</div></div>
         </div>
       </section>
       <section>
@@ -1052,6 +1047,8 @@ def _live_chat_html() -> str:
       document.getElementById('usageTokens').textContent = usage.latest_total_tokens || 0;
       document.getElementById('usageCost').textContent = `$${Number(usage.latest_cost_usd || 0).toFixed(6)}`;
       document.getElementById('sessionCost').textContent = `$${Number(usage.estimated_session_cost_usd || 0).toFixed(6)}`;
+      document.getElementById('brainRoute').textContent = `${usage.latest_requested_model_mode || 'none'} -> ${usage.latest_model_mode || 'none'}`;
+      document.getElementById('brainTask').textContent = usage.latest_brain_task_type || 'none';
       renderQueue(status.open_reflection_tasks || []);
       renderSelfModel(status.self_model || {});
       renderGovernedContext(status.governed_context || {});

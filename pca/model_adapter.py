@@ -12,14 +12,16 @@ MODEL_MODE_OPENAI = "openai"
 MODEL_MODE_LOCAL_OLLAMA = "local_ollama"
 MODEL_MODE_LOCAL_FIRST = "local_first"
 MODEL_MODE_SERIOUS_ONLY = "serious_only"
+MODEL_MODE_AUTO = "auto"
 MODEL_MODES = {
+    MODEL_MODE_AUTO,
     MODEL_MODE_ECHO,
     MODEL_MODE_OPENAI,
     MODEL_MODE_LOCAL_OLLAMA,
     MODEL_MODE_LOCAL_FIRST,
     MODEL_MODE_SERIOUS_ONLY,
 }
-DEFAULT_MODEL_MODE = MODEL_MODE_SERIOUS_ONLY
+DEFAULT_MODEL_MODE = MODEL_MODE_AUTO
 DEFAULT_INPUT_COST_PER_M_TOKEN = 0.40
 DEFAULT_OUTPUT_COST_PER_M_TOKEN = 1.60
 
@@ -303,6 +305,8 @@ def adapter_for_model_mode(
     normalized = normalize_model_mode(mode)
     if normalized == MODEL_MODE_ECHO:
         return EchoAdapter()
+    if normalized == MODEL_MODE_AUTO:
+        return adapter_for_model_mode(MODEL_MODE_LOCAL_FIRST, use_openai=use_openai, env_path=env_path)
     if normalized == MODEL_MODE_LOCAL_OLLAMA:
         return local_adapter_from_environment(env_path)
     if normalized == MODEL_MODE_LOCAL_FIRST:
@@ -320,6 +324,8 @@ def normalize_model_mode(mode: str | None) -> str:
     normalized = normalized.lower().replace("-", "_")
     if normalized in {"serious", "serious_replies", "openai_serious"}:
         normalized = MODEL_MODE_SERIOUS_ONLY
+    if normalized in {"brain_router", "router", "smart", "smart_router"}:
+        normalized = MODEL_MODE_AUTO
     if normalized in {"ollama", "local", "local_model"}:
         normalized = MODEL_MODE_LOCAL_OLLAMA
     if normalized in {"local_first", "local_openai_fallback", "local_with_openai_fallback"}:

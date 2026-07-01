@@ -353,6 +353,15 @@ In the live app, choose `Local Model` to use Ollama. Choose `Local Model with
 fallback` to try Ollama first and fall back to Echo locally unless OpenAI is
 explicitly requested.
 
+The default `Brain Router` mode chooses the cheapest safe language engine for
+the message:
+
+```text
+simple status/governance query -> Echo Local
+normal work or conversation -> Local Model with fallback
+hard reasoning or strategy -> OpenAI only when explicitly allowed
+```
+
 Do not commit `.env`. It is ignored by Git. The model is only the language
 engine: PCA still builds governed context, output-gates the answer, and records
 only model metadata, response length, and context hash in the ledger.
