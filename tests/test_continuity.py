@@ -822,6 +822,11 @@ def test_live_chat_html_contains_mission_first_home():
     assert "run_tool" in html
     assert "Suggest Next Step" in html
     assert "propose_next_step" in html
+    assert "Mission Dashboard" in html
+    assert "activeMissionSelect" in html
+    assert "missionCards" in html
+    assert "Set Active" in html
+    assert "Review Blockers" in html
 
 
 def test_live_status_includes_tool_router_state(tmp_path):

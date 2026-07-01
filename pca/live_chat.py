@@ -754,6 +754,10 @@ def _live_chat_html() -> str:
     .home-title { font-size: 24px; font-weight: 900; margin: 0 0 4px; }
     .home-subtitle { color: var(--muted); font-size: 14px; }
     .home-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .mission-dashboard { grid-column: 1 / -1; display: grid; gap: 12px; }
+    .mission-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+    .mission-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
+    .mission-card.active { border-color: var(--green); box-shadow: inset 4px 0 0 var(--green); }
     section { background: var(--panel); border: 1px solid var(--line); padding: 16px; }
     .chat { min-height: 560px; display: flex; flex-direction: column; }
     .messages { flex: 1; overflow-y: auto; border: 1px solid #e8ece8; padding: 12px; background: #fbfcf8; }
@@ -814,6 +818,16 @@ def _live_chat_html() -> str:
         <div class="metric"><div class="label">Continuity / Gate</div><div id="homeContinuity" class="value">loading</div></div>
       </div>
       <div id="homeBlockerList" class="queue"></div>
+    </section>
+    <section class="mission-dashboard">
+      <div class="mission-controls">
+        <div>
+          <h2>Mission Dashboard</h2>
+          <div class="item-meta">Choose the active mission and move from status to the next safe action.</div>
+        </div>
+        <select id="activeMissionSelect"></select>
+      </div>
+      <div id="missionCards" class="mission-card-grid"></div>
     </section>
     <section class="chat">
       <h2>Chat</h2>
@@ -939,10 +953,14 @@ def _live_chat_html() -> str:
     const memoryInbox = document.getElementById('memoryInbox');
     const recall = document.getElementById('recall');
     const missions = document.getElementById('missions');
+    const missionCards = document.getElementById('missionCards');
+    const activeMissionSelect = document.getElementById('activeMissionSelect');
     const missionSteps = document.getElementById('missionSteps');
     const skillMemory = document.getElementById('skillMemory');
     const stewardInbox = document.getElementById('stewardInbox');
     let activeInboxFilter = 'all';
+    let selectedMissionId = window.localStorage.getItem('lucien.activeMissionId') || '';
+    let currentStatus = null;
     let lastLucien = '';
 
     function addMessage(kind, text) {
@@ -954,8 +972,10 @@ def _live_chat_html() -> str:
     }
 
     function renderStatus(status) {
+      currentStatus = status;
       const summary = status.summary || {};
-      renderWorkbenchHome(status.workbench || {}, status);
+      const missionView = renderMissionDashboard(status);
+      renderWorkbenchHome(status.workbench || {}, status, missionView.activeMission);
       document.getElementById('claim').textContent = summary.current_continuity_claim || 'unknown';
       document.getElementById('csm').textContent = status.csm_state || 'unknown';
       const gate = status.output_gate || {};
@@ -992,12 +1012,12 @@ def _live_chat_html() -> str:
       }
     }
 
-    function renderWorkbenchHome(workbench, status) {
-      const mission = workbench.active_mission || null;
+    function renderWorkbenchHome(workbench, status, selectedMission) {
+      const mission = selectedMission || workbench.active_mission || null;
       document.getElementById('homeSubtitle').textContent = mission ? 'Current governed mission' : 'What are we working on today?';
       document.getElementById('homeMission').textContent = mission ? mission.title : 'No active mission';
       document.getElementById('homePhase').textContent = mission ? mission.phase : 'none';
-      document.getElementById('homeNextAction').textContent = workbench.recommended_next_action || 'Open a mission before using Lucien for work.';
+      document.getElementById('homeNextAction').textContent = mission ? mission.next_action || workbench.recommended_next_action : workbench.recommended_next_action || 'Open a mission before using Lucien for work.';
       document.getElementById('homeBlockers').textContent = mission ? mission.blocker_count || 0 : 0;
       document.getElementById('homeInbox').textContent = `${workbench.open_steward_inbox_count || 0} open / ${workbench.high_priority_inbox_count || 0} high`;
       document.getElementById('homeModelMode').textContent = workbench.model_mode || 'serious_only';
@@ -1018,6 +1038,126 @@ def _live_chat_html() -> str:
         row.textContent = mission ? 'No mission blockers detected.' : 'No active mission. Start one to turn chat into governed work.';
         blockerList.appendChild(row);
       }
+    }
+
+    function renderMissionDashboard(status) {
+      const cards = buildMissionCards(status);
+      if (!cards.length) {
+        activeMissionSelect.innerHTML = '<option>No active missions</option>';
+        empty(missionCards, 'No missions yet. Open a mission to turn Lucien into a governed workbench.');
+        return {activeMission: null, cards};
+      }
+      if (!selectedMissionId || !cards.some(card => card.mission_id === selectedMissionId)) {
+        const latestOpen = [...cards].reverse().find(card => card.status === 'open');
+        selectedMissionId = (latestOpen || cards[cards.length - 1]).mission_id;
+        window.localStorage.setItem('lucien.activeMissionId', selectedMissionId);
+      }
+      activeMissionSelect.innerHTML = '';
+      for (const card of cards) {
+        const option = document.createElement('option');
+        option.value = card.mission_id;
+        option.textContent = `${card.title} / ${card.phase}`;
+        option.selected = card.mission_id === selectedMissionId;
+        activeMissionSelect.appendChild(option);
+      }
+      missionCards.innerHTML = '';
+      for (const card of cards) {
+        missionCards.appendChild(missionCardNode(card, status));
+      }
+      return {activeMission: cards.find(card => card.mission_id === selectedMissionId) || cards[0], cards};
+    }
+
+    function buildMissionCards(status) {
+      const flows = status.mission_flows || {};
+      const steps = status.mission_steps || [];
+      const executions = status.tool_executions || [];
+      const previews = status.tool_previews || [];
+      const inbox = status.steward_inbox || [];
+      return (status.missions || []).map((brief) => {
+        const mission = brief.mission || {};
+        const flow = flows[mission.mission_id] || {};
+        const missionSteps = steps.filter(step => step.mission_id === mission.mission_id);
+        const latestStep = missionSteps[missionSteps.length - 1] || null;
+        const latestExecution = latestStep ? [...executions].reverse().find(item => item.step_id === latestStep.step_id) || null : null;
+        const latestPreview = latestStep ? [...previews].reverse().find(item => item.step_id === latestStep.step_id) || null : null;
+        const pressure = inbox.filter((item) => item.linked_target_id === mission.mission_id || String(item.reason || '').includes(mission.mission_id));
+        return {
+          mission_id: mission.mission_id,
+          title: mission.title || 'Untitled mission',
+          status: mission.status || 'unknown',
+          phase: flow.phase || 'unknown',
+          next_action: flow.next_action || 'No next action recorded.',
+          blockers: flow.blockers || [],
+          blocker_count: (flow.blockers || []).length,
+          inbox_count: pressure.length,
+          high_inbox_count: pressure.filter(item => item.severity === 'high' || item.severity === 'critical').length,
+          latest_step: latestStep,
+          latest_execution: latestExecution,
+          latest_preview: latestPreview,
+          counts: brief.counts || {}
+        };
+      });
+    }
+
+    function missionCardNode(card, status) {
+      const row = document.createElement('div');
+      row.className = 'item mission-card' + (card.mission_id === selectedMissionId ? ' active' : '');
+      const title = document.createElement('div');
+      title.className = 'item-title';
+      title.textContent = `${card.title} / ${card.phase}`;
+      const meta = document.createElement('div');
+      meta.className = 'item-meta';
+      meta.textContent = `${card.status} / blockers ${card.blocker_count} / inbox ${card.inbox_count} open, ${card.high_inbox_count} high`;
+      const next = document.createElement('div');
+      next.className = 'item-meta';
+      next.textContent = `next safe action: ${card.next_action}`;
+      const step = document.createElement('div');
+      step.className = 'item-meta';
+      step.textContent = card.latest_step ? `last step: ${card.latest_step.execution_status} / ${card.latest_step.risk_level} / ${card.latest_step.required_tool}` : 'last step: none';
+      const tool = document.createElement('div');
+      tool.className = 'item-meta';
+      tool.textContent = card.latest_execution ? `last tool: ${card.latest_execution.status} / evidence ${card.latest_execution.evidence_id || 'none'}` : (card.latest_preview ? `last dry run: ${card.latest_preview.permission_decision} / would_execute ${card.latest_preview.would_execute}` : 'last tool: none');
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      actions.appendChild(localButton('Set Active', () => setActiveMission(card.mission_id)));
+      if (card.status === 'open') {
+        actions.appendChild(button('Suggest Next Step', {action: 'propose_next_step', mission_id: card.mission_id, reason: 'mission dashboard next-step proposal'}));
+      }
+      if (card.blocker_count || card.inbox_count) {
+        actions.appendChild(localButton('Review Blockers', () => {
+          activeInboxFilter = card.high_inbox_count ? 'high' : 'missions';
+          stewardInbox.scrollIntoView({behavior: 'smooth', block: 'center'});
+          renderStewardInbox((currentStatus || {}).steward_inbox || []);
+        }));
+      }
+      if (card.latest_step) {
+        const spec = (status.tools || {})[card.latest_step.required_tool];
+        const canRun = ['proposed', 'ready'].includes(card.latest_step.execution_status);
+        const needsApproval = ['medium', 'high'].includes(card.latest_step.risk_level) && card.latest_step.approval_status !== 'approved';
+        if (spec && canRun) {
+          actions.appendChild(toolButton(card.latest_step, spec, true));
+          if (!needsApproval) actions.appendChild(toolButton(card.latest_step, spec, false));
+        }
+      }
+      actions.appendChild(button('Pause', {action: 'update_mission_status', mission_id: card.mission_id, status: 'paused', reason: 'paused from mission dashboard'}));
+      actions.appendChild(button('Complete', {action: 'update_mission_status', mission_id: card.mission_id, status: 'completed', reason: 'completed from mission dashboard'}));
+      row.append(title, meta, next, step, tool, actions);
+      return row;
+    }
+
+    function setActiveMission(missionId) {
+      selectedMissionId = missionId;
+      window.localStorage.setItem('lucien.activeMissionId', missionId);
+      if (currentStatus) renderStatus(currentStatus);
+    }
+
+    function localButton(text, fn) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'secondary';
+      btn.textContent = text;
+      btn.addEventListener('click', fn);
+      return btn;
     }
 
     function renderStewardInbox(items) {
@@ -1556,6 +1696,10 @@ def _live_chat_html() -> str:
 
     document.getElementById('homeSessionReplay').addEventListener('click', () => {
       timeline.scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
+
+    activeMissionSelect.addEventListener('change', () => {
+      setActiveMission(activeMissionSelect.value);
     });
 
     for (const control of document.querySelectorAll('[data-inbox-filter]')) {
