@@ -22,6 +22,11 @@ from .growth_conflicts import (
     resolve_growth_conflict,
 )
 from .ledger import ContinuityLedger
+from .learning_review import (
+    learning_review_records_from_events,
+    run_latest_session_learning_review,
+    run_learning_review,
+)
 from .manifest import IdentityManifest
 from .memory_cards import memory_cards_from_events
 from .memory_signals import record_memory_signal
@@ -395,6 +400,42 @@ def _apply_steward_action(
             "opened_tasks": [task.to_dict() for task in opened_tasks],
         }
 
+    if action == "learning_review":
+        scope = str(payload.get("scope", "latest_session")).strip()
+        apply = bool(payload.get("apply", True))
+        if scope == "latest_session":
+            return run_latest_session_learning_review(
+                ledger,
+                manifest.system_id,
+                apply=apply,
+                reason=reason,
+            )
+        if scope == "mission":
+            mission_id = str(payload.get("mission_id", "")).strip()
+            if not mission_id:
+                raise ValueError("mission_id is required")
+            return run_learning_review(
+                ledger,
+                manifest.system_id,
+                "mission",
+                mission_id,
+                apply=apply,
+                reason=reason,
+            )
+        if scope == "step":
+            step_id = str(payload.get("step_id", "")).strip()
+            if not step_id:
+                raise ValueError("step_id is required")
+            return run_learning_review(
+                ledger,
+                manifest.system_id,
+                "step",
+                step_id,
+                apply=apply,
+                reason=reason,
+            )
+        raise ValueError("learning review scope must be latest_session, mission, or step")
+
     if action == "steward_inbox_action":
         inbox_id = str(payload.get("inbox_id", "")).strip()
         inbox_action = str(payload.get("inbox_action", "")).strip()
@@ -591,6 +632,10 @@ def _status_payload(
         record.to_dict()
         for record in mission_autonomy_recommendations_from_events(ledger.events())
     ]
+    learning_reviews = [
+        record.to_dict()
+        for record in learning_review_records_from_events(ledger.events())
+    ]
     latest_events = [
         {
             "event_type": event.event_type,
@@ -624,6 +669,7 @@ def _status_payload(
         "missions": missions,
         "mission_flows": mission_flows,
         "mission_autonomy": mission_autonomy,
+        "learning_reviews": learning_reviews,
         "mission_steps": mission_steps,
         "tools": tool_spec_map,
         "tool_executions": tool_executions,
@@ -803,6 +849,7 @@ def _live_chat_html() -> str:
         </div>
         <div class="home-actions">
           <button type="button" id="homeStartMission">Start Mission</button>
+          <button type="button" id="homeLearningReview" class="secondary">Review Session for Learning</button>
           <button type="button" id="homeReviewInbox" class="secondary">Review Inbox</button>
           <button type="button" id="homeSessionReplay" class="secondary">View Session Replay</button>
         </div>
@@ -890,6 +937,13 @@ def _live_chat_html() -> str:
         <div id="queue" class="queue"></div>
       </section>
       <section>
+        <h2>Learning Review</h2>
+        <div class="actions">
+          <button type="button" id="reviewSessionLearning">Review Session for Learning</button>
+        </div>
+        <div id="learningReview" class="queue"></div>
+      </section>
+      <section>
         <h2>Self-Model</h2>
         <div id="selfModel" class="queue"></div>
       </section>
@@ -958,6 +1012,7 @@ def _live_chat_html() -> str:
     const missionSteps = document.getElementById('missionSteps');
     const skillMemory = document.getElementById('skillMemory');
     const stewardInbox = document.getElementById('stewardInbox');
+    const learningReview = document.getElementById('learningReview');
     let activeInboxFilter = 'all';
     let selectedMissionId = window.localStorage.getItem('lucien.activeMissionId') || '';
     let currentStatus = null;
@@ -1000,6 +1055,7 @@ def _live_chat_html() -> str:
       renderMissionSteps(status.mission_steps || [], status.tools || {}, status.tool_executions || [], status.tool_previews || []);
       renderSkillMemory(status.skill_candidates || [], status.accepted_skills || []);
       renderStewardInbox(status.steward_inbox || []);
+      renderLearningReview(status.learning_reviews || []);
       renderGrowth(status.active_growth || []);
       renderConflicts(status.growth_conflicts || []);
       renderTimeline(status.session_replay);
@@ -1374,6 +1430,7 @@ def _live_chat_html() -> str:
         actions.className = 'actions';
         if (mission.status === 'open') {
           actions.appendChild(button('Suggest Next Step', {action: 'propose_next_step', mission_id: mission.mission_id, reason: 'live autonomous mission loop'}));
+          actions.appendChild(button('Review Mission for Learning', {action: 'learning_review', scope: 'mission', mission_id: mission.mission_id, apply: true, reason: 'live mission learning review'}));
           actions.appendChild(button('Pause', {action: 'update_mission_status', mission_id: mission.mission_id, status: 'paused', reason: 'paused in live mission workspace'}));
           actions.appendChild(button('Complete', {action: 'update_mission_status', mission_id: mission.mission_id, status: 'completed', reason: 'completed in live mission workspace'}));
         } else if (mission.status === 'paused') {
@@ -1500,6 +1557,23 @@ def _live_chat_html() -> str:
         row.innerHTML = `<div class="item-title">${skill.name} / ${skill.status}</div>
           <div class="item-meta">${skill.skill_id} / tool ${skill.required_tool} / risk ${skill.risk_level} / hash ${skill.procedure_sha256.slice(0, 12)}</div>`;
         skillMemory.appendChild(row);
+      }
+    }
+
+    function renderLearningReview(records) {
+      if (!records.length) {
+        empty(learningReview, 'No learning reviews yet.');
+        return;
+      }
+      learningReview.innerHTML = '';
+      for (const record of records.slice(-6).reverse()) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        const counts = record.candidate_counts || {};
+        row.innerHTML = `<div class="item-title">${record.scope} / ${record.status}</div>
+          <div class="item-meta">${record.review_id} / target ${record.target_id}</div>
+          <div class="item-meta">memory ${counts.memory_candidates || 0} / skills ${counts.skill_candidates || 0} / lessons ${counts.mission_lessons || 0} / evidence needed ${counts.evidence_needed || 0} / tasks ${counts.reflection_tasks || 0}</div>`;
+        learningReview.appendChild(row);
       }
     }
 
@@ -1683,6 +1757,14 @@ def _live_chat_html() -> str:
 
     document.getElementById('reflectNow').addEventListener('click', () => {
       steward({action: 'run_reflection', reason: 'manual live cockpit reflection'});
+    });
+
+    document.getElementById('reviewSessionLearning').addEventListener('click', () => {
+      steward({action: 'learning_review', scope: 'latest_session', apply: true, reason: 'manual session learning review'});
+    });
+
+    document.getElementById('homeLearningReview').addEventListener('click', () => {
+      steward({action: 'learning_review', scope: 'latest_session', apply: true, reason: 'home session learning review'});
     });
 
     document.getElementById('homeStartMission').addEventListener('click', () => {

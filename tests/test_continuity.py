@@ -98,6 +98,9 @@ from pca import (
     recommend_next_mission_step,
     propose_autonomous_mission_step,
     mission_autonomy_recommendations_from_events,
+    run_learning_review,
+    run_latest_session_learning_review,
+    learning_review_records_from_events,
     mission_flow,
     mission_flows_from_events,
     mission_items_from_events,
@@ -827,6 +830,10 @@ def test_live_chat_html_contains_mission_first_home():
     assert "missionCards" in html
     assert "Set Active" in html
     assert "Review Blockers" in html
+    assert "Learning Review" in html
+    assert "Review Session for Learning" in html
+    assert "Review Mission for Learning" in html
+    assert "learning_review" in html
 
 
 def test_live_status_includes_tool_router_state(tmp_path):
@@ -2205,6 +2212,128 @@ def test_completed_mission_step_records_outcome_item(tmp_path):
     assert items[-1].status == "completed"
 
 
+def test_learning_review_completed_step_proposes_skill_candidate(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Learning review skill",
+        problem_statement="Completed work should become skill candidates only under review.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Run a repeatable local check.",
+        risk_level="low",
+        required_tool="git_status",
+    )
+    start_mission_step(ledger, manifest.system_id, step.step_id)
+    complete_mission_step(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        actual_outcome="Status check completed.",
+    )
+
+    result = run_learning_review(
+        ledger,
+        manifest.system_id,
+        "step",
+        step.step_id,
+        apply=True,
+    )
+    candidates = skill_candidates_from_events(ledger.events())
+    reviews = learning_review_records_from_events(ledger.events())
+
+    assert result["completed"]["candidate_counts"]["skill_candidates"] == 1
+    assert candidates[-1].status == SkillCandidateStatus.PROPOSED
+    assert reviews[-1].status == "completed"
+
+
+def test_latest_session_learning_review_creates_pending_memory_only(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    ledger.append(
+        "lucien.chat_session_started",
+        manifest.system_id,
+        {
+            "session_id": "session_learning_test",
+            "identity_id": manifest.system_id,
+            "started_at": "2026-01-01T00:00:00+00:00",
+            "status": "open",
+            "turn_count": 0,
+            "closed_at": None,
+            "reason": "learning test",
+        },
+    )
+    ledger.append(
+        "lucien.chat_turn_recorded",
+        manifest.system_id,
+        {
+            "turn_id": "turn_learning_test",
+            "session_id": "session_learning_test",
+            "identity_id": manifest.system_id,
+            "turn_index": 1,
+            "input_event_id": "input_hash",
+            "output_event_id": "output_hash",
+            "growth_event_ids": [],
+            "output_allowed": True,
+            "continuity_claim": "review_required",
+            "created_at": "2026-01-01T00:00:01+00:00",
+        },
+    )
+    ledger.append(
+        "lucien.chat_session_closed",
+        manifest.system_id,
+        {
+            "session_id": "session_learning_test",
+            "identity_id": manifest.system_id,
+            "started_at": "2026-01-01T00:00:00+00:00",
+            "status": "closed",
+            "turn_count": 1,
+            "closed_at": "2026-01-01T00:00:02+00:00",
+            "reason": "done",
+        },
+    )
+
+    result = run_latest_session_learning_review(
+        ledger,
+        manifest.system_id,
+        apply=True,
+    )
+    growth = growth_records_from_events(ledger.events())
+
+    assert result["completed"]["candidate_counts"]["memory_candidates"] == 1
+    assert growth[-1].status in {GrowthStatus.PROPOSED, GrowthStatus.REQUIRES_REVIEW}
+    assert growth[-1].kind.value == "memory"
+
+
+def test_mission_learning_review_requests_evidence_when_missing(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Evidence needed",
+        problem_statement="Mission claims need evidence.",
+    )
+
+    result = run_learning_review(
+        ledger,
+        manifest.system_id,
+        "mission",
+        mission.mission_id,
+        apply=True,
+    )
+    items = mission_items_from_events(ledger.events(), mission.mission_id)
+
+    assert result["completed"]["candidate_counts"]["evidence_needed"] == 1
+    assert items[-1].kind == MissionItemKind.EVIDENCE
+    assert items[-1].status == "requested"
+
+
 def test_failed_mission_step_routes_reflection_pressure(tmp_path):
     manifest = load_manifest()
     ledger = ContinuityLedger(tmp_path / "continuity.log")
@@ -2234,6 +2363,46 @@ def test_failed_mission_step_routes_reflection_pressure(tmp_path):
 
     assert failed.execution_status == MissionStepExecutionStatus.FAILED
     assert reflections[-1].focus == "mission_outcome_review"
+    assert tasks[-1].kind.value == "review_mission"
+
+
+def test_learning_review_failed_step_routes_pressure_not_skill(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Learning review failed step",
+        problem_statement="Failed work should create pressure, not skill.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Try a risky workflow.",
+        risk_level="low",
+        required_tool="git_status",
+    )
+    fail_mission_step(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        failure_note="Workflow failed before producing a reusable result.",
+    )
+
+    result = run_learning_review(
+        ledger,
+        manifest.system_id,
+        "step",
+        step.step_id,
+        apply=True,
+    )
+    candidates = skill_candidates_from_events(ledger.events())
+    tasks = reflection_task_records_from_events(ledger.events())
+
+    assert result["completed"]["candidate_counts"]["skill_candidates"] == 0
+    assert result["completed"]["candidate_counts"]["reflection_tasks"] >= 1
+    assert candidates == []
     assert tasks[-1].kind.value == "review_mission"
 
 

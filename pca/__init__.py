@@ -112,6 +112,12 @@ from .growth_conflicts import (
     resolve_growth_conflict,
 )
 from .ledger import ContinuityEvent, ContinuityLedger
+from .learning_review import (
+    LearningReviewRecord,
+    learning_review_records_from_events,
+    run_latest_session_learning_review,
+    run_learning_review,
+)
 from .lineage import LineageRecord, lineage_records
 from .lucien import LucienGovernedRuntime, LucienTurnResult
 from .lucien_cockpit import render_lucien_cockpit_html, write_lucien_cockpit_html

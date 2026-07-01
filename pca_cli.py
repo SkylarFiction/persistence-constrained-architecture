@@ -61,6 +61,9 @@ from pca import (
     growth_conflict_resolution_records_from_events,
     growth_review_records_from_events,
     lineage_records,
+    learning_review_records_from_events,
+    run_latest_session_learning_review,
+    run_learning_review,
     accept_growth,
     approve_mission_step,
     block_mission_step,
@@ -462,6 +465,14 @@ def main() -> int:
     session_replay_parser.add_argument("session_id", nargs="?")
     session_replay_parser.add_argument("--latest", action="store_true")
     session_replay_parser.add_argument("--html")
+    learning_review_parser = subparsers.add_parser("learning-review")
+    learning_scope = learning_review_parser.add_mutually_exclusive_group(required=False)
+    learning_scope.add_argument("--latest-session", action="store_true")
+    learning_scope.add_argument("--mission")
+    learning_scope.add_argument("--step")
+    learning_review_parser.add_argument("--apply", action="store_true")
+    learning_review_parser.add_argument("--reason", default="")
+    subparsers.add_parser("learning-reviews")
     subparsers.add_parser("reflect")
     subparsers.add_parser("reflections")
     reflection_queue_parser = subparsers.add_parser("reflection-queue")
@@ -1374,6 +1385,49 @@ def main() -> int:
                     record.to_dict()
                     for record in tool_preview_records_from_events(events)
                 ],
+            }
+        )
+        return 0
+
+    if args.command == "learning-review":
+        try:
+            if args.latest_session or (not args.mission and not args.step):
+                result = run_latest_session_learning_review(
+                    ledger,
+                    manifest.system_id,
+                    apply=args.apply,
+                    reason=args.reason,
+                )
+            elif args.mission:
+                result = run_learning_review(
+                    ledger,
+                    manifest.system_id,
+                    "mission",
+                    args.mission,
+                    apply=args.apply,
+                    reason=args.reason,
+                )
+            else:
+                result = run_learning_review(
+                    ledger,
+                    manifest.system_id,
+                    "step",
+                    args.step,
+                    apply=args.apply,
+                    reason=args.reason,
+                )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"learning_review": result})
+        return 0
+
+    if args.command == "learning-reviews":
+        records = learning_review_records_from_events(ledger.events())
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "count": len(records),
+                "learning_reviews": [record.to_dict() for record in records],
             }
         )
         return 0
