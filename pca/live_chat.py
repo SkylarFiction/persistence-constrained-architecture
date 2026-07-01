@@ -5,6 +5,7 @@ import argparse
 import json
 from pathlib import Path
 from typing import Any
+from urllib import error, request
 from urllib.parse import parse_qs, urlparse
 
 from lucien import LucienChatShell
@@ -168,7 +169,17 @@ def run_live_chat_server(
             payload = _read_json(self)
             before_count = len(ledger.events())
             try:
-                result = _apply_steward_action(ledger, manifest, payload)
+                if str(payload.get("action", "")).strip() == "start_clean_daily_session":
+                    shell.close_session(reason="clean daily session reset")
+                    shell.session_id = None
+                    session_id = shell.start_session(reason="clean daily session")
+                    result = {
+                        "action": "start_clean_daily_session",
+                        "session_id": session_id,
+                        "status": "open",
+                    }
+                else:
+                    result = _apply_steward_action(ledger, manifest, payload)
             except ValueError as exc:
                 _send_json(self, {"error": str(exc)}, status=400)
                 return
@@ -647,7 +658,7 @@ def _status_payload(
         "summary": summary,
         "daily": daily_command_center(ledger, manifest),
         "workbench": workbench_status(ledger, manifest),
-        "model_adapter": model_environment_diagnostic(),
+        "model_adapter": _model_diagnostic_with_runtime(),
         "model_usage": model_usage,
         "steward_inbox": [item.to_dict() for item in steward_inbox(ledger)],
         "csm_state": latest_signal["state"] if latest_signal else "unknown",
@@ -701,6 +712,43 @@ def _format_model_startup_diagnostic(diagnostic: dict[str, Any]) -> str:
         f".env={env_file} plain_text={plain_text} "
         f"OPENAI_API_KEY_present={key_present} key_prefix_ok={prefix_ok}"
     )
+
+
+def _model_diagnostic_with_runtime() -> dict[str, Any]:
+    diagnostic = model_environment_diagnostic()
+    runtime = _local_model_runtime_status(diagnostic)
+    diagnostic["local_runtime"] = runtime
+    diagnostic["local_model_available"] = bool(runtime.get("available"))
+    return diagnostic
+
+
+def _local_model_runtime_status(diagnostic: dict[str, Any]) -> dict[str, Any]:
+    base_url = str(diagnostic.get("local_base_url") or "http://127.0.0.1:11434").rstrip("/")
+    model = str(diagnostic.get("local_model") or "")
+    if not diagnostic.get("local_model_configured"):
+        return {
+            "available": False,
+            "reason": "Local model is not configured.",
+            "model_present": False,
+        }
+    try:
+        with request.urlopen(f"{base_url}/api/tags", timeout=0.35) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (OSError, error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        return {
+            "available": False,
+            "reason": "Local model unavailable. Start Ollama or switch to Debug Mode.",
+            "error": exc.__class__.__name__,
+            "model_present": False,
+        }
+    model_names = {str(item.get("name", "")) for item in payload.get("models", [])}
+    model_present = model in model_names
+    return {
+        "available": model_present,
+        "reason": "ready" if model_present else f"Model {model} is not installed in Ollama.",
+        "model_present": model_present,
+        "model_count": len(model_names),
+    }
 
 
 def _model_usage_summary(events) -> dict[str, Any]:
@@ -871,7 +919,23 @@ def _live_chat_html() -> str:
     }
     input:focus, select:focus, textarea:focus { border-color: rgba(84,196,179,.75); box-shadow: 0 0 0 3px rgba(84,196,179,.14); }
     textarea { min-height: 72px; resize: vertical; }
-    .model-controls { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(170px, 220px) minmax(0, 1fr); gap: 8px; align-items: center; }
+    .model-controls { grid-column: 1 / -1; display: grid; gap: 10px; align-items: center; }
+    .brain-mode-row { display: grid; grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); gap: 10px; align-items: center; }
+    .brain-status {
+      grid-column: 1 / -1;
+      border: 1px solid rgba(84,196,179,.22);
+      border-radius: 8px;
+      padding: 10px;
+      background: rgba(84,196,179,.07);
+      color: #dff3eb;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .warning {
+      border-color: rgba(216,161,58,.48);
+      background: rgba(216,161,58,.10);
+      color: #ffe1a8;
+    }
     .checkline { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 13px; font-weight: 700; }
     .checkline input { width: auto; }
     button {
@@ -910,9 +974,27 @@ def _live_chat_html() -> str:
     .actions button { min-height: 32px; font-size: 12px; padding: 0 10px; }
     .events { max-height: 360px; overflow-y: auto; }
     .event { border-bottom: 1px solid rgba(255,255,255,.08); padding: 8px 0; color: #d6e0da; }
+    details.advanced {
+      grid-column: 1 / -1;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 8px;
+      background: rgba(255,255,255,.035);
+      box-shadow: var(--shadow);
+    }
+    details.advanced > summary {
+      cursor: pointer;
+      padding: 16px;
+      font-weight: 900;
+      color: #f4f8f5;
+      list-style: none;
+    }
+    details.advanced > summary::-webkit-details-marker { display: none; }
+    details.advanced > summary::after { content: "Show"; float: right; color: var(--muted); font-size: 12px; text-transform: uppercase; }
+    details.advanced[open] > summary::after { content: "Hide"; }
+    .advanced-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 0 16px 16px; }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #9ee7c0; }
     ::placeholder { color: #73867d; }
-    @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px; } form { grid-template-columns: 1fr; } .home-top, .model-controls, .mission-controls { grid-template-columns: 1fr; } }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px; } form { grid-template-columns: 1fr; } .home-top, .brain-mode-row, .mission-controls, .advanced-grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -929,6 +1011,7 @@ def _live_chat_html() -> str:
         </div>
         <div class="home-actions">
           <button type="button" id="homeStartMission">Start Mission</button>
+          <button type="button" id="homeCleanSession" class="secondary">Start Clean Daily Session</button>
           <button type="button" id="homeLearningReview" class="secondary">Review Session for Learning</button>
           <button type="button" id="homeReviewInbox" class="secondary">Review Inbox</button>
           <button type="button" id="homeSessionReplay" class="secondary">View Session Replay</button>
@@ -966,15 +1049,18 @@ def _live_chat_html() -> str:
         <button type="submit">Send</button>
         <button type="button" id="speak" class="secondary">Speak</button>
         <div class="model-controls">
-          <select id="modelMode">
-            <option value="auto" selected>Brain Router</option>
-            <option value="serious_only">OpenAI only when checked</option>
-            <option value="local_ollama">Local Model</option>
-            <option value="local_first">Local Model with fallback</option>
-            <option value="echo">Echo Local</option>
-            <option value="openai">OpenAI</option>
-          </select>
-          <label class="checkline"><input id="useOpenAI" type="checkbox"> Use OpenAI for this message</label>
+          <div class="brain-mode-row">
+            <label>
+              <div class="label">Brain Mode</div>
+              <select id="brainMode">
+                <option value="local_ollama" selected>Local Mode</option>
+                <option value="serious_only">Cloud Assist</option>
+                <option value="echo">Debug</option>
+              </select>
+            </label>
+            <label class="checkline"><input id="useOpenAI" type="checkbox"> Use OpenAI for this message</label>
+          </div>
+          <div id="brainStatus" class="brain-status">Current brain: loading</div>
         </div>
       </form>
     </section>
@@ -984,7 +1070,7 @@ def _live_chat_html() -> str:
         <div class="metrics">
           <div class="metric"><div class="label">Continuity</div><div id="claim" class="value">loading</div></div>
           <div class="metric"><div class="label">CSM State</div><div id="csm" class="value">loading</div></div>
-          <div class="metric"><div class="label">Output Gate</div><div id="gate" class="value">loading</div></div>
+          <div class="metric"><div class="label">Output</div><div id="gate" class="value">loading</div></div>
           <div class="metric"><div class="label">Recovery</div><div id="recovery" class="value">loading</div></div>
           <div class="metric"><div class="label">Open Tasks</div><div id="tasks" class="value">loading</div></div>
           <div class="metric"><div class="label">Conflicts</div><div id="conflicts" class="value">loading</div></div>
@@ -995,14 +1081,12 @@ def _live_chat_html() -> str:
         </div>
       </section>
       <section>
-        <h2>OpenAI Usage</h2>
+        <h2>Model Usage</h2>
         <div class="metrics">
-          <div class="metric"><div class="label">Latest Provider</div><div id="usageProvider" class="value">loading</div></div>
+          <div class="metric"><div class="label">Last Brain Used</div><div id="usageProvider" class="value">loading</div></div>
           <div class="metric"><div class="label">Latest Tokens</div><div id="usageTokens" class="value">loading</div></div>
           <div class="metric"><div class="label">Latest Cost</div><div id="usageCost" class="value">loading</div></div>
           <div class="metric"><div class="label">Session Cost</div><div id="sessionCost" class="value">loading</div></div>
-          <div class="metric"><div class="label">Brain Route</div><div id="brainRoute" class="value">loading</div></div>
-          <div class="metric"><div class="label">Brain Task</div><div id="brainTask" class="value">loading</div></div>
         </div>
       </section>
       <section>
@@ -1021,11 +1105,6 @@ def _live_chat_html() -> str:
         <div id="stewardInbox" class="queue"></div>
       </section>
       <section>
-        <h2>Steward Queue</h2>
-        <div class="actions"><button type="button" id="reflectNow">Reflect Now</button></div>
-        <div id="queue" class="queue"></div>
-      </section>
-      <section>
         <h2>Learning Review</h2>
         <div class="actions">
           <button type="button" id="reviewSessionLearning">Review Session for Learning</button>
@@ -1035,10 +1114,6 @@ def _live_chat_html() -> str:
       <section>
         <h2>Self-Model</h2>
         <div id="selfModel" class="queue"></div>
-      </section>
-      <section>
-        <h2>Governed Context</h2>
-        <div id="governedContext" class="queue"></div>
       </section>
       <section>
         <h2>Memory Inbox</h2>
@@ -1074,15 +1149,50 @@ def _live_chat_html() -> str:
         <h2>Conflicts</h2>
         <div id="conflictList" class="queue"></div>
       </section>
-      <section>
-        <h2>Session Timeline</h2>
-        <div id="timeline" class="events"></div>
-      </section>
-      <section>
-        <h2>Live Ledger</h2>
-        <div id="events" class="events"></div>
-      </section>
     </div>
+    <details id="advancedDiagnostics" class="advanced">
+      <summary>Advanced Diagnostics</summary>
+      <div class="advanced-grid">
+        <section>
+          <h2>Developer Brain Routing</h2>
+          <div class="metrics">
+            <div class="metric"><div class="label">Routing</div><div id="brainRoute" class="value">loading</div></div>
+            <div class="metric"><div class="label">Brain Task</div><div id="brainTask" class="value">loading</div></div>
+            <div class="metric"><div class="label">Raw Continuity</div><div id="rawClaim" class="value">loading</div></div>
+            <div class="metric"><div class="label">Raw Output Gate</div><div id="rawGate" class="value">loading</div></div>
+          </div>
+          <label>
+            <div class="label">Advanced route override</div>
+            <select id="advancedModelMode">
+              <option value="">Use selected Brain Mode</option>
+              <option value="auto">Brain Router</option>
+              <option value="local_first">Local first with fallback</option>
+              <option value="local_ollama">Local Ollama only</option>
+              <option value="serious_only">Cloud Assist spend-safe</option>
+              <option value="echo">Echo Local</option>
+              <option value="openai">OpenAI direct</option>
+            </select>
+          </label>
+        </section>
+        <section>
+          <h2>Steward Queue</h2>
+          <div class="actions"><button type="button" id="reflectNow">Reflect Now</button></div>
+          <div id="queue" class="queue"></div>
+        </section>
+        <section>
+          <h2>Governed Context</h2>
+          <div id="governedContext" class="queue"></div>
+        </section>
+        <section>
+          <h2>Session Timeline</h2>
+          <div id="timeline" class="events"></div>
+        </section>
+        <section>
+          <h2>Live Ledger</h2>
+          <div id="events" class="events"></div>
+        </section>
+      </div>
+    </details>
   </main>
   <script>
     const messages = document.getElementById('messages');
@@ -1120,10 +1230,12 @@ def _live_chat_html() -> str:
       const summary = status.summary || {};
       const missionView = renderMissionDashboard(status);
       renderDailyCommandCenter(status.daily || {}, status.workbench || {}, status, missionView.activeMission);
-      document.getElementById('claim').textContent = summary.current_continuity_claim || 'unknown';
+      document.getElementById('claim').textContent = plainContinuity(summary.current_continuity_claim || 'unknown');
       document.getElementById('csm').textContent = status.csm_state || 'unknown';
       const gate = status.output_gate || {};
-      document.getElementById('gate').textContent = gate.mode ? `${gate.mode} / ${gate.allowed}` : 'none';
+      document.getElementById('gate').textContent = plainOutputGate(gate.mode, gate.allowed);
+      document.getElementById('rawClaim').textContent = summary.current_continuity_claim || 'unknown';
+      document.getElementById('rawGate').textContent = gate.mode ? `${gate.mode} / ${gate.allowed}` : 'none';
       document.getElementById('recovery').textContent = summary.current_recovery_status || 'none';
       document.getElementById('tasks').textContent = summary.active_reflection_task_count ?? 0;
       document.getElementById('conflicts').textContent = summary.unresolved_growth_conflict_count ?? 0;
@@ -1131,14 +1243,16 @@ def _live_chat_html() -> str:
       document.getElementById('modelProvider').textContent = `${modelAdapter.configured_provider || 'unknown'} / ${modelAdapter.configured_model || 'unknown'}`;
       document.getElementById('apiKey').textContent = modelAdapter.openai_key_present ? 'present' : 'missing';
       document.getElementById('localModel').textContent = `${modelAdapter.local_provider || 'none'} / ${modelAdapter.local_model || 'none'}`;
-      document.getElementById('localStatus').textContent = modelAdapter.local_model_configured ? 'configured' : 'missing';
+      const localRuntime = modelAdapter.local_runtime || {};
+      document.getElementById('localStatus').textContent = localRuntime.available ? 'ready' : (localRuntime.reason || (modelAdapter.local_model_configured ? 'configured' : 'missing'));
       const usage = status.model_usage || {};
       document.getElementById('usageProvider').textContent = `${usage.latest_provider || 'none'} / ${usage.latest_model || 'none'}`;
       document.getElementById('usageTokens').textContent = usage.latest_total_tokens || 0;
       document.getElementById('usageCost').textContent = `$${Number(usage.latest_cost_usd || 0).toFixed(6)}`;
       document.getElementById('sessionCost').textContent = `$${Number(usage.estimated_session_cost_usd || 0).toFixed(6)}`;
-      document.getElementById('brainRoute').textContent = `${usage.latest_requested_model_mode || 'none'} -> ${usage.latest_model_mode || 'none'}`;
+      document.getElementById('brainRoute').textContent = plainRouting(usage.latest_requested_model_mode, usage.latest_model_mode);
       document.getElementById('brainTask').textContent = usage.latest_brain_task_type || 'none';
+      renderBrainStatus(status);
       renderQueue(status.open_reflection_tasks || []);
       renderSelfModel(status.self_model || {});
       renderGovernedContext(status.governed_context || {});
@@ -1159,6 +1273,78 @@ def _live_chat_html() -> str:
         row.innerHTML = `<code>${event.event_type}</code><br>${event.detail || ''}`;
         events.appendChild(row);
       }
+    }
+
+    function plainContinuity(value) {
+      const labels = {
+        certified_continuity: 'Continuity: Certified',
+        review_required: 'Continuity: Under Review',
+        uncertified_continuity: 'Continuity: Uncertified',
+        declared_fork: 'Continuity: Fork Declared',
+        continuity_break: 'Continuity: Break Recorded'
+      };
+      return labels[value] || `Continuity: ${value || 'Unknown'}`;
+    }
+
+    function plainOutputGate(mode, allowed) {
+      const labels = {
+        normal_identity: 'Normal Identity Output',
+        disclose_review: 'Review Disclosure Required',
+        operational_only: 'Operational Answers Only',
+        fork_disclosure: 'Fork Disclosure Required',
+        recovery_status_only: 'Recovery Status Only'
+      };
+      const text = labels[mode] || mode || 'No output gate event';
+      return allowed === false ? `${text} / Blocked` : text;
+    }
+
+    function plainRouting(requested, selected) {
+      const route = `${requested || 'none'} -> ${selected || 'none'}`;
+      const labels = {
+        'local_ollama -> local_ollama': 'Routing: Local model',
+        'local_first -> local_first': 'Routing: Local first',
+        'serious_only -> echo': 'Routing: Cloud assist idle',
+        'serious_only -> openai': 'Routing: Cloud assist',
+        'echo -> echo': 'Routing: Debug echo',
+        'auto -> local_first': 'Routing: Local first',
+        'auto -> echo': 'Routing: Diagnostic echo',
+        'auto -> openai': 'Routing: Cloud assist',
+        'openai -> openai': 'Routing: OpenAI direct'
+      };
+      return labels[route] || `Routing: ${route.replaceAll('_', ' ')}`;
+    }
+
+    function plainBrainMode(mode) {
+      const labels = {
+        local_ollama: 'Local Mode',
+        local_first: 'Local Mode',
+        serious_only: 'Cloud Assist',
+        echo: 'Debug Mode',
+        openai: 'Cloud Assist',
+        auto: 'Local Mode'
+      };
+      return labels[mode] || mode || 'Local Mode';
+    }
+
+    function renderBrainStatus(status) {
+      const modelAdapter = status.model_adapter || {};
+      const usage = status.model_usage || {};
+      const runtime = modelAdapter.local_runtime || {};
+      const openaiAvailable = modelAdapter.openai_key_present ? 'available' : 'not configured';
+      const localName = `${modelAdapter.local_provider || 'ollama'} / ${modelAdapter.local_model || 'none'}`;
+      const current = `${usage.latest_provider || modelAdapter.local_provider || 'none'} / ${usage.latest_model || modelAdapter.local_model || 'none'}`;
+      const node = document.getElementById('brainStatus');
+      const localWarning = runtime.available === false ? `Local model unavailable. Start Ollama or switch to Debug Mode. ${runtime.reason || ''}` : '';
+      node.className = 'brain-status' + (localWarning ? ' warning' : '');
+      node.innerHTML = [
+        `<strong>Current brain:</strong> ${escapeHtml(current)}`,
+        `<strong>Local:</strong> ${escapeHtml(localName)}`,
+        `<strong>Cloud assist:</strong> ${escapeHtml(openaiAvailable)}`,
+        `<strong>Latest cost:</strong> $${Number(usage.latest_cost_usd || 0).toFixed(6)}`,
+        `<strong>Session cost:</strong> $${Number(usage.estimated_session_cost_usd || 0).toFixed(6)}`,
+        localWarning ? `<br>${escapeHtml(localWarning)}` : ''
+      ].join(' &nbsp; ');
+      updateBrainModeControls();
     }
 
     function renderDailyCommandCenter(daily, workbench, selectedMission) {
@@ -1182,9 +1368,9 @@ def _live_chat_html() -> str:
       document.getElementById('homeNextAction').textContent = daily.recommended_first_action || (mission ? mission.next_action || workbench.recommended_next_action : workbench.recommended_next_action || 'Open a mission before using Lucien for work.');
       document.getElementById('homeBlockers').textContent = mission ? mission.blocker_count || 0 : 0;
       document.getElementById('homeInbox').textContent = `${workbench.open_steward_inbox_count || 0} open / ${workbench.high_priority_inbox_count || 0} high`;
-      document.getElementById('homeModelMode').textContent = workbench.model_mode || 'serious_only';
+      document.getElementById('homeModelMode').textContent = plainBrainMode(workbench.model_mode || 'local_ollama');
       document.getElementById('homeCost').textContent = `$${Number(workbench.estimated_session_cost_usd || 0).toFixed(6)}`;
-      document.getElementById('homeContinuity').textContent = `${workbench.continuity_state || 'unknown'} / ${workbench.output_gate_mode || 'unknown'}`;
+      document.getElementById('homeContinuity').textContent = `${plainContinuity(workbench.continuity_state || 'unknown')} / ${plainOutputGate(workbench.output_gate_mode, true)}`;
       const blockerList = document.getElementById('homeBlockerList');
       blockerList.innerHTML = '';
       if (mission && mission.blockers && mission.blockers.length) {
@@ -1815,13 +2001,36 @@ def _live_chat_html() -> str:
       renderStatus(data.status);
     }
 
+    function getSelectedModelMode() {
+      const override = document.getElementById('advancedModelMode').value;
+      if (override) return override;
+      return document.getElementById('brainMode').value;
+    }
+
+    function getOpenAIAllowedForSend() {
+      const mode = getSelectedModelMode();
+      if (mode === 'local_ollama' || mode === 'echo') return false;
+      if (mode === 'openai') return true;
+      return document.getElementById('useOpenAI').checked;
+    }
+
+    function updateBrainModeControls() {
+      const mode = getSelectedModelMode();
+      const check = document.getElementById('useOpenAI');
+      const cloudMode = mode === 'serious_only' || mode === 'local_first' || mode === 'auto';
+      if (mode === 'local_ollama' || mode === 'echo') check.checked = false;
+      check.disabled = !cloudMode;
+      const label = check.closest('label');
+      if (label) label.style.opacity = check.disabled ? '.55' : '1';
+    }
+
     document.getElementById('chatForm').addEventListener('submit', async (event) => {
       event.preventDefault();
       const box = document.getElementById('message');
       const text = box.value.trim();
       if (!text) return;
-      const modelMode = document.getElementById('modelMode').value;
-      const useOpenAI = document.getElementById('useOpenAI').checked;
+      const modelMode = getSelectedModelMode();
+      const useOpenAI = getOpenAIAllowedForSend();
       box.value = '';
       addMessage('user', text);
       const res = await fetch('/api/chat', {
@@ -1882,6 +2091,12 @@ def _live_chat_html() -> str:
       steward({action: 'learning_review', scope: 'latest_session', apply: true, reason: 'home session learning review'});
     });
 
+    document.getElementById('homeCleanSession').addEventListener('click', () => {
+      steward({action: 'start_clean_daily_session', reason: 'started clean daily session from command center'});
+      messages.innerHTML = '';
+      lastLucien = '';
+    });
+
     document.getElementById('homeStartMission').addEventListener('click', () => {
       document.getElementById('missionTitle').focus();
       document.getElementById('missionTitle').scrollIntoView({behavior: 'smooth', block: 'center'});
@@ -1892,7 +2107,19 @@ def _live_chat_html() -> str:
     });
 
     document.getElementById('homeSessionReplay').addEventListener('click', () => {
+      document.getElementById('advancedDiagnostics').open = true;
       timeline.scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
+
+    document.getElementById('brainMode').addEventListener('change', () => {
+      window.localStorage.setItem('lucien.brainMode', document.getElementById('brainMode').value);
+      updateBrainModeControls();
+    });
+
+    document.getElementById('advancedModelMode').addEventListener('change', updateBrainModeControls);
+
+    document.getElementById('advancedDiagnostics').addEventListener('toggle', () => {
+      window.localStorage.setItem('lucien.advancedDiagnosticsOpen', document.getElementById('advancedDiagnostics').open ? 'yes' : 'no');
     });
 
     activeMissionSelect.addEventListener('change', () => {
@@ -1906,6 +2133,12 @@ def _live_chat_html() -> str:
       });
     }
 
+    const storedBrainMode = window.localStorage.getItem('lucien.brainMode');
+    if (storedBrainMode && ['local_ollama', 'serious_only', 'echo'].includes(storedBrainMode)) {
+      document.getElementById('brainMode').value = storedBrainMode;
+    }
+    document.getElementById('advancedDiagnostics').open = window.localStorage.getItem('lucien.advancedDiagnosticsOpen') === 'yes';
+    updateBrainModeControls();
     refresh();
   </script>
 </body>

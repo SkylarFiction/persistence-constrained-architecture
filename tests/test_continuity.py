@@ -426,6 +426,46 @@ def test_serious_only_model_mode_uses_echo_until_openai_requested(tmp_path):
     assert isinstance(adapter, EchoAdapter)
 
 
+def test_cloud_assist_requires_explicit_openai_checkbox(tmp_path):
+    old_key = os.environ.pop("OPENAI_API_KEY", None)
+    old_model = os.environ.pop("LUCIEN_MODEL", None)
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "OPENAI_API_KEY=sk-proj-local-test-key\nLUCIEN_MODEL=test-model\n",
+        encoding="utf-8",
+    )
+    try:
+        idle_adapter = adapter_for_model_mode(
+            "serious_only",
+            use_openai=False,
+            env_path=str(env_path),
+        )
+        allowed_adapter = adapter_for_model_mode(
+            "serious_only",
+            use_openai=True,
+            env_path=str(env_path),
+        )
+    finally:
+        _restore_env("OPENAI_API_KEY", old_key)
+        _restore_env("LUCIEN_MODEL", old_model)
+
+    assert isinstance(idle_adapter, EchoAdapter)
+    assert isinstance(allowed_adapter, OpenAICompatibleAdapter)
+    assert allowed_adapter.model == "test-model"
+
+
+def test_debug_model_mode_uses_echo_and_zero_cost():
+    adapter = adapter_for_model_mode("echo", use_openai=True)
+    response = adapter.generate(
+        [ModelMessage(role="user", content="hello")],
+        system_context="diagnostic",
+    )
+
+    assert isinstance(adapter, EchoAdapter)
+    assert response.provider == "echo"
+    assert response.model == "echo-local"
+
+
 def test_openai_model_mode_uses_openai_adapter_when_key_exists(tmp_path):
     old_key = os.environ.pop("OPENAI_API_KEY", None)
     old_model = os.environ.pop("LUCIEN_MODEL", None)
@@ -1072,6 +1112,18 @@ def test_live_chat_html_contains_mission_first_home():
     assert "Review Session for Learning" in html
     assert "Review Mission for Learning" in html
     assert "learning_review" in html
+    assert "Brain Mode" in html
+    assert "Local Mode" in html
+    assert "Cloud Assist" in html
+    assert "Debug" in html
+    assert "Advanced Diagnostics" in html
+    assert "advancedDiagnostics" in html
+    assert "Start Clean Daily Session" in html
+    assert "Model Usage" in html
+    assert "Last Brain Used" in html
+    assert "Continuity: Under Review" in html
+    assert "Review Disclosure Required" in html
+    assert "<details id=\"advancedDiagnostics\" class=\"advanced\">" in html
     assert "Brain Router" in html
     assert "brainRoute" in html
     assert "brainTask" in html
