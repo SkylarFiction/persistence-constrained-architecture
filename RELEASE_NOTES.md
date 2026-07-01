@@ -48,6 +48,22 @@ Then open:
 
 [scenario_runs/index.html](scenario_runs/index.html)
 
+## Lucien Workbench Layer
+
+The repo also includes a local Lucien workbench built on PCA. It provides:
+
+- Local Mode through Ollama for normal `$0` OpenAI API use.
+- Cloud Assist through OpenAI only when explicitly enabled for a message.
+- Debug mode through `echo-local`.
+- Daily Command Center, Mission Dashboard, Steward Inbox, Model Usage, and
+  Advanced Diagnostics panels.
+- Governed chat turns that still pass through context building, output gating,
+  ledger recording, and session replay.
+
+This workbench is a prototype interface over the same governance machinery. It does
+not change PCA's claims: Lucien is not presented as conscious, alive, AGI, or a
+person.
+
 ## What The Demo Proves
 
 The strongest proof is the CSM RED continuity-break scenario:

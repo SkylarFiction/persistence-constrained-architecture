@@ -8,6 +8,23 @@ inspectable, and honest about what it does not yet provide.
 PCA currently runs as a local Python project. It writes local ledger files and local
 HTML artifacts. It is not yet a networked service or distributed governance system.
 
+## Local Model Is A Language Engine
+
+Lucien can use Ollama as a local language model provider. That model is not Lucien's
+identity and is not trusted automatically. PCA remains the layer that assembles
+governed context, gates output claims, tracks evidence, and records ledger events.
+
+Local model quality depends on the model installed on the user's machine.
+
+## Cloud Assist Is Optional And Paid
+
+OpenAI Cloud Assist is optional. It should be used only when explicitly selected and
+enabled for a message. API keys must stay in local environment variables or `.env`
+and must not be committed.
+
+Users who want strict cost control should keep OpenAI billing auto-recharge off and
+use Local Mode for normal work.
+
 ## Not A Production Security Boundary
 
 The file lock protects local concurrent ledger writes, but PCA v0.1 should not be

@@ -42,6 +42,136 @@ Allowed Claim or Constrained Claim
 Most AI safety asks whether the system obeys. PCA asks whether the system is still
 the same system making the claim.
 
+## What Lucien Is
+
+Lucien is the local governed AI workbench built on top of PCA.
+
+It is not just a chat page. Lucien combines a local model, optional cloud model
+assist, memory review, evidence tracking, mission planning, tool routing, skill
+learning, steward review, output gating, and session replay under one continuity
+governance layer.
+
+The product story is:
+
+```text
+Local Brain = default daily mode
+Cloud Assist = optional stronger reasoning when explicitly enabled
+Debug = echo-local fallback for testing
+PCA = governance layer over memory, claims, tools, recovery, and continuity
+```
+
+Lucien is meant to answer and work through governed context. It may propose
+memories, skills, mission steps, or evidence needs, but those do not silently become
+trusted identity state. Steward review and ledger-backed governance remain in the
+loop.
+
+## What PCA Governs
+
+PCA governs whether Lucien is allowed to make continuity and identity-relevant
+claims through change. In the current local workbench, PCA also governs:
+
+- memory candidates and accepted recall
+- evidence records, evidence links, and disputed or stale evidence
+- missions, mission phases, mission steps, blockers, and outcomes
+- skill candidates and accepted reusable procedures
+- tool previews, tool execution, and generated evidence
+- steward inbox items and conflict resolution
+- CSM-style runtime state, recovery, forks, and output-gate behavior
+- session replay, trace reports, dashboards, and hash-chained ledger history
+
+## Brain Modes
+
+Lucien has three user-facing brain modes:
+
+| Mode | What it does | Cost behavior |
+| --- | --- | --- |
+| **Local Mode** | Uses the Ollama/local model on your Mac. This is the normal daily mode. | `$0` OpenAI API cost |
+| **Cloud Assist** | Uses OpenAI only when **Use OpenAI for this message** is explicitly checked. | Paid only when enabled |
+| **Debug** | Uses `echo-local` diagnostic fallback. Useful for testing UI/governance without model reasoning. | `$0` OpenAI API cost |
+
+The model is only the language engine. PCA still decides what context is allowed
+into the prompt, what output claims are allowed, what must be reviewed, and what is
+recorded in the ledger.
+
+## How To Run Locally
+
+From the project folder:
+
+```bash
+python3 scripts/check_all.py
+zsh "scripts/Launch Lucien.command"
+```
+
+Then open:
+
+[http://127.0.0.1:8787/](http://127.0.0.1:8787/)
+
+The launcher chooses the first available port from `8787` to `8799` and opens the
+matching browser URL.
+
+## How To Use Ollama / Local Model
+
+Install Ollama from [ollama.com](https://ollama.com), then run:
+
+```bash
+ollama pull llama3.1:8b
+```
+
+Your local `.env` can include:
+
+```bash
+LUCIEN_LOCAL_PROVIDER=ollama
+LUCIEN_OLLAMA_BASE_URL=http://127.0.0.1:11434
+LUCIEN_OLLAMA_MODEL=llama3.1:8b
+```
+
+In the live app, choose **Local Mode**. Success looks like:
+
+```text
+Current Mode: Local Mode
+Last Brain Used: ollama / llama3.1:8b
+Local Status: ready
+Latest Cost: $0.000000
+```
+
+## How Cloud Assist Works
+
+Cloud Assist is optional. If you want OpenAI available, create `.env` from
+`.env.example` and add:
+
+```bash
+OPENAI_API_KEY=your_api_key_here
+LUCIEN_MODEL=gpt-4.1-mini
+```
+
+Do not commit `.env`. It is ignored by Git.
+
+OpenAI is not used in normal Local Mode. Cloud Assist uses OpenAI only when you
+select Cloud Assist and explicitly check **Use OpenAI for this message**. Keep
+auto-recharge off in your OpenAI billing settings if you want strict cost control.
+
+## Quick Demo Walkthrough
+
+1. Launch Lucien.
+2. Confirm **Local Brain** is ready and **Last Brain Used** is local after a reply.
+3. Start a mission, for example `Improve Lucien Daily Use`.
+4. Ask Lucien to suggest the next safe mission step.
+5. Review the Steward Inbox for blockers or review pressure.
+6. Add or inspect evidence in the Evidence Locker as needed.
+7. Use **Advanced Diagnostics** only when you want raw ledger, routing, or session
+   replay details.
+
+## Screenshots
+
+Screenshots are intentionally kept as placeholders here so local generated images do
+not become part of the source of truth.
+
+- Daily Command Center
+- Local Brain status
+- Mission Dashboard
+- Steward Inbox
+- Advanced Diagnostics
+
 ## What PCA Is Not
 
 PCA is not a chatbot personality system.
@@ -51,6 +181,8 @@ PCA is not memory alone.
 PCA is not a claim of consciousness.
 
 PCA is not AGI.
+
+PCA does not claim Lucien is conscious, alive, a person, or human-equivalent.
 
 PCA is a continuity governance layer for systems that make identity claims through
 change.
@@ -322,26 +454,17 @@ python3 lucien_chat.py --seed-required --message "Remember that PCA learning mus
 
 ## Model Setup
 
-Lucien can run without an API key; in that mode it uses the local Echo fallback.
-To give Lucien a real model-backed voice, create a local `.env` file:
+Lucien can run in Debug mode without an API key or local model. For daily use,
+Local Mode with Ollama is recommended. For stronger paid reasoning, Cloud Assist
+can call OpenAI only when explicitly enabled for a message.
+
+Use `.env.example` as the starting point:
 
 ```bash
 cp .env.example .env
 ```
 
-Then edit `.env`:
-
-```bash
-OPENAI_API_KEY=your_api_key_here
-LUCIEN_MODEL=gpt-4.1-mini
-```
-
-Lucien can also use a local Ollama model. Install Ollama, pull a model, and set
-the local model variables:
-
-```bash
-ollama pull llama3.1:8b
-```
+Local model settings:
 
 ```bash
 LUCIEN_LOCAL_PROVIDER=ollama
@@ -349,22 +472,16 @@ LUCIEN_OLLAMA_BASE_URL=http://127.0.0.1:11434
 LUCIEN_OLLAMA_MODEL=llama3.1:8b
 ```
 
-In the live app, choose `Local Model` to use Ollama. Choose `Local Model with
-fallback` to try Ollama first and fall back to Echo locally unless OpenAI is
-explicitly requested.
+Optional Cloud Assist settings:
 
-The default `Brain Router` mode chooses the cheapest safe language engine for
-the message:
-
-```text
-simple status/governance query -> Echo Local
-normal work or conversation -> Local Model with fallback
-hard reasoning or strategy -> OpenAI only when explicitly allowed
+```bash
+OPENAI_API_KEY=your_api_key_here
+LUCIEN_MODEL=gpt-4.1-mini
 ```
 
-Do not commit `.env`. It is ignored by Git. The model is only the language
-engine: PCA still builds governed context, output-gates the answer, and records
-only model metadata, response length, and context hash in the ledger.
+Do not commit `.env`. The model is only the language engine: PCA still builds
+governed context, output-gates the answer, and records only model metadata,
+response length, usage estimate, and context hash in the ledger.
 
 The live chat page includes steward controls for resolving reflection tasks,
 reviewing pending growth, and resolving growth conflicts. These controls write
@@ -384,9 +501,10 @@ the matching browser URL, so an old server on `8787` should not block startup.
 Recommended daily settings:
 
 ```text
-Model mode: Brain Router
-Routine work: Local Model / Echo fallback
-OpenAI: only when explicitly checked
+Brain Mode: Local Mode
+Routine work: Ollama local brain
+Cloud Assist: only when explicitly selected and checked
+Debug: echo-local fallback for testing
 First action: start or resume a mission
 Review pressure: clear Steward Inbox items before accepting growth or evidence
 ```

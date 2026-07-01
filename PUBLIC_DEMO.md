@@ -12,6 +12,43 @@ a narrower governance question:
 The demo scenarios generate real ledger events, continuity claims, output-gate
 decisions, trace reports, dashboards, and regression results.
 
+## Lucien Workbench Demo
+
+Lucien is the live local workbench built on PCA. It is designed to make the
+governance loop usable:
+
+```text
+Local Brain = default daily mode through Ollama
+Cloud Assist = optional OpenAI use only when explicitly enabled
+Debug = echo-local fallback
+PCA = governance over memory, evidence, missions, tools, claims, and continuity
+```
+
+Start Lucien:
+
+```bash
+zsh "scripts/Launch Lucien.command"
+```
+
+Then open the URL printed by the launcher, usually:
+
+[http://127.0.0.1:8787/](http://127.0.0.1:8787/)
+
+Recommended live walkthrough:
+
+1. Confirm **Local Brain** says `ollama / llama3.1:8b` and **Local Status** is
+   ready.
+2. Confirm **Current Mode** is Local Mode.
+3. Send a message and confirm **Last Brain Used** is `ollama / llama3.1:8b`.
+4. Start a mission.
+5. Ask Lucien to suggest the next safe mission step.
+6. Review the Steward Inbox for blockers or pending review.
+7. Use Advanced Diagnostics only when you want raw session replay, ledger events,
+   routing, or governed context details.
+
+OpenAI is optional. Local Mode does not spend OpenAI API credit. Cloud Assist uses
+OpenAI only when explicitly selected and enabled for a message.
+
 ## Run The Health Check
 
 From the project directory:
