@@ -369,6 +369,35 @@ only model metadata, response length, and context hash in the ledger.
 The live chat page includes steward controls for resolving reflection tasks,
 reviewing pending growth, and resolving growth conflicts. These controls write
 the same ledger-backed events as the CLI workflows.
+
+## Run Lucien Safely
+
+For daily local use, open `Launch Lucien.app` or run:
+
+```bash
+zsh "scripts/Launch Lucien.command"
+```
+
+The launcher chooses the first available port from `8787` to `8799` and opens
+the matching browser URL, so an old server on `8787` should not block startup.
+
+Recommended daily settings:
+
+```text
+Model mode: Brain Router
+Routine work: Local Model / Echo fallback
+OpenAI: only when explicitly checked
+First action: start or resume a mission
+Review pressure: clear Steward Inbox items before accepting growth or evidence
+```
+
+To clean regenerated review artifacts from the working tree without touching
+source code or `data/` ledgers:
+
+```bash
+python3 scripts/clean_local_artifacts.py
+```
+
 It also exposes a live self-model panel and a manual reflection action so
 Lucien can surface new steward work while the conversation is running.
 The Memory Inbox and Recall panels let stewards accept or reject memory

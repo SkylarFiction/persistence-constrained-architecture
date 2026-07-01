@@ -15,3 +15,9 @@ venv/
 
 *.log.lock
 data/
+
+# Local generated review artifacts. Some reference outputs may already be
+# tracked intentionally; this prevents new throwaway artifacts from being added.
+LUCIEN_CONSTITUTION.md
+reports/
+scenario_runs/
