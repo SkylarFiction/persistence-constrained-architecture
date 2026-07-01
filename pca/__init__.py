@@ -51,6 +51,10 @@ from .context_builder import (
     build_governed_context,
 )
 from .dashboard import render_dashboard_html, write_dashboard_html
+from .daily_command_center import (
+    daily_command_center,
+    render_daily_command_center_text,
+)
 from .evaluator import (
     EVALUATION_PRECEDENCE,
     ContinuityEvaluation,
@@ -323,6 +327,7 @@ __all__ = [
     "ContinuityStatus",
     "ContextSection",
     "CSMRuntimeBridge",
+    "daily_command_center",
     "EVALUATION_PRECEDENCE",
     "AuditEngine",
     "AuditOutcome",
@@ -532,6 +537,7 @@ __all__ = [
     "update_mission_status",
     "render_trace_report_html",
     "render_constitution_markdown",
+    "render_daily_command_center_text",
     "render_dashboard_html",
     "render_lucien_cockpit_html",
     "render_session_replay_html",

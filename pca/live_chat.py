@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 from lucien import LucienChatShell
 
 from .constitution import write_constitution_markdown
+from .daily_command_center import daily_command_center
 from .growth import (
     GrowthReviewDecision,
     GrowthStatus,
@@ -644,6 +645,7 @@ def _status_payload(
     )
     return {
         "summary": summary,
+        "daily": daily_command_center(ledger, manifest),
         "workbench": workbench_status(ledger, manifest),
         "model_adapter": model_environment_diagnostic(),
         "model_usage": model_usage,
@@ -922,7 +924,7 @@ def _live_chat_html() -> str:
     <section class="home">
       <div class="home-top">
         <div>
-          <h2 class="home-title">Lucien Workbench</h2>
+          <h2 class="home-title">Daily Command Center</h2>
           <div id="homeSubtitle" class="home-subtitle">What are we working on today?</div>
         </div>
         <div class="home-actions">
@@ -932,6 +934,8 @@ def _live_chat_html() -> str:
           <button type="button" id="homeSessionReplay" class="secondary">View Session Replay</button>
         </div>
       </div>
+      <div id="dailyBriefing" class="item"></div>
+      <div id="dailyCards" class="mission-card-grid"></div>
       <div class="metrics">
         <div class="metric"><div class="label">Active Mission</div><div id="homeMission" class="value">loading</div></div>
         <div class="metric"><div class="label">Mission Phase</div><div id="homePhase" class="value">loading</div></div>
@@ -1115,7 +1119,7 @@ def _live_chat_html() -> str:
       currentStatus = status;
       const summary = status.summary || {};
       const missionView = renderMissionDashboard(status);
-      renderWorkbenchHome(status.workbench || {}, status, missionView.activeMission);
+      renderDailyCommandCenter(status.daily || {}, status.workbench || {}, status, missionView.activeMission);
       document.getElementById('claim').textContent = summary.current_continuity_claim || 'unknown';
       document.getElementById('csm').textContent = status.csm_state || 'unknown';
       const gate = status.output_gate || {};
@@ -1157,12 +1161,25 @@ def _live_chat_html() -> str:
       }
     }
 
-    function renderWorkbenchHome(workbench, status, selectedMission) {
-      const mission = selectedMission || workbench.active_mission || null;
+    function renderDailyCommandCenter(daily, workbench, selectedMission) {
+      const missionCandidate = selectedMission || workbench.active_mission || null;
+      const mission = missionCandidate && missionCandidate.mission_id ? missionCandidate : null;
       document.getElementById('homeSubtitle').textContent = mission ? 'Current governed mission' : 'What are we working on today?';
+      const briefing = document.getElementById('dailyBriefing');
+      briefing.innerHTML = `<div class="item-title">Opening Briefing</div><div class="item-meta">${escapeHtml(daily.briefing || 'Daily briefing unavailable.')}</div>`;
+      const cardHost = document.getElementById('dailyCards');
+      cardHost.innerHTML = '';
+      const cards = daily.cards || {};
+      for (const key of ['work_today', 'blockers', 'safe_next_action', 'needs_steward_review', 'cost_brain_mode']) {
+        const card = cards[key] || {};
+        const row = document.createElement('div');
+        row.className = 'item mission-card';
+        row.innerHTML = `<div class="item-title">${escapeHtml(card.title || key)}</div><div class="item-meta">${escapeHtml(card.value || 'none')}</div>`;
+        cardHost.appendChild(row);
+      }
       document.getElementById('homeMission').textContent = mission ? mission.title : 'No active mission';
       document.getElementById('homePhase').textContent = mission ? mission.phase : 'none';
-      document.getElementById('homeNextAction').textContent = mission ? mission.next_action || workbench.recommended_next_action : workbench.recommended_next_action || 'Open a mission before using Lucien for work.';
+      document.getElementById('homeNextAction').textContent = daily.recommended_first_action || (mission ? mission.next_action || workbench.recommended_next_action : workbench.recommended_next_action || 'Open a mission before using Lucien for work.');
       document.getElementById('homeBlockers').textContent = mission ? mission.blocker_count || 0 : 0;
       document.getElementById('homeInbox').textContent = `${workbench.open_steward_inbox_count || 0} open / ${workbench.high_priority_inbox_count || 0} high`;
       document.getElementById('homeModelMode').textContent = workbench.model_mode || 'serious_only';
@@ -1183,6 +1200,15 @@ def _live_chat_html() -> str:
         row.textContent = mission ? 'No mission blockers detected.' : 'No active mission. Start one to turn chat into governed work.';
         blockerList.appendChild(row);
       }
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
     }
 
     function renderMissionDashboard(status) {

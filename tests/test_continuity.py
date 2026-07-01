@@ -72,6 +72,7 @@ from pca import (
     compile_self_model,
     continuity_claim_from_followups,
     current_claim_record,
+    daily_command_center,
     derive_current_claim,
     derive_self_model,
     estimate_model_usage,
@@ -1047,7 +1048,10 @@ def test_live_chat_html_contains_mission_first_home():
 
     html = _live_chat_html()
 
-    assert "Lucien Workbench" in html
+    assert "Daily Command Center" in html
+    assert "dailyBriefing" in html
+    assert "dailyCards" in html
+    assert "Opening Briefing" in html
     assert "homeMission" in html
     assert "homeNextAction" in html
     assert "homeModelMode" in html
@@ -2185,6 +2189,97 @@ def test_workbench_status_counts_blocked_mission_and_inbox(tmp_path):
     assert status["open_steward_inbox_count"] >= 1
     assert status["high_priority_inbox_count"] >= 1
     assert "Review high-priority" in status["recommended_next_action"]
+
+
+def test_daily_command_center_recommends_mission_when_none_exists(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    daily = daily_command_center(ledger, manifest)
+
+    assert daily["current_active_mission"] is None
+    assert daily["active_mission_count"] == 0
+    assert "Open or resume a mission" in daily["recommended_first_action"]
+    assert "No active mission" in daily["briefing"]
+    assert "openai_spend_gated" in daily["cost_brain_mode"]
+
+
+def test_daily_command_center_shows_active_mission_phase_and_next_action(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Daily mission",
+        problem_statement="Make Lucien useful today.",
+    )
+
+    daily = daily_command_center(ledger, manifest)
+
+    assert daily["current_active_mission"]["mission_id"] == mission.mission_id
+    assert daily["mission_phase"] == "intake"
+    assert daily["next_safe_action"]
+    assert "Daily mission" in daily["briefing"]
+
+
+def test_daily_command_center_surfaces_blockers_and_steward_pressure(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Blocked daily mission",
+        problem_statement="Needs approval before execution.",
+    )
+    propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Medium-risk daily step.",
+        risk_level="medium",
+        required_tool="manual_review",
+    )
+    propose_growth(
+        ledger,
+        manifest.system_id,
+        kind="commitment",
+        summary="High-impact daily inbox item.",
+        identity_impact="high",
+        reason="daily inbox item",
+    )
+
+    daily = daily_command_center(ledger, manifest)
+
+    assert daily["blocked_mission_count"] == 1
+    assert daily["pending_tool_approvals"] == 1
+    assert daily["open_steward_inbox_count"] >= 1
+    assert daily["high_priority_steward_count"] >= 1
+    assert "Review high-priority" in daily["recommended_first_action"]
+
+
+def test_daily_command_center_surfaces_ready_steps(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Ready daily mission",
+        problem_statement="Run a safe next step.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Low-risk ready step.",
+        risk_level="low",
+        required_tool="read_file",
+    )
+
+    daily = daily_command_center(ledger, manifest)
+
+    assert daily["ready_mission_steps"] == 1
+    assert step.step_id in daily["ready_step_ids"]
+    assert "ready mission steps" in daily["recommended_first_action"]
 
 
 def test_low_risk_mission_step_can_start_without_approval(tmp_path):

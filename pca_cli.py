@@ -48,6 +48,7 @@ from pca import (
     compile_self_model,
     current_claim_record,
     current_recovery_record,
+    daily_command_center,
     derive_self_model,
     derive_current_claim,
     evidence_for_target,
@@ -108,6 +109,7 @@ from pca import (
     check_tool_permission,
     dry_run_tool_for_step,
     render_constitution_markdown,
+    render_daily_command_center_text,
     run_tool_for_step,
     tool_execution_records_from_events,
     tool_permission_records_from_events,
@@ -257,6 +259,8 @@ def main() -> int:
     context_parser.add_argument("--prompt", action="store_true")
 
     subparsers.add_parser("status")
+    daily_parser = subparsers.add_parser("daily")
+    daily_parser.add_argument("--json", action="store_true")
     subparsers.add_parser("model-diagnostic")
     subparsers.add_parser("workbench-status")
     chat_once_parser = subparsers.add_parser("chat-once")
@@ -758,6 +762,14 @@ def main() -> int:
 
     if args.command == "model-diagnostic":
         print_json({"model_adapter": model_environment_diagnostic()})
+        return 0
+
+    if args.command == "daily":
+        daily = daily_command_center(ledger, manifest)
+        if args.json:
+            print_json({"daily": daily})
+        else:
+            print(render_daily_command_center_text(daily))
         return 0
 
     if args.command == "workbench-status":
