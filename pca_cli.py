@@ -14,6 +14,7 @@ from pca import (
     ContinuityLedger,
     FollowUpRecord,
     FollowUpStatus,
+    GoalStatus,
     GrowthGate,
     GrowthGateAction,
     GrowthReviewDecision,
@@ -33,6 +34,7 @@ from pca import (
     TransformRequest,
     add_evidence,
     add_evidence_claim,
+    add_goal_blocker,
     append_ledger_anchor,
     apply_steward_inbox_action,
     accepted_skills_from_events,
@@ -49,6 +51,7 @@ from pca import (
     current_claim_record,
     current_recovery_record,
     daily_command_center,
+    daily_plan,
     derive_self_model,
     derive_current_claim,
     evidence_for_target,
@@ -57,6 +60,7 @@ from pca import (
     find_followup,
     find_recovery,
     followups_from_events,
+    goal_records_from_events,
     growth_records_from_events,
     growth_conflict_records_from_events,
     growth_conflict_resolution_records_from_events,
@@ -80,6 +84,7 @@ from pca import (
     mission_flows_from_events,
     mission_step_records_from_events,
     add_mission_item,
+    create_goal_record,
     open_mission,
     open_tasks_from_reflection,
     propose_growth,
@@ -98,9 +103,11 @@ from pca import (
     review_skill_candidate,
     review_evidence,
     link_evidence,
+    link_goal_mission,
     safe_load_policy_directory,
     safe_load_policy_pack,
     update_mission_status,
+    update_goal_status,
     update_reflection_task,
     start_mission_step,
     steward_inbox,
@@ -110,6 +117,7 @@ from pca import (
     dry_run_tool_for_step,
     render_constitution_markdown,
     render_daily_command_center_text,
+    render_daily_plan_text,
     run_tool_for_step,
     tool_execution_records_from_events,
     tool_permission_records_from_events,
@@ -261,6 +269,8 @@ def main() -> int:
     subparsers.add_parser("status")
     daily_parser = subparsers.add_parser("daily")
     daily_parser.add_argument("--json", action="store_true")
+    daily_plan_parser = subparsers.add_parser("daily-plan")
+    daily_plan_parser.add_argument("--json", action="store_true")
     subparsers.add_parser("model-diagnostic")
     subparsers.add_parser("workbench-status")
     chat_once_parser = subparsers.add_parser("chat-once")
@@ -348,6 +358,39 @@ def main() -> int:
 
     missions_parser = subparsers.add_parser("missions")
     missions_parser.add_argument("--open", action="store_true")
+
+    goal_create_parser = subparsers.add_parser("goal-create")
+    goal_create_parser.add_argument("title")
+    goal_create_parser.add_argument("--purpose", required=True)
+    goal_create_parser.add_argument("--success-criteria", required=True)
+    goal_create_parser.add_argument("--priority", default="medium")
+    goal_create_parser.add_argument("--next-action", default="")
+    goal_create_parser.add_argument("--review-state", default="pending")
+    goal_create_parser.add_argument("--reason", default="")
+
+    goals_parser = subparsers.add_parser("goals")
+    goals_parser.add_argument("--active", action="store_true")
+
+    goal_status_parser = subparsers.add_parser("goal-status")
+    goal_status_parser.add_argument("goal_id")
+
+    goal_link_parser = subparsers.add_parser("goal-link-mission")
+    goal_link_parser.add_argument("goal_id")
+    goal_link_parser.add_argument("mission_id")
+    goal_link_parser.add_argument("--reason", default="")
+
+    goal_blocker_parser = subparsers.add_parser("goal-add-blocker")
+    goal_blocker_parser.add_argument("goal_id")
+    goal_blocker_parser.add_argument("text")
+    goal_blocker_parser.add_argument("--reason", default="")
+
+    goal_complete_parser = subparsers.add_parser("goal-complete")
+    goal_complete_parser.add_argument("goal_id")
+    goal_complete_parser.add_argument("--reason", default="")
+
+    goal_archive_parser = subparsers.add_parser("goal-archive")
+    goal_archive_parser.add_argument("goal_id")
+    goal_archive_parser.add_argument("--reason", default="")
 
     mission_open_parser = subparsers.add_parser("mission-open")
     mission_open_parser.add_argument("title")
@@ -772,6 +815,14 @@ def main() -> int:
             print(render_daily_command_center_text(daily))
         return 0
 
+    if args.command == "daily-plan":
+        plan = daily_plan(ledger, manifest)
+        if args.json:
+            print_json({"daily_plan": plan})
+        else:
+            print(render_daily_plan_text(plan))
+        return 0
+
     if args.command == "workbench-status":
         print_json({"workbench": workbench_status(ledger, manifest)})
         return 0
@@ -1143,6 +1194,106 @@ def main() -> int:
                 "missions": [brief.to_dict() for brief in briefs],
             }
         )
+        return 0
+
+    if args.command == "goal-create":
+        goal = create_goal_record(
+            ledger=ledger,
+            identity_id=manifest.system_id,
+            title=args.title,
+            purpose=args.purpose,
+            success_criteria=args.success_criteria,
+            priority=args.priority,
+            next_recommended_action=args.next_action,
+            review_state=args.review_state,
+            reason=args.reason,
+        )
+        print_json({"goal": goal.to_dict()})
+        return 0
+
+    if args.command == "goals":
+        goals = goal_records_from_events(ledger.events())
+        if args.active:
+            goals = [
+                goal
+                for goal in goals
+                if goal.status == GoalStatus.ACTIVE
+            ]
+        print_json(
+            {
+                "system_id": manifest.system_id,
+                "count": len(goals),
+                "goals": [goal.to_dict() for goal in goals],
+            }
+        )
+        return 0
+
+    if args.command == "goal-status":
+        try:
+            goal = next(
+                goal
+                for goal in goal_records_from_events(ledger.events())
+                if goal.goal_id == args.goal_id
+            )
+        except StopIteration as exc:
+            raise SystemExit(f"Goal not found: {args.goal_id}") from exc
+        print_json({"goal": goal.to_dict()})
+        return 0
+
+    if args.command == "goal-link-mission":
+        try:
+            goal = link_goal_mission(
+                ledger,
+                manifest.system_id,
+                args.goal_id,
+                args.mission_id,
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"goal": goal.to_dict()})
+        return 0
+
+    if args.command == "goal-add-blocker":
+        try:
+            goal = add_goal_blocker(
+                ledger,
+                manifest.system_id,
+                args.goal_id,
+                args.text,
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"goal": goal.to_dict()})
+        return 0
+
+    if args.command == "goal-complete":
+        try:
+            goal = update_goal_status(
+                ledger,
+                manifest.system_id,
+                args.goal_id,
+                GoalStatus.COMPLETED,
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"goal": goal.to_dict()})
+        return 0
+
+    if args.command == "goal-archive":
+        try:
+            goal = update_goal_status(
+                ledger,
+                manifest.system_id,
+                args.goal_id,
+                GoalStatus.ARCHIVED,
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"goal": goal.to_dict()})
         return 0
 
     if args.command == "mission-open":

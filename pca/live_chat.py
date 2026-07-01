@@ -18,6 +18,14 @@ from .growth import (
     growth_records_from_events,
     review_growth,
 )
+from .goals import (
+    add_goal_blocker,
+    create_goal_record,
+    daily_plan,
+    goal_records_from_events,
+    link_goal_mission,
+    update_goal_status,
+)
 from .growth_conflicts import (
     growth_conflict_records_from_events,
     growth_conflict_resolution_records_from_events,
@@ -501,6 +509,77 @@ def _apply_steward_action(
             mission_id,
         )
 
+    if action == "create_goal":
+        title = str(payload.get("title", "")).strip()
+        purpose = str(payload.get("purpose", "")).strip()
+        success_criteria = str(payload.get("success_criteria", "")).strip()
+        if not title:
+            raise ValueError("goal title is required")
+        if not purpose:
+            raise ValueError("goal purpose is required")
+        if not success_criteria:
+            raise ValueError("goal success criteria is required")
+        goal = create_goal_record(
+            ledger,
+            manifest.system_id,
+            title=title,
+            purpose=purpose,
+            success_criteria=success_criteria,
+            priority=str(payload.get("priority", "medium")).strip() or "medium",
+            next_recommended_action=str(payload.get("next_recommended_action", "")).strip(),
+            reason=reason,
+        )
+        return {"goal": goal.to_dict()}
+
+    if action == "link_goal_mission":
+        goal_id = str(payload.get("goal_id", "")).strip()
+        mission_id = str(payload.get("mission_id", "")).strip()
+        if not goal_id:
+            raise ValueError("goal_id is required")
+        if not mission_id:
+            raise ValueError("mission_id is required")
+        goal = link_goal_mission(
+            ledger,
+            manifest.system_id,
+            goal_id,
+            mission_id,
+            reason=reason,
+        )
+        return {"goal": goal.to_dict()}
+
+    if action == "add_goal_blocker":
+        goal_id = str(payload.get("goal_id", "")).strip()
+        blocker = str(payload.get("blocker", "")).strip()
+        if not goal_id:
+            raise ValueError("goal_id is required")
+        if not blocker:
+            raise ValueError("blocker is required")
+        goal = add_goal_blocker(
+            ledger,
+            manifest.system_id,
+            goal_id,
+            blocker,
+            reason=reason,
+        )
+        return {"goal": goal.to_dict()}
+
+    if action in {"complete_goal", "archive_goal"}:
+        goal_id = str(payload.get("goal_id", "")).strip()
+        if not goal_id:
+            raise ValueError("goal_id is required")
+        status = "completed" if action == "complete_goal" else "archived"
+        goal = update_goal_status(
+            ledger,
+            manifest.system_id,
+            goal_id,
+            status,
+            reason=reason,
+        )
+        return {"goal": goal.to_dict()}
+
+    if action == "generate_daily_plan":
+        return {"daily_plan": daily_plan(ledger, manifest)}
+
     raise ValueError(f"unknown steward action: {action}")
 
 
@@ -624,6 +703,7 @@ def _status_payload(
     accepted_skills = [
         skill.to_dict() for skill in accepted_skills_from_events(ledger.events())
     ]
+    goals = [goal.to_dict() for goal in goal_records_from_events(ledger.events())]
     mission_flows = {
         flow.mission_id: flow.to_dict()
         for flow in mission_flows_from_events(ledger.events())
@@ -671,6 +751,8 @@ def _status_payload(
         "mission_flows": mission_flows,
         "mission_autonomy": mission_autonomy,
         "learning_reviews": learning_reviews,
+        "goals": goals,
+        "daily_plan": daily_plan(ledger, manifest),
         "mission_steps": mission_steps,
         "tools": tool_spec_map,
         "tool_executions": tool_executions,
@@ -1012,6 +1094,7 @@ def _live_chat_html() -> str:
         <div class="home-actions">
           <button type="button" id="homeStartMission">Start Mission</button>
           <button type="button" id="homeCleanSession" class="secondary">Start Clean Daily Session</button>
+          <button type="button" id="homeDailyPlan" class="secondary">Generate Daily Plan</button>
           <button type="button" id="homeLearningReview" class="secondary">Review Session for Learning</button>
           <button type="button" id="homeReviewInbox" class="secondary">Review Inbox</button>
           <button type="button" id="homeSessionReplay" class="secondary">View Session Replay</button>
@@ -1040,6 +1123,29 @@ def _live_chat_html() -> str:
         <select id="activeMissionSelect"></select>
       </div>
       <div id="missionCards" class="mission-card-grid"></div>
+    </section>
+    <section class="mission-dashboard">
+      <div class="mission-controls">
+        <div>
+          <h2>Goals</h2>
+          <div class="item-meta">Durable directions that can link to missions without executing actions automatically.</div>
+        </div>
+        <button type="button" id="generateDailyPlan" class="secondary">Generate Daily Plan</button>
+      </div>
+      <form id="goalForm">
+        <input id="goalTitle" placeholder="Goal title">
+        <textarea id="goalPurpose" placeholder="Why this goal matters"></textarea>
+        <textarea id="goalSuccess" placeholder="Success criteria"></textarea>
+        <select id="goalPriority">
+          <option value="medium" selected>medium</option>
+          <option value="high">high</option>
+          <option value="low">low</option>
+          <option value="critical">critical</option>
+        </select>
+        <button type="submit">Create Goal</button>
+      </form>
+      <div id="dailyPlan" class="queue"></div>
+      <div id="goals" class="mission-card-grid"></div>
     </section>
     <section class="chat">
       <h2>Chat</h2>
@@ -1211,6 +1317,8 @@ def _live_chat_html() -> str:
     const missions = document.getElementById('missions');
     const missionCards = document.getElementById('missionCards');
     const activeMissionSelect = document.getElementById('activeMissionSelect');
+    const goals = document.getElementById('goals');
+    const dailyPlan = document.getElementById('dailyPlan');
     const missionSteps = document.getElementById('missionSteps');
     const skillMemory = document.getElementById('skillMemory');
     const stewardInbox = document.getElementById('stewardInbox');
@@ -1264,6 +1372,8 @@ def _live_chat_html() -> str:
       renderGovernedContext(status.governed_context || {});
       renderMemoryInbox(status.memory_inbox || []);
       renderRecall((status.self_model || {}).memory_cards || []);
+      renderGoals(status.goals || [], status.missions || []);
+      renderDailyPlan(status.daily_plan || {});
       renderMissions(status.missions || [], status.mission_flows || {}, status.mission_autonomy || []);
       renderMissionSteps(status.mission_steps || [], status.tools || {}, status.tool_executions || [], status.tool_previews || []);
       renderSkillMemory(status.skill_candidates || [], status.accepted_skills || []);
@@ -1380,7 +1490,7 @@ def _live_chat_html() -> str:
       const cardHost = document.getElementById('dailyCards');
       cardHost.innerHTML = '';
       const cards = daily.cards || {};
-      for (const key of ['work_today', 'blockers', 'safe_next_action', 'needs_steward_review', 'cost_brain_mode']) {
+      for (const key of ['work_today', 'goals', 'blockers', 'safe_next_action', 'needs_steward_review', 'cost_brain_mode']) {
         const card = cards[key] || {};
         const row = document.createElement('div');
         row.className = 'item mission-card';
@@ -1409,6 +1519,76 @@ def _live_chat_html() -> str:
         row.className = 'item-meta';
         row.textContent = mission ? 'No mission blockers detected.' : 'No active mission. Start one to turn chat into governed work.';
         blockerList.appendChild(row);
+      }
+    }
+
+    function renderDailyPlan(plan) {
+      if (!plan || !plan.current_focus) {
+        empty(dailyPlan, 'No daily plan generated yet.');
+        return;
+      }
+      dailyPlan.innerHTML = '';
+      const top = document.createElement('div');
+      top.className = 'item';
+      top.innerHTML = `<div class="item-title">Daily Plan / ${escapeHtml(plan.continuity_state || 'unknown')}</div>
+        <div class="item-meta">Focus: ${escapeHtml(plan.current_focus || 'none')}</div>
+        <div class="item-meta">Best next safe action: ${escapeHtml(plan.best_next_safe_action || 'none')}</div>`;
+      dailyPlan.appendChild(top);
+      const blockers = document.createElement('div');
+      blockers.className = 'item';
+      blockers.innerHTML = `<div class="item-title">Blockers</div>
+        <div class="item-meta">${escapeHtml((plan.blockers || []).join(' / ') || 'none')}</div>`;
+      dailyPlan.appendChild(blockers);
+      const notYet = document.createElement('div');
+      notYet.className = 'item';
+      notYet.innerHTML = `<div class="item-title">What not to do yet</div>
+        <div class="item-meta">${escapeHtml((plan.what_not_to_do_yet || []).join(' / ') || 'none')}</div>`;
+      dailyPlan.appendChild(notYet);
+    }
+
+    function renderGoals(records, missionRecords) {
+      const active = records.filter(goal => goal.status === 'active');
+      if (!records.length) {
+        empty(goals, 'No goals yet. Create one to give Lucien a durable direction.');
+        return;
+      }
+      goals.innerHTML = '';
+      const missionOptions = [];
+      for (const brief of missionRecords || []) {
+        const mission = brief.mission || {};
+        if (mission.mission_id) missionOptions.push(mission);
+      }
+      for (const goal of active.concat(records.filter(goal => goal.status !== 'active')).slice(0, 8)) {
+        const row = document.createElement('div');
+        row.className = 'item mission-card';
+        const linked = (goal.linked_mission_ids || []).length;
+        const blockers = (goal.blockers || []).length;
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        if (goal.status === 'active') {
+          actions.appendChild(localButton('Link Mission', () => {
+            if (!missionOptions.length) {
+              addMessage('lucien', 'No mission is available to link yet.');
+              return;
+            }
+            const missionId = window.prompt('Mission ID to link', missionOptions[missionOptions.length - 1].mission_id);
+            if (!missionId) return;
+            steward({action: 'link_goal_mission', goal_id: goal.goal_id, mission_id: missionId, reason: 'linked from live goals panel'});
+          }));
+          actions.appendChild(localButton('Add Blocker', () => {
+            const blocker = window.prompt('Goal blocker');
+            if (!blocker) return;
+            steward({action: 'add_goal_blocker', goal_id: goal.goal_id, blocker, reason: 'added from live goals panel'});
+          }));
+          actions.appendChild(button('Complete', {action: 'complete_goal', goal_id: goal.goal_id, reason: 'completed from live goals panel'}));
+          actions.appendChild(button('Archive', {action: 'archive_goal', goal_id: goal.goal_id, reason: 'archived from live goals panel'}));
+        }
+        row.innerHTML = `<div class="item-title">${escapeHtml(goal.title)} / ${escapeHtml(goal.priority)} / ${escapeHtml(goal.status)}</div>
+          <div class="item-meta">${escapeHtml(goal.goal_id)} / review ${escapeHtml(goal.review_state || 'pending')}</div>
+          <div class="item-meta">linked missions ${linked} / blockers ${blockers}</div>
+          <div class="item-meta">next: ${escapeHtml(goal.next_recommended_action || 'none')}</div>`;
+        row.appendChild(actions);
+        goals.appendChild(row);
       }
     }
 
@@ -2104,6 +2284,26 @@ def _live_chat_html() -> str:
       });
     });
 
+    document.getElementById('goalForm').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const title = document.getElementById('goalTitle').value.trim();
+      const purpose = document.getElementById('goalPurpose').value.trim();
+      const success = document.getElementById('goalSuccess').value.trim();
+      const priority = document.getElementById('goalPriority').value;
+      if (!title || !purpose || !success) return;
+      document.getElementById('goalTitle').value = '';
+      document.getElementById('goalPurpose').value = '';
+      document.getElementById('goalSuccess').value = '';
+      steward({
+        action: 'create_goal',
+        title,
+        purpose,
+        success_criteria: success,
+        priority,
+        reason: 'created from live goals panel'
+      });
+    });
+
     document.getElementById('speak').addEventListener('click', () => {
       if (!lastLucien || !window.speechSynthesis) return;
       window.speechSynthesis.cancel();
@@ -2127,6 +2327,13 @@ def _live_chat_html() -> str:
       messages.innerHTML = '';
       lastLucien = '';
     });
+
+    function generatePlan() {
+      steward({action: 'generate_daily_plan', reason: 'generated from live workbench'});
+    }
+
+    document.getElementById('homeDailyPlan').addEventListener('click', generatePlan);
+    document.getElementById('generateDailyPlan').addEventListener('click', generatePlan);
 
     document.getElementById('homeStartMission').addEventListener('click', () => {
       document.getElementById('missionTitle').focus();

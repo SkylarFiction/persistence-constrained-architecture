@@ -5,6 +5,7 @@ from typing import Any
 from .ledger import ContinuityLedger
 from .learning_review import learning_review_records_from_events
 from .manifest import IdentityManifest
+from .goals import active_goal_records, daily_plan
 from .mission_flow import mission_flows_from_events
 from .mission_steps import (
     MissionStepApprovalStatus,
@@ -28,6 +29,7 @@ def daily_command_center(
     events = ledger.events()
     report = build_trace_report(ledger, manifest)
     workbench = workbench_status(ledger, manifest)
+    plan = daily_plan(ledger, manifest)
     claim, _, _ = derive_current_claim(ledger, manifest)
     gate = OutputGate().evaluate(claim)
     model_adapter = model_environment_diagnostic()
@@ -58,6 +60,8 @@ def daily_command_center(
         if active_mission
         else []
     )
+    active_goals = active_goal_records(events)
+    focus_goal = plan.get("focus_goal")
     blocked_mission_count = sum(
         1
         for flow in flows.values()
@@ -93,6 +97,8 @@ def daily_command_center(
         "latest_provider": workbench.get("latest_provider", "none"),
         "estimated_session_cost_usd": workbench.get("estimated_session_cost_usd", 0.0),
         "active_mission_count": len(active_briefs),
+        "active_goal_count": len(active_goals),
+        "focus_goal": focus_goal,
         "current_active_mission": active_mission,
         "mission_phase": active_mission.get("phase") if active_mission else "none",
         "next_safe_action": workbench.get("recommended_next_action"),
@@ -107,6 +113,7 @@ def daily_command_center(
         "skill_suggestions_available": len(skill_suggestions),
         "recovery_state": recovery_state,
         "conflicts_count": conflicts_count,
+        "daily_plan": plan,
         "cost_brain_mode": {
             "local_model_available": bool(model_adapter.get("local_model_configured")),
             "local_model": model_adapter.get("local_model"),
@@ -120,6 +127,13 @@ def daily_command_center(
         },
         "cards": {
             "work_today": _work_today_card(active_mission, len(active_briefs)),
+            "goals": {
+                "title": "Goals",
+                "value": (
+                    f"{len(active_goals)} active"
+                    + (f" / focus {focus_goal['title']}" if focus_goal else "")
+                ),
+            },
             "blockers": _blockers_card(
                 blocked_mission_count,
                 len(high_priority_items),
@@ -158,6 +172,7 @@ def render_daily_command_center_text(daily: dict[str, Any]) -> str:
         f"Model mode: {daily['model_mode']} / latest provider: {daily['latest_provider']}",
         f"Session cost estimate: ${float(daily['estimated_session_cost_usd'] or 0.0):.6f}",
         f"Active missions: {daily['active_mission_count']}",
+        f"Active goals: {daily.get('active_goal_count', 0)}",
         f"Blocked missions: {daily['blocked_mission_count']}",
         f"Ready steps: {daily['ready_mission_steps']}",
         f"Pending tool approvals: {daily['pending_tool_approvals']}",
@@ -167,6 +182,15 @@ def render_daily_command_center_text(daily: dict[str, Any]) -> str:
         f"Recovery: {daily['recovery_state'] or 'none'}",
         f"Conflicts: {daily['conflicts_count']}",
     ]
+    goal = daily.get("focus_goal")
+    if goal:
+        lines.extend(
+            [
+                "",
+                f"Focus goal: {goal['title']}",
+                f"Goal next action: {goal.get('next_recommended_action') or 'none'}",
+            ]
+        )
     mission = daily.get("current_active_mission")
     if mission:
         lines.extend(

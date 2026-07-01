@@ -73,6 +73,7 @@ from pca import (
     continuity_claim_from_followups,
     current_claim_record,
     daily_command_center,
+    daily_plan,
     derive_current_claim,
     derive_self_model,
     estimate_model_usage,
@@ -84,10 +85,12 @@ from pca import (
     approve_mission_step,
     block_mission_step,
     complete_mission_step,
+    create_goal_record,
     export_latest_anchor,
     fail_mission_step,
     growth_conflict_records_from_events,
     growth_conflict_resolution_records_from_events,
+    goal_records_from_events,
     growth_records_from_events,
     growth_review_records_from_events,
     load_policy_directory,
@@ -132,6 +135,7 @@ from pca import (
     resolve_matching_reflection_tasks,
     review_evidence,
     link_evidence,
+    link_goal_mission,
     review_skill_candidate,
     review_growth,
     skill_candidates_from_events,
@@ -1106,6 +1110,10 @@ def test_live_chat_html_contains_mission_first_home():
     assert "Mission Dashboard" in html
     assert "activeMissionSelect" in html
     assert "missionCards" in html
+    assert "Goals" in html
+    assert "goalForm" in html
+    assert "Generate Daily Plan" in html
+    assert "Create Goal" in html
     assert "Set Active" in html
     assert "Review Blockers" in html
     assert "Learning Review" in html
@@ -2338,6 +2346,98 @@ def test_daily_command_center_surfaces_ready_steps(tmp_path):
     assert daily["ready_mission_steps"] == 1
     assert step.step_id in daily["ready_step_ids"]
     assert "ready mission steps" in daily["recommended_first_action"]
+
+
+def test_goal_engine_creates_and_lists_goal(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    goal = create_goal_record(
+        ledger,
+        manifest.system_id,
+        title="Make Coherence AI self-proficient",
+        purpose="Track durable work beyond a single chat session.",
+        success_criteria="A daily plan can identify the safest next action.",
+        priority="high",
+        reason="test goal creation",
+    )
+    goals = goal_records_from_events(ledger.events())
+
+    assert goals == [goal]
+    assert goals[0].status.value == "active"
+    assert goals[0].priority == "high"
+    assert goals[0].history[-1].action == "created"
+
+
+def test_goal_engine_links_goal_to_mission(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    goal = create_goal_record(
+        ledger,
+        manifest.system_id,
+        title="Improve daily work",
+        purpose="Make Lucien useful every day.",
+        success_criteria="A mission is linked and actionable.",
+    )
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Daily mission",
+        problem_statement="Improve daily work without bypassing governance.",
+    )
+
+    linked = link_goal_mission(
+        ledger,
+        manifest.system_id,
+        goal.goal_id,
+        mission.mission_id,
+        reason="test link",
+    )
+
+    assert linked.linked_mission_ids == [mission.mission_id]
+    assert goal_records_from_events(ledger.events())[-1].linked_mission_ids == [
+        mission.mission_id
+    ]
+
+
+def test_daily_plan_includes_active_goal_and_safe_next_action(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    goal = create_goal_record(
+        ledger,
+        manifest.system_id,
+        title="Build governed goals",
+        purpose="Turn loose intention into daily governed work.",
+        success_criteria="Daily plan names the active goal.",
+        priority="high",
+    )
+
+    plan = daily_plan(ledger, manifest)
+
+    assert plan["focus_goal"]["goal_id"] == goal.goal_id
+    assert "Goal: Build governed goals" == plan["current_focus"]
+    assert plan["best_next_safe_action"]
+    assert "Do not auto-execute tools" in plan["what_not_to_do_yet"][0]
+
+
+def test_daily_plan_respects_continuity_under_review(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    create_goal_record(
+        ledger,
+        manifest.system_id,
+        title="High impact work",
+        purpose="Test continuity caution.",
+        success_criteria="Plan avoids high-impact work under review.",
+        priority="critical",
+    )
+
+    plan = daily_plan(ledger, manifest)
+
+    assert plan["continuity_state"] == "review_required"
+    assert "continuity is review_required" in plan["blockers"]
+    assert "Review continuity blockers" in plan["best_next_safe_action"]
+    assert any("high-impact" in item for item in plan["what_not_to_do_yet"])
 
 
 def test_low_risk_mission_step_can_start_without_approval(tmp_path):
