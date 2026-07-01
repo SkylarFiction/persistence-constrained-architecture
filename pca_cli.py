@@ -263,7 +263,7 @@ def main() -> int:
     chat_once_parser.add_argument("message")
     chat_once_parser.add_argument(
         "--model-mode",
-        choices=["echo", "openai", "serious_only"],
+        choices=["echo", "openai", "serious_only", "local_ollama", "local_first"],
         default="serious_only",
     )
     chat_once_parser.add_argument("--use-openai", action="store_true")

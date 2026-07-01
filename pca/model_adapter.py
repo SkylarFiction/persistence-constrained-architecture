@@ -9,8 +9,16 @@ from urllib import error, request
 
 MODEL_MODE_ECHO = "echo"
 MODEL_MODE_OPENAI = "openai"
+MODEL_MODE_LOCAL_OLLAMA = "local_ollama"
+MODEL_MODE_LOCAL_FIRST = "local_first"
 MODEL_MODE_SERIOUS_ONLY = "serious_only"
-MODEL_MODES = {MODEL_MODE_ECHO, MODEL_MODE_OPENAI, MODEL_MODE_SERIOUS_ONLY}
+MODEL_MODES = {
+    MODEL_MODE_ECHO,
+    MODEL_MODE_OPENAI,
+    MODEL_MODE_LOCAL_OLLAMA,
+    MODEL_MODE_LOCAL_FIRST,
+    MODEL_MODE_SERIOUS_ONLY,
+}
 DEFAULT_MODEL_MODE = MODEL_MODE_SERIOUS_ONLY
 DEFAULT_INPUT_COST_PER_M_TOKEN = 0.40
 DEFAULT_OUTPUT_COST_PER_M_TOKEN = 1.60
@@ -178,6 +186,92 @@ class OpenAICompatibleAdapter(ModelAdapter):
         )
 
 
+class OllamaAdapter(ModelAdapter):
+    def __init__(
+        self,
+        model: str = "llama3.1:8b",
+        base_url: str = "http://127.0.0.1:11434",
+        timeout_seconds: int = 60,
+    ):
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.timeout_seconds = timeout_seconds
+
+    def generate(
+        self,
+        messages: list[ModelMessage],
+        system_context: str,
+    ) -> ModelResponse:
+        payload = {
+            "model": self.model,
+            "stream": False,
+            "messages": [
+                {"role": "system", "content": system_context},
+                *[message.to_dict() for message in messages],
+            ],
+        }
+        body = json.dumps(payload).encode("utf-8")
+        req = request.Request(
+            f"{self.base_url}/api/chat",
+            data=body,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with request.urlopen(req, timeout=self.timeout_seconds) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", "replace")[:500]
+            raise ModelAdapterError(
+                f"Ollama request failed with HTTP {exc.code}: {detail}",
+                provider="ollama",
+                model=self.model,
+                error_type="http_error",
+            ) from exc
+        except OSError as exc:
+            raise ModelAdapterError(
+                f"Ollama request failed: {exc}",
+                provider="ollama",
+                model=self.model,
+                error_type=exc.__class__.__name__,
+            ) from exc
+        text = _extract_ollama_text(data).strip()
+        return ModelResponse(
+            text=text or "The local model returned an empty response.",
+            provider="ollama",
+            model=self.model,
+            raw=_compact_ollama_raw(data),
+        )
+
+
+class FallbackAdapter(ModelAdapter):
+    def __init__(self, primary: ModelAdapter, fallback: ModelAdapter):
+        self.primary = primary
+        self.fallback = fallback
+
+    def generate(
+        self,
+        messages: list[ModelMessage],
+        system_context: str,
+    ) -> ModelResponse:
+        try:
+            return self.primary.generate(messages, system_context)
+        except ModelAdapterError as primary_error:
+            try:
+                response = self.fallback.generate(messages, system_context)
+            except ModelAdapterError:
+                raise primary_error
+            return ModelResponse(
+                text=response.text,
+                provider=response.provider,
+                model=response.model,
+                raw={
+                    **(response.raw or {}),
+                    "fallback_from": primary_error.to_dict(),
+                },
+            )
+
+
 def adapter_from_environment(env_path: str = ".env") -> ModelAdapter:
     _load_dotenv(env_path)
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -190,6 +284,17 @@ def adapter_from_environment(env_path: str = ".env") -> ModelAdapter:
     )
 
 
+def local_adapter_from_environment(env_path: str = ".env") -> ModelAdapter:
+    _load_dotenv(env_path)
+    provider = os.environ.get("LUCIEN_LOCAL_PROVIDER", "ollama").strip().lower()
+    if provider not in {"ollama", "local_ollama"}:
+        return EchoAdapter()
+    return OllamaAdapter(
+        model=os.environ.get("LUCIEN_OLLAMA_MODEL", "llama3.1:8b"),
+        base_url=os.environ.get("LUCIEN_OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
+    )
+
+
 def adapter_for_model_mode(
     mode: str | None,
     use_openai: bool = False,
@@ -198,6 +303,13 @@ def adapter_for_model_mode(
     normalized = normalize_model_mode(mode)
     if normalized == MODEL_MODE_ECHO:
         return EchoAdapter()
+    if normalized == MODEL_MODE_LOCAL_OLLAMA:
+        return local_adapter_from_environment(env_path)
+    if normalized == MODEL_MODE_LOCAL_FIRST:
+        local = local_adapter_from_environment(env_path)
+        if use_openai:
+            return FallbackAdapter(local, adapter_from_environment(env_path))
+        return FallbackAdapter(local, EchoAdapter())
     if normalized == MODEL_MODE_SERIOUS_ONLY and not use_openai:
         return EchoAdapter()
     return adapter_from_environment(env_path)
@@ -208,6 +320,10 @@ def normalize_model_mode(mode: str | None) -> str:
     normalized = normalized.lower().replace("-", "_")
     if normalized in {"serious", "serious_replies", "openai_serious"}:
         normalized = MODEL_MODE_SERIOUS_ONLY
+    if normalized in {"ollama", "local", "local_model"}:
+        normalized = MODEL_MODE_LOCAL_OLLAMA
+    if normalized in {"local_first", "local_openai_fallback", "local_with_openai_fallback"}:
+        normalized = MODEL_MODE_LOCAL_FIRST
     if normalized not in MODEL_MODES:
         return DEFAULT_MODEL_MODE
     return normalized
@@ -225,6 +341,9 @@ def model_environment_diagnostic(env_path: str = ".env") -> dict[str, Any]:
             raw = b""
     api_key = os.environ.get("OPENAI_API_KEY", "")
     model = os.environ.get("LUCIEN_MODEL", "gpt-4.1-mini")
+    local_provider = os.environ.get("LUCIEN_LOCAL_PROVIDER", "ollama")
+    ollama_url = os.environ.get("LUCIEN_OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+    ollama_model = os.environ.get("LUCIEN_OLLAMA_MODEL", "llama3.1:8b")
     key_present = bool(api_key.strip())
     return {
         "env_path": str(env_file),
@@ -238,6 +357,10 @@ def model_environment_diagnostic(env_path: str = ".env") -> dict[str, Any]:
         ),
         "configured_model": model,
         "configured_provider": "openai" if key_present else "echo",
+        "local_provider": local_provider,
+        "local_model": ollama_model,
+        "local_base_url": ollama_url,
+        "local_model_configured": bool(ollama_model.strip()),
         "default_model_mode": normalize_model_mode(None),
     }
 
@@ -348,6 +471,30 @@ def _extract_responses_text(data: dict[str, Any]) -> str:
             if isinstance(text, str):
                 chunks.append(text)
     return "".join(chunks)
+
+
+def _extract_ollama_text(data: dict[str, Any]) -> str:
+    message = data.get("message", {})
+    if isinstance(message, dict) and isinstance(message.get("content"), str):
+        return message["content"]
+    response = data.get("response")
+    if isinstance(response, str):
+        return response
+    return ""
+
+
+def _compact_ollama_raw(data: dict[str, Any]) -> dict[str, Any]:
+    usage = {}
+    if isinstance(data.get("prompt_eval_count"), int):
+        usage["input_tokens"] = data["prompt_eval_count"]
+    if isinstance(data.get("eval_count"), int):
+        usage["output_tokens"] = data["eval_count"]
+    return {
+        "model": data.get("model"),
+        "created_at": data.get("created_at"),
+        "done": data.get("done"),
+        "usage": usage,
+    }
 
 
 def _load_dotenv(path: str) -> None:

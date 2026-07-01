@@ -320,7 +320,7 @@ python3 scripts/lucien_cockpit_demo.py
 python3 lucien_chat.py --seed-required --message "Remember that PCA learning must be governed."
 ```
 
-## OpenAI API Setup
+## Model Setup
 
 Lucien can run without an API key; in that mode it uses the local Echo fallback.
 To give Lucien a real model-backed voice, create a local `.env` file:
@@ -335,6 +335,23 @@ Then edit `.env`:
 OPENAI_API_KEY=your_api_key_here
 LUCIEN_MODEL=gpt-4.1-mini
 ```
+
+Lucien can also use a local Ollama model. Install Ollama, pull a model, and set
+the local model variables:
+
+```bash
+ollama pull llama3.1:8b
+```
+
+```bash
+LUCIEN_LOCAL_PROVIDER=ollama
+LUCIEN_OLLAMA_BASE_URL=http://127.0.0.1:11434
+LUCIEN_OLLAMA_MODEL=llama3.1:8b
+```
+
+In the live app, choose `Local Model` to use Ollama. Choose `Local Model with
+fallback` to try Ollama first and fall back to Echo locally unless OpenAI is
+explicitly requested.
 
 Do not commit `.env`. It is ignored by Git. The model is only the language
 engine: PCA still builds governed context, output-gates the answer, and records

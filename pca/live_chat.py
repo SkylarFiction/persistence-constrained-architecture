@@ -886,6 +886,8 @@ def _live_chat_html() -> str:
         <div class="model-controls">
           <select id="modelMode">
             <option value="serious_only" selected>OpenAI only when checked</option>
+            <option value="local_ollama">Local Model</option>
+            <option value="local_first">Local Model with fallback</option>
             <option value="echo">Echo Local</option>
             <option value="openai">OpenAI</option>
           </select>
@@ -905,6 +907,8 @@ def _live_chat_html() -> str:
           <div class="metric"><div class="label">Conflicts</div><div id="conflicts" class="value">loading</div></div>
           <div class="metric"><div class="label">Model Provider</div><div id="modelProvider" class="value">loading</div></div>
           <div class="metric"><div class="label">API Key</div><div id="apiKey" class="value">loading</div></div>
+          <div class="metric"><div class="label">Local Model</div><div id="localModel" class="value">loading</div></div>
+          <div class="metric"><div class="label">Local Status</div><div id="localStatus" class="value">loading</div></div>
         </div>
       </section>
       <section>
@@ -1041,6 +1045,8 @@ def _live_chat_html() -> str:
       const modelAdapter = status.model_adapter || {};
       document.getElementById('modelProvider').textContent = `${modelAdapter.configured_provider || 'unknown'} / ${modelAdapter.configured_model || 'unknown'}`;
       document.getElementById('apiKey').textContent = modelAdapter.openai_key_present ? 'present' : 'missing';
+      document.getElementById('localModel').textContent = `${modelAdapter.local_provider || 'none'} / ${modelAdapter.local_model || 'none'}`;
+      document.getElementById('localStatus').textContent = modelAdapter.local_model_configured ? 'configured' : 'missing';
       const usage = status.model_usage || {};
       document.getElementById('usageProvider').textContent = `${usage.latest_provider || 'none'} / ${usage.latest_model || 'none'}`;
       document.getElementById('usageTokens').textContent = usage.latest_total_tokens || 0;

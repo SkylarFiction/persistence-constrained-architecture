@@ -36,6 +36,7 @@ from pca import (
     MissionStatus,
     ModelAdapterError,
     ModelMessage,
+    OllamaAdapter,
     OpenAICompatibleAdapter,
     OverrideEngine,
     OverrideRequest,
@@ -154,6 +155,13 @@ from pca import (
 def load_manifest():
     with open("examples/minimal_identity.json", encoding="utf-8") as handle:
         return IdentityManifest.from_dict(json.load(handle))
+
+
+def _restore_env(name, value):
+    if value is None:
+        os.environ.pop(name, None)
+    else:
+        os.environ[name] = value
 
 
 def event_at(event_type, subject_id, payload, timestamp):
@@ -444,6 +452,42 @@ def test_openai_model_mode_uses_openai_adapter_when_key_exists(tmp_path):
     assert adapter.model == "test-model"
 
 
+def test_local_ollama_mode_does_not_require_openai_key(tmp_path):
+    old_key = os.environ.pop("OPENAI_API_KEY", None)
+    old_mode = os.environ.pop("LUCIEN_MODEL_MODE", None)
+    old_provider = os.environ.pop("LUCIEN_LOCAL_PROVIDER", None)
+    old_model = os.environ.pop("LUCIEN_OLLAMA_MODEL", None)
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "\n".join(
+            [
+                "LUCIEN_MODEL_MODE=local_ollama",
+                "LUCIEN_LOCAL_PROVIDER=ollama",
+                "LUCIEN_OLLAMA_MODEL=test-local-model",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    try:
+        adapter = adapter_for_model_mode(
+            "local_ollama",
+            use_openai=False,
+            env_path=str(env_path),
+        )
+        diagnostic = model_environment_diagnostic(env_path=str(env_path))
+    finally:
+        _restore_env("OPENAI_API_KEY", old_key)
+        _restore_env("LUCIEN_MODEL_MODE", old_mode)
+        _restore_env("LUCIEN_LOCAL_PROVIDER", old_provider)
+        _restore_env("LUCIEN_OLLAMA_MODEL", old_model)
+
+    assert isinstance(adapter, OllamaAdapter)
+    assert adapter.model == "test-local-model"
+    assert diagnostic["openai_key_present"] is False
+    assert diagnostic["local_provider"] == "ollama"
+    assert diagnostic["local_model"] == "test-local-model"
+
+
 def test_model_usage_estimate_uses_api_usage_when_available():
     usage = estimate_model_usage(
         context_length=4000,
@@ -560,6 +604,76 @@ def test_openai_adapter_failure_is_clean_error():
         model_adapter_module.request.urlopen = old_urlopen
 
 
+def test_ollama_adapter_uses_local_chat_api():
+    captured = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "model": "test-local-model",
+                    "message": {"role": "assistant", "content": "Local answer."},
+                    "done": True,
+                    "prompt_eval_count": 12,
+                    "eval_count": 5,
+                }
+            ).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        captured["timeout"] = timeout
+        captured["payload"] = json.loads(request.data.decode("utf-8"))
+        return FakeResponse()
+
+    old_urlopen = model_adapter_module.request.urlopen
+    model_adapter_module.request.urlopen = fake_urlopen
+    try:
+        adapter = OllamaAdapter(model="test-local-model", base_url="http://127.0.0.1:11434")
+        response = adapter.generate(
+            [ModelMessage(role="user", content="hello")],
+            system_context="governed context",
+        )
+    finally:
+        model_adapter_module.request.urlopen = old_urlopen
+
+    assert captured["url"].endswith("/api/chat")
+    assert captured["payload"]["model"] == "test-local-model"
+    assert captured["payload"]["messages"][0]["role"] == "system"
+    assert response.provider == "ollama"
+    assert response.model == "test-local-model"
+    assert response.text == "Local answer."
+    assert response.raw["usage"] == {"input_tokens": 12, "output_tokens": 5}
+
+
+def test_ollama_adapter_failure_is_clean_error():
+    def failing_urlopen(request, timeout):
+        raise OSError("connection refused")
+
+    old_urlopen = model_adapter_module.request.urlopen
+    model_adapter_module.request.urlopen = failing_urlopen
+    try:
+        adapter = OllamaAdapter(model="test-local-model")
+        try:
+            adapter.generate(
+                [ModelMessage(role="user", content="hello")],
+                system_context="governed context",
+            )
+        except ModelAdapterError as exc:
+            assert exc.provider == "ollama"
+            assert exc.model == "test-local-model"
+            assert exc.error_type == "OSError"
+        else:
+            raise AssertionError("Ollama adapter did not raise clean model error")
+    finally:
+        model_adapter_module.request.urlopen = old_urlopen
+
+
 def test_chat_once_writes_governed_live_chat_events(tmp_path):
     result = chat_once(
         "Lucien, what changed in your state?",
@@ -573,6 +687,58 @@ def test_chat_once_writes_governed_live_chat_events(tmp_path):
     assert "lucien.chat_session_closed" in event_types
     assert result["result"]["output_allowed"] is True
     assert result["status"]["summary"]["chain_valid"] is True
+
+
+def test_chat_once_local_ollama_records_zero_cost_and_output_gate(tmp_path):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "model": "test-local-model",
+                    "message": {"role": "assistant", "content": "Local governed answer."},
+                    "done": True,
+                    "prompt_eval_count": 10,
+                    "eval_count": 4,
+                }
+            ).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        return FakeResponse()
+
+    old_urlopen = model_adapter_module.request.urlopen
+    old_provider = os.environ.pop("LUCIEN_LOCAL_PROVIDER", None)
+    old_model = os.environ.pop("LUCIEN_OLLAMA_MODEL", None)
+    model_adapter_module.request.urlopen = fake_urlopen
+    try:
+        os.environ["LUCIEN_LOCAL_PROVIDER"] = "ollama"
+        os.environ["LUCIEN_OLLAMA_MODEL"] = "test-local-model"
+        result = chat_once(
+            "Lucien, answer locally.",
+            ledger_path=tmp_path / "lucien_live_chat.log",
+            model_mode="local_ollama",
+        )
+    finally:
+        model_adapter_module.request.urlopen = old_urlopen
+        _restore_env("LUCIEN_LOCAL_PROVIDER", old_provider)
+        _restore_env("LUCIEN_OLLAMA_MODEL", old_model)
+
+    model_events = [
+        event
+        for event in result["events"]
+        if event["event_type"] == "chat.model_response_generated"
+    ]
+    event_types = [event["event_type"] for event in result["events"]]
+
+    assert model_events[-1]["payload"]["provider"] == "ollama"
+    assert model_events[-1]["payload"]["model"] == "test-local-model"
+    assert model_events[-1]["payload"]["estimated_cost_usd"] == 0.0
+    assert "runtime.output_gate" in event_types
 
 
 def test_live_steward_action_resolves_reflection_task(tmp_path):
@@ -834,6 +1000,10 @@ def test_live_chat_html_contains_mission_first_home():
     assert "Review Session for Learning" in html
     assert "Review Mission for Learning" in html
     assert "learning_review" in html
+    assert "Local Model" in html
+    assert "local_ollama" in html
+    assert "local_first" in html
+    assert "localStatus" in html
 
 
 def test_live_status_includes_tool_router_state(tmp_path):
