@@ -4000,13 +4000,16 @@ def test_runtime_amber_signal_constrains_identity_speech(tmp_path):
         metrics={"strain": 0.72},
         reason="runtime strain above review threshold",
     )
-    decision = runtime.process_output("I can continue.")
+    decision = runtime.process_output("I am still the same identity.")
+    factual = runtime.process_output("The capital of Texas is Austin.")
 
     assert result.breach_event is not None
     assert result.breach_event.payload["severity"] == "soft"
     assert result.output_gate.mode == OutputMode.DISCLOSE_REVIEW
     assert decision.allowed is True
     assert decision.text.startswith("Continuity is under review.")
+    assert factual.allowed is True
+    assert factual.text == "The capital of Texas is Austin."
 
 
 def test_runtime_red_signal_breaks_continuity_and_blocks_identity_speech(tmp_path):
@@ -4191,12 +4194,16 @@ def test_output_wrapper_adds_review_disclosure(tmp_path):
     runtime.record_runtime_signal("AMBER", reason="strain review")
     wrapper = PCAOutputWrapper(runtime)
 
-    envelope = wrapper.emit("I can continue operationally.")
+    envelope = wrapper.emit("I am still the same identity.")
+    factual = wrapper.emit("The capital of Texas is Austin.")
 
     assert envelope.decision.allowed is True
     assert envelope.decision.text.startswith("Continuity is under review.")
     assert envelope.audit_event.payload["mode"] == "disclose_review"
     assert envelope.audit_event.payload["must_disclose"] is True
+    assert factual.decision.allowed is True
+    assert factual.decision.text == "The capital of Texas is Austin."
+    assert factual.audit_event.payload["mode"] == "disclose_review"
 
 
 def test_output_wrapper_blocks_identity_speech_after_break(tmp_path):

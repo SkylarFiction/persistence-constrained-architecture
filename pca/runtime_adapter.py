@@ -131,8 +131,32 @@ class PCAIdentityRuntime:
                 text=gate.required_disclosure,
                 output_gate=gate,
             )
+        if gate.mode == OutputMode.DISCLOSE_REVIEW and not _contains_identity_claim(text):
+            return RuntimeOutputDecision(allowed=True, text=text, output_gate=gate)
         return RuntimeOutputDecision(
             allowed=True,
             text=f"{gate.required_disclosure} {text}",
             output_gate=gate,
         )
+
+
+def _contains_identity_claim(text: str) -> bool:
+    lowered = text.lower()
+    identity_markers = (
+        "i am still",
+        "i'm still",
+        "same identity",
+        "stable identity",
+        "certified continuity",
+        "my continuity is certified",
+        "my continuity is stable",
+        "i remember",
+        "my memory",
+        "my identity",
+        "as lucien",
+        "i am lucien",
+        "i'm lucien",
+        "unchanged identity",
+        "unbroken continuity",
+    )
+    return any(marker in lowered for marker in identity_markers)
