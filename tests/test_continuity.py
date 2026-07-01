@@ -1121,6 +1121,12 @@ def test_live_chat_html_contains_mission_first_home():
     assert "Start Clean Daily Session" in html
     assert "Model Usage" in html
     assert "Last Brain Used" in html
+    assert "Current Mode" in html
+    assert "Cloud Assist" in html
+    assert "Local Brain" in html
+    assert "Configured Cloud Model" in html
+    assert "Model Provider" not in html
+    assert "OpenAI Usage" not in html
     assert "Continuity: Under Review" in html
     assert "Review Disclosure Required" in html
     assert "<details id=\"advancedDiagnostics\" class=\"advanced\">" in html

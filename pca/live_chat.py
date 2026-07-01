@@ -1074,17 +1074,17 @@ def _live_chat_html() -> str:
           <div class="metric"><div class="label">Recovery</div><div id="recovery" class="value">loading</div></div>
           <div class="metric"><div class="label">Open Tasks</div><div id="tasks" class="value">loading</div></div>
           <div class="metric"><div class="label">Conflicts</div><div id="conflicts" class="value">loading</div></div>
-          <div class="metric"><div class="label">Model Provider</div><div id="modelProvider" class="value">loading</div></div>
-          <div class="metric"><div class="label">API Key</div><div id="apiKey" class="value">loading</div></div>
-          <div class="metric"><div class="label">Local Model</div><div id="localModel" class="value">loading</div></div>
+          <div class="metric"><div class="label">Cloud Assist</div><div id="cloudAssist" class="value">loading</div></div>
+          <div class="metric"><div class="label">Local Brain</div><div id="localModel" class="value">loading</div></div>
           <div class="metric"><div class="label">Local Status</div><div id="localStatus" class="value">loading</div></div>
         </div>
       </section>
       <section>
         <h2>Model Usage</h2>
         <div class="metrics">
+          <div class="metric"><div class="label">Current Mode</div><div id="usageMode" class="value">loading</div></div>
           <div class="metric"><div class="label">Last Brain Used</div><div id="usageProvider" class="value">loading</div></div>
-          <div class="metric"><div class="label">Latest Tokens</div><div id="usageTokens" class="value">loading</div></div>
+          <div class="metric"><div class="label">Cloud Assist</div><div id="usageCloudAssist" class="value">loading</div></div>
           <div class="metric"><div class="label">Latest Cost</div><div id="usageCost" class="value">loading</div></div>
           <div class="metric"><div class="label">Session Cost</div><div id="sessionCost" class="value">loading</div></div>
         </div>
@@ -1160,6 +1160,9 @@ def _live_chat_html() -> str:
             <div class="metric"><div class="label">Brain Task</div><div id="brainTask" class="value">loading</div></div>
             <div class="metric"><div class="label">Raw Continuity</div><div id="rawClaim" class="value">loading</div></div>
             <div class="metric"><div class="label">Raw Output Gate</div><div id="rawGate" class="value">loading</div></div>
+            <div class="metric"><div class="label">Configured Cloud Model</div><div id="configuredCloudModel" class="value">loading</div></div>
+            <div class="metric"><div class="label">API Key</div><div id="apiKey" class="value">loading</div></div>
+            <div class="metric"><div class="label">Latest Tokens</div><div id="usageTokens" class="value">loading</div></div>
           </div>
           <label>
             <div class="label">Advanced route override</div>
@@ -1240,13 +1243,16 @@ def _live_chat_html() -> str:
       document.getElementById('tasks').textContent = summary.active_reflection_task_count ?? 0;
       document.getElementById('conflicts').textContent = summary.unresolved_growth_conflict_count ?? 0;
       const modelAdapter = status.model_adapter || {};
-      document.getElementById('modelProvider').textContent = `${modelAdapter.configured_provider || 'unknown'} / ${modelAdapter.configured_model || 'unknown'}`;
+      document.getElementById('cloudAssist').textContent = cloudAssistDailyStatus(modelAdapter);
+      document.getElementById('configuredCloudModel').textContent = `${modelAdapter.configured_provider || 'unknown'} / ${modelAdapter.configured_model || 'unknown'}`;
       document.getElementById('apiKey').textContent = modelAdapter.openai_key_present ? 'present' : 'missing';
       document.getElementById('localModel').textContent = `${modelAdapter.local_provider || 'none'} / ${modelAdapter.local_model || 'none'}`;
       const localRuntime = modelAdapter.local_runtime || {};
       document.getElementById('localStatus').textContent = localRuntime.available ? 'ready' : (localRuntime.reason || (modelAdapter.local_model_configured ? 'configured' : 'missing'));
       const usage = status.model_usage || {};
+      document.getElementById('usageMode').textContent = plainBrainMode(getSelectedModelMode());
       document.getElementById('usageProvider').textContent = `${usage.latest_provider || 'none'} / ${usage.latest_model || 'none'}`;
+      document.getElementById('usageCloudAssist').textContent = cloudAssistUsageStatus(usage, modelAdapter);
       document.getElementById('usageTokens').textContent = usage.latest_total_tokens || 0;
       document.getElementById('usageCost').textContent = `$${Number(usage.latest_cost_usd || 0).toFixed(6)}`;
       document.getElementById('sessionCost').textContent = `$${Number(usage.estimated_session_cost_usd || 0).toFixed(6)}`;
@@ -1324,6 +1330,24 @@ def _live_chat_html() -> str:
         auto: 'Local Mode'
       };
       return labels[mode] || mode || 'Local Mode';
+    }
+
+    function cloudAssistDailyStatus(modelAdapter) {
+      if (!modelAdapter.openai_key_present) return 'Unavailable';
+      const mode = getSelectedModelMode();
+      if (mode === 'serious_only' || mode === 'local_first' || mode === 'auto') return 'Available when checked';
+      if (mode === 'openai') return 'Direct mode in Advanced';
+      return 'Available / off';
+    }
+
+    function cloudAssistUsageStatus(usage, modelAdapter) {
+      if (!modelAdapter.openai_key_present) return 'Unavailable';
+      if (usage.latest_provider === 'openai') return 'Used for last reply';
+      const mode = getSelectedModelMode();
+      if (mode === 'serious_only' || mode === 'local_first' || mode === 'auto') {
+        return document.getElementById('useOpenAI').checked ? 'On for next message' : 'Off unless checked';
+      }
+      return 'Off in this mode';
     }
 
     function renderBrainStatus(status) {
@@ -2022,6 +2046,13 @@ def _live_chat_html() -> str:
       check.disabled = !cloudMode;
       const label = check.closest('label');
       if (label) label.style.opacity = check.disabled ? '.55' : '1';
+      if (currentStatus) {
+        const usage = currentStatus.model_usage || {};
+        const modelAdapter = currentStatus.model_adapter || {};
+        document.getElementById('usageMode').textContent = plainBrainMode(mode);
+        document.getElementById('usageCloudAssist').textContent = cloudAssistUsageStatus(usage, modelAdapter);
+        document.getElementById('cloudAssist').textContent = cloudAssistDailyStatus(modelAdapter);
+      }
     }
 
     document.getElementById('chatForm').addEventListener('submit', async (event) => {
@@ -2117,6 +2148,7 @@ def _live_chat_html() -> str:
     });
 
     document.getElementById('advancedModelMode').addEventListener('change', updateBrainModeControls);
+    document.getElementById('useOpenAI').addEventListener('change', updateBrainModeControls);
 
     document.getElementById('advancedDiagnostics').addEventListener('toggle', () => {
       window.localStorage.setItem('lucien.advancedDiagnosticsOpen', document.getElementById('advancedDiagnostics').open ? 'yes' : 'no');
