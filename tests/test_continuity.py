@@ -106,6 +106,7 @@ from pca import (
     memory_signal_records_from_events,
     model_environment_diagnostic,
     mission_briefs_from_events,
+    next_governed_build,
     recommend_next_mission_step,
     propose_autonomous_mission_step,
     mission_autonomy_recommendations_from_events,
@@ -128,6 +129,7 @@ from pca import (
     render_project_build_brief_text,
     render_constitution_markdown,
     render_lucien_cockpit_html,
+    render_next_governed_build_text,
     render_session_replay_html,
     render_trace_report_html,
     recovery_records_from_events,
@@ -2908,6 +2910,83 @@ def test_checkpoint_story_describes_uncommitted_work(tmp_path):
     assert story["suggested_commit_message"] == "Improve Lucien workbench governance"
     assert any("core_pca_code" in item for item in story["bullets"])
     assert "Run checks" in story["push_note"]
+
+
+def test_next_governed_build_finishes_pending_checkpoint(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    (project_root / "pca").mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    (project_root / "pca" / "module.py").write_text("VALUE = 1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "pca/module.py"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
+    )
+    (project_root / "pca" / "new_module.py").write_text("VALUE = 2\n", encoding="utf-8")
+    old_cwd = Path.cwd()
+    try:
+        os.chdir(project_root)
+        proposal = next_governed_build(ledger, manifest)
+    finally:
+        os.chdir(old_cwd)
+    rendered = render_next_governed_build_text(proposal)
+
+    assert proposal["title"] == "Finish the current checkpoint safely"
+    assert proposal["does_not_execute"] is True
+    assert proposal["context"]["readiness_state"] == "needs_review"
+    assert "Next Governed Build" in rendered
+
+
+def test_next_governed_build_advances_active_mission_when_repo_clean(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    (project_root / "README.md").write_text("project", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
+    )
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Improve Lucien daily use",
+        problem_statement="Make the workbench more useful.",
+    )
+    old_cwd = Path.cwd()
+    try:
+        os.chdir(project_root)
+        proposal = next_governed_build(ledger, manifest)
+    finally:
+        os.chdir(old_cwd)
+
+    assert proposal["title"] == f"Advance mission: {mission.title}"
+    assert proposal["does_not_execute"] is True
+    assert proposal["context"]["active_mission_count"] == 1
+    assert "mission" in proposal["reason"].lower()
 
 
 def test_suggest_next_build_tool_is_planning_only(tmp_path):

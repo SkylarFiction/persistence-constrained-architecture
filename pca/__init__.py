@@ -236,6 +236,7 @@ from .model_adapter import (
     model_environment_diagnostic,
     normalize_model_mode,
 )
+from .next_build import next_governed_build, render_next_governed_build_text
 from .override import OverrideEngine, OverrideRecord, OverrideRequest
 from .output_gate import OutputGate, OutputGateDecision, OutputMode
 from .output_wrapper import OutputEnvelope, PCAOutputWrapper
@@ -480,6 +481,7 @@ __all__ = [
     "local_adapter_from_environment",
     "model_environment_diagnostic",
     "normalize_model_mode",
+    "next_governed_build",
     "authorize",
     "classify_brain_task",
     "build_manifest_from_packs",
@@ -585,6 +587,7 @@ __all__ = [
     "render_daily_command_center_text",
     "render_dashboard_html",
     "render_lucien_cockpit_html",
+    "render_next_governed_build_text",
     "render_project_build_brief_text",
     "render_session_replay_html",
     "report_scenario",

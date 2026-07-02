@@ -123,6 +123,7 @@ from pca import (
     render_commit_readiness_text,
     render_daily_command_center_text,
     render_daily_plan_text,
+    render_next_governed_build_text,
     render_project_build_brief_text,
     run_tool_for_step,
     tool_execution_records_from_events,
@@ -142,6 +143,7 @@ from pca import (
     build_review,
     checkpoint_story,
     commit_readiness,
+    next_governed_build,
 )
 from pca.live_chat import chat_once, run_live_chat_server
 from pca.demo_live import run_demo
@@ -291,6 +293,8 @@ def main() -> int:
     commit_readiness_parser.add_argument("--json", action="store_true")
     checkpoint_story_parser = subparsers.add_parser("checkpoint-story")
     checkpoint_story_parser.add_argument("--json", action="store_true")
+    next_build_parser = subparsers.add_parser("next-build")
+    next_build_parser.add_argument("--json", action="store_true")
     subparsers.add_parser("model-diagnostic")
     subparsers.add_parser("workbench-status")
     chat_once_parser = subparsers.add_parser("chat-once")
@@ -881,6 +885,14 @@ def main() -> int:
             print_json({"checkpoint_story": story})
         else:
             print(render_checkpoint_story_markdown(story))
+        return 0
+
+    if args.command == "next-build":
+        proposal = next_governed_build(ledger, manifest)
+        if args.json:
+            print_json({"next_build": proposal})
+        else:
+            print(render_next_governed_build_text(proposal))
         return 0
 
     if args.command == "workbench-status":

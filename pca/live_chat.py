@@ -59,6 +59,7 @@ from .missions import (
     update_mission_status,
 )
 from .model_adapter import model_environment_diagnostic, normalize_model_mode
+from .next_build import next_governed_build
 from .context_builder import build_governed_context
 from .project_brief import project_build_brief
 from .reflection_queue import (
@@ -746,6 +747,7 @@ def _status_payload(
         "build_review": build_review(Path.cwd()),
         "checkpoint_story": checkpoint_story(Path.cwd()),
         "commit_readiness": commit_readiness(Path.cwd()),
+        "next_build": next_governed_build(ledger, manifest),
         "continuity_certification": continuity_certification(ledger, manifest).to_dict(),
         "workbench": workbench_status(ledger, manifest),
         "model_adapter": _model_diagnostic_with_runtime(),
@@ -1139,6 +1141,7 @@ def _live_chat_html() -> str:
       <div id="commitReadinessCards" class="mission-card-grid"></div>
       <div id="commitReadinessDetails" class="queue"></div>
       <div id="checkpointStory" class="queue"></div>
+      <div id="nextBuild" class="queue"></div>
     </section>
     <section class="mission-dashboard">
       <div class="mission-controls">
@@ -1376,6 +1379,7 @@ def _live_chat_html() -> str:
       renderBuildReview(status.build_review || {});
       renderCommitReadiness(status.commit_readiness || {});
       renderCheckpointStory(status.checkpoint_story || {});
+      renderNextBuild(status.next_build || {});
       document.getElementById('claim').textContent = plainContinuity(summary.current_continuity_claim || 'unknown');
       document.getElementById('csm').textContent = status.csm_state || 'unknown';
       const gate = status.output_gate || {};
@@ -1703,6 +1707,27 @@ def _live_chat_html() -> str:
         const detail = document.createElement('div');
         detail.className = 'item';
         detail.innerHTML = `<div class="item-title">What Changed</div><div class="item-meta">${escapeHtml(bullets.slice(0, 5).join(' / '))}</div>`;
+        host.appendChild(detail);
+      }
+    }
+
+    function renderNextBuild(proposal) {
+      const host = document.getElementById('nextBuild');
+      host.innerHTML = '';
+      const top = document.createElement('div');
+      top.className = 'item';
+      top.innerHTML = `<div class="item-title">Next Governed Build / ${escapeHtml(proposal.title || 'none')}</div>
+        <div class="item-meta">Reason: ${escapeHtml(proposal.reason || 'none')}</div>
+        <div class="item-meta">First step: ${escapeHtml(proposal.suggested_first_step || 'none')}</div>
+        <div class="item-meta">Risk: ${escapeHtml(proposal.risk || 'unknown')}</div>`;
+      host.appendChild(top);
+      const doNot = proposal.do_not_do_yet || [];
+      const checks = proposal.checks || [];
+      if (checks.length || doNot.length) {
+        const detail = document.createElement('div');
+        detail.className = 'item';
+        detail.innerHTML = `<div class="item-title">Checks / Boundaries</div>
+          <div class="item-meta">${escapeHtml((checks.concat(doNot)).slice(0, 6).join(' / '))}</div>`;
         host.appendChild(detail);
       }
     }
