@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -2569,8 +2570,99 @@ def test_tool_router_lists_governed_tools():
 
     assert specs["read_file"].risk.value == "low"
     assert specs["git_status"].risk.value == "low"
+    assert specs["project_snapshot"].risk.value == "low"
+    assert specs["project_snapshot"].read_only is True
+    assert specs["changed_files_summary"].read_only is True
+    assert specs["suggest_next_build"].read_only is True
     assert specs["run_check_all"].risk.value == "medium"
     assert specs["run_check_all"].requires_approval is True
+
+
+def test_project_snapshot_tool_reports_repo_state_without_writing(tmp_path):
+    manifest = load_manifest()
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    (project_root / "README.md").write_text("project", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
+    )
+    (project_root / "README.md").write_text("project changed", encoding="utf-8")
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Project awareness mission",
+        problem_statement="Inspect project state.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Summarize project status.",
+        risk_level="low",
+        required_tool="project_snapshot",
+        expected_outcome="Bounded project summary.",
+    )
+
+    result = run_tool_for_step(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        project_root=project_root,
+    )
+
+    assert result["permission"]["decision"] == "allowed"
+    assert result["execution"]["status"] == "completed"
+    assert "Project Snapshot" in result["output"]
+    assert "Latest commit" in result["output"]
+    assert "Changed Files Summary" in result["output"]
+    assert "README.md" in result["output"]
+
+
+def test_suggest_next_build_tool_is_planning_only(tmp_path):
+    manifest = load_manifest()
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Next build mission",
+        problem_statement="Suggest next work without executing it.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Suggest next build.",
+        risk_level="low",
+        required_tool="suggest_next_build",
+        expected_outcome="Planning suggestion.",
+    )
+
+    result = run_tool_for_step(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        project_root=project_root,
+    )
+
+    assert result["execution"]["status"] == "completed"
+    assert "Suggested Next Governed Action" in result["output"]
+    assert "Propose the next mission step" in result["output"]
 
 
 def test_low_risk_tool_executes_and_creates_evidence(tmp_path):

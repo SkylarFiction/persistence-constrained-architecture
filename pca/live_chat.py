@@ -2063,6 +2063,11 @@ def _live_chat_html() -> str:
           if (value === null) return;
           toolArgs.path = value;
         }
+        if (step.required_tool === 'git_recent') {
+          const count = window.prompt('Commit count', '5');
+          if (count === null) return;
+          toolArgs.count = count;
+        }
         steward({
           action: dryRun ? 'dry_run_tool' : 'run_tool',
           step_id: step.step_id,

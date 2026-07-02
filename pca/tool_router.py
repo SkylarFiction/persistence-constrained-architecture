@@ -313,6 +313,26 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
         risk=ToolRisk.LOW,
         description="Report local git status without changing repository state.",
     ),
+    "project_snapshot": ToolSpec(
+        name="project_snapshot",
+        risk=ToolRisk.LOW,
+        description="Summarize the local project state, latest commit, changed files, and check command.",
+    ),
+    "git_recent": ToolSpec(
+        name="git_recent",
+        risk=ToolRisk.LOW,
+        description="Report recent git commits without changing repository state.",
+    ),
+    "changed_files_summary": ToolSpec(
+        name="changed_files_summary",
+        risk=ToolRisk.LOW,
+        description="Summarize changed files without exposing raw diffs.",
+    ),
+    "suggest_next_build": ToolSpec(
+        name="suggest_next_build",
+        risk=ToolRisk.LOW,
+        description="Suggest the next governed project action from local repo state.",
+    ),
     "run_check_all": ToolSpec(
         name="run_check_all",
         risk=ToolRisk.MEDIUM,
@@ -576,6 +596,15 @@ def _execute_tool(
         return text[:4000], 0
     if tool_name == "git_status":
         return _run_command(["git", "status", "--short", "--branch"], project_root)
+    if tool_name == "project_snapshot":
+        return _project_snapshot(project_root)
+    if tool_name == "git_recent":
+        count = _bounded_int(tool_args.get("count", "5"), default=5, minimum=1, maximum=12)
+        return _run_command(["git", "log", "--oneline", f"-{count}"], project_root)
+    if tool_name == "changed_files_summary":
+        return _changed_files_summary(project_root)
+    if tool_name == "suggest_next_build":
+        return _suggest_next_build(project_root)
     if tool_name == "run_check_all":
         return _run_command(["python3", "scripts/check_all.py"], project_root)
     if tool_name == "open_dashboard":
@@ -598,6 +627,14 @@ def _planned_tool_action(
         return f"Read a bounded preview from {tool_args.get('path', '')!r}."
     if tool_name == "git_status":
         return "Run git status --short --branch without changing repository state."
+    if tool_name == "project_snapshot":
+        return "Summarize branch, latest commit, changed file count, and recommended check command."
+    if tool_name == "git_recent":
+        return f"Show the last {tool_args.get('count', '5')} commits without changing repository state."
+    if tool_name == "changed_files_summary":
+        return "Summarize changed files from git status without showing raw diffs."
+    if tool_name == "suggest_next_build":
+        return "Suggest the next governed project action from current repo state."
     if tool_name == "run_check_all":
         return "Run python3 scripts/check_all.py from the project root."
     if tool_name == "open_dashboard":
@@ -617,6 +654,98 @@ def _run_command(command: list[str], project_root: Path) -> tuple[str, int]:
     )
     output = "\n".join(part for part in [result.stdout, result.stderr] if part)
     return output.strip(), result.returncode
+
+
+def _project_snapshot(project_root: Path) -> tuple[str, int]:
+    status, status_code = _run_command(["git", "status", "--short", "--branch"], project_root)
+    recent, _recent_code = _run_command(["git", "log", "--oneline", "-1"], project_root)
+    summary, _summary_code = _changed_files_summary(project_root)
+    check_hint = "Run `python3 scripts/check_all.py` before committing."
+    output = "\n".join(
+        [
+            "Project Snapshot",
+            "",
+            "Latest commit:",
+            recent or "none",
+            "",
+            "Git status:",
+            status or "clean",
+            "",
+            summary,
+            "",
+            check_hint,
+        ]
+    )
+    return output, status_code
+
+
+def _changed_files_summary(project_root: Path) -> tuple[str, int]:
+    status, code = _run_command(["git", "status", "--short"], project_root)
+    if code != 0:
+        return status, code
+    lines = [line for line in status.splitlines() if line.strip()]
+    if not lines:
+        return "Changed files: none", 0
+    buckets: dict[str, list[str]] = {
+        "modified": [],
+        "added": [],
+        "deleted": [],
+        "untracked": [],
+        "other": [],
+    }
+    for line in lines:
+        marker = line[:2]
+        path = line[3:].strip() if len(line) > 3 else line.strip()
+        if marker == "??":
+            buckets["untracked"].append(path)
+        elif "D" in marker:
+            buckets["deleted"].append(path)
+        elif "A" in marker:
+            buckets["added"].append(path)
+        elif "M" in marker:
+            buckets["modified"].append(path)
+        else:
+            buckets["other"].append(path)
+    output = ["Changed Files Summary", f"total={len(lines)}"]
+    for name, paths in buckets.items():
+        if paths:
+            preview = ", ".join(paths[:8])
+            extra = f" (+{len(paths) - 8} more)" if len(paths) > 8 else ""
+            output.append(f"{name}: {len(paths)} / {preview}{extra}")
+    return "\n".join(output), 0
+
+
+def _suggest_next_build(project_root: Path) -> tuple[str, int]:
+    status, status_code = _run_command(["git", "status", "--short"], project_root)
+    log, _log_code = _run_command(["git", "log", "--oneline", "-1"], project_root)
+    changed = [line for line in status.splitlines() if line.strip()]
+    suggestions = ["Suggested Next Governed Action"]
+    if changed:
+        suggestions.extend(
+            [
+                "1. Review changed files before adding new features.",
+                "2. Run `python3 scripts/check_all.py`.",
+                "3. Commit only source/docs changes; clean generated artifacts first.",
+            ]
+        )
+    else:
+        suggestions.extend(
+            [
+                "1. Open or select an active goal.",
+                "2. Generate the daily plan.",
+                "3. Propose the next mission step instead of executing it automatically.",
+            ]
+        )
+    suggestions.append(f"latest_commit={log or 'none'}")
+    return "\n".join(suggestions), status_code
+
+
+def _bounded_int(value: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(minimum, min(maximum, parsed))
 
 
 def _safe_project_path(project_root: Path, path_value: str) -> Path:
