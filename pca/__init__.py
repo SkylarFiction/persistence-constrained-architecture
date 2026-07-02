@@ -43,6 +43,11 @@ from .chat_sessions import (
     record_chat_turn,
     start_chat_session,
 )
+from .certification import (
+    ContinuityCertification,
+    continuity_certification,
+    render_continuity_certification_text,
+)
 from .csm_bridge import CSMRuntimeBridge, PCAAuditLoggerAdapter
 from .constitution import render_constitution_markdown, write_constitution_markdown
 from .context_builder import (
@@ -338,6 +343,7 @@ __all__ = [
     "ContinuityEvent",
     "ContinuityLedger",
     "ContinuityClaimRecord",
+    "ContinuityCertification",
     "ContinuityStatus",
     "ContextSection",
     "CSMRuntimeBridge",
@@ -483,6 +489,7 @@ __all__ = [
     "compile_self_model",
     "complete_mission_step",
     "continuity_claim_from_followups",
+    "continuity_certification",
     "current_claim_record",
     "current_recovery_record",
     "create_goal_record",
@@ -563,6 +570,7 @@ __all__ = [
     "update_mission_status",
     "render_trace_report_html",
     "render_constitution_markdown",
+    "render_continuity_certification_text",
     "render_daily_command_center_text",
     "render_dashboard_html",
     "render_lucien_cockpit_html",

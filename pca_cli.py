@@ -12,6 +12,7 @@ from pca import (
     AuthorizationPolicy,
     ContinuityEvaluator,
     ContinuityLedger,
+    continuity_certification,
     FollowUpRecord,
     FollowUpStatus,
     GoalStatus,
@@ -116,6 +117,7 @@ from pca import (
     check_tool_permission,
     dry_run_tool_for_step,
     render_constitution_markdown,
+    render_continuity_certification_text,
     render_daily_command_center_text,
     render_daily_plan_text,
     run_tool_for_step,
@@ -269,6 +271,8 @@ def main() -> int:
     subparsers.add_parser("status")
     daily_parser = subparsers.add_parser("daily")
     daily_parser.add_argument("--json", action="store_true")
+    certification_parser = subparsers.add_parser("continuity-certification")
+    certification_parser.add_argument("--json", action="store_true")
     daily_plan_parser = subparsers.add_parser("daily-plan")
     daily_plan_parser.add_argument("--json", action="store_true")
     subparsers.add_parser("model-diagnostic")
@@ -813,6 +817,14 @@ def main() -> int:
             print_json({"daily": daily})
         else:
             print(render_daily_command_center_text(daily))
+        return 0
+
+    if args.command == "continuity-certification":
+        certification = continuity_certification(ledger, manifest)
+        if args.json:
+            print_json({"continuity_certification": certification.to_dict()})
+        else:
+            print(render_continuity_certification_text(certification))
         return 0
 
     if args.command == "daily-plan":

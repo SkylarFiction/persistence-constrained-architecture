@@ -15,6 +15,7 @@ from pca import (
     AuthorizationPolicy,
     ContinuityEvaluator,
     ContinuityEvent,
+    ContinuityCertification,
     ContinuityClaimRecord,
     ContinuityLedger,
     ContinuityStatus,
@@ -71,6 +72,7 @@ from pca import (
     chat_turns_from_events,
     compile_self_model,
     continuity_claim_from_followups,
+    continuity_certification,
     current_claim_record,
     daily_command_center,
     daily_plan,
@@ -1093,6 +1095,8 @@ def test_live_chat_html_contains_mission_first_home():
     html = _live_chat_html()
 
     assert "Daily Command Center" in html
+    assert "Continuity Certification" in html
+    assert "certification" in html
     assert "dailyBriefing" in html
     assert "dailyCards" in html
     assert "Opening Briefing" in html
@@ -2438,6 +2442,62 @@ def test_daily_plan_respects_continuity_under_review(tmp_path):
     assert "continuity is review_required" in plan["blockers"]
     assert "Review continuity blockers" in plan["best_next_safe_action"]
     assert any("high-impact" in item for item in plan["what_not_to_do_yet"])
+
+
+def test_continuity_certification_reports_missing_required_evidence(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    certification = continuity_certification(ledger, manifest)
+
+    assert certification.certifiable is False
+    assert certification.continuity_claim == "review_required"
+    assert "ledger_integrity" in certification.missing_evidence
+    assert "origin_traceability" in certification.missing_evidence
+    assert any("Record required constraint evidence" in action for action in certification.steward_actions)
+
+
+def test_continuity_certification_reports_certifiable_when_constraints_are_fresh(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "ledger_integrity", "value": True},
+    )
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "origin_traceability", "value": True},
+    )
+
+    certification = continuity_certification(ledger, manifest)
+
+    assert isinstance(certification, ContinuityCertification)
+    assert certification.certifiable is True
+    assert certification.continuity_claim == "certified_continuity"
+    assert certification.blockers == []
+
+
+def test_continuity_certification_reports_stale_required_evidence(tmp_path):
+    manifest = manifest_with_freshness(freshness_seconds=0)
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "ledger_integrity", "value": True},
+    )
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "origin_traceability", "value": True},
+    )
+
+    certification = continuity_certification(ledger, manifest)
+
+    assert certification.certifiable is False
+    assert certification.stale_evidence == ["ledger_integrity", "origin_traceability"]
+    assert any("Refresh required constraint evidence" in action for action in certification.steward_actions)
 
 
 def test_low_risk_mission_step_can_start_without_approval(tmp_path):

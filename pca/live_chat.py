@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlparse
 from lucien import LucienChatShell
 
 from .constitution import write_constitution_markdown
+from .certification import continuity_certification
 from .daily_command_center import daily_command_center
 from .growth import (
     GrowthReviewDecision,
@@ -737,6 +738,7 @@ def _status_payload(
     return {
         "summary": summary,
         "daily": daily_command_center(ledger, manifest),
+        "continuity_certification": continuity_certification(ledger, manifest).to_dict(),
         "workbench": workbench_status(ledger, manifest),
         "model_adapter": _model_diagnostic_with_runtime(),
         "model_usage": model_usage,
@@ -1186,6 +1188,10 @@ def _live_chat_html() -> str:
         </div>
       </section>
       <section>
+        <h2>Continuity Certification</h2>
+        <div id="certification" class="queue"></div>
+      </section>
+      <section>
         <h2>Model Usage</h2>
         <div class="metrics">
           <div class="metric"><div class="label">Current Mode</div><div id="usageMode" class="value">loading</div></div>
@@ -1323,6 +1329,7 @@ def _live_chat_html() -> str:
     const skillMemory = document.getElementById('skillMemory');
     const stewardInbox = document.getElementById('stewardInbox');
     const learningReview = document.getElementById('learningReview');
+    const certification = document.getElementById('certification');
     let activeInboxFilter = 'all';
     let selectedMissionId = window.localStorage.getItem('lucien.activeMissionId') || '';
     let currentStatus = null;
@@ -1367,6 +1374,7 @@ def _live_chat_html() -> str:
       document.getElementById('brainRoute').textContent = plainRouting(usage.latest_requested_model_mode, usage.latest_model_mode);
       document.getElementById('brainTask').textContent = usage.latest_brain_task_type || 'none';
       renderBrainStatus(status);
+      renderCertification(status.continuity_certification || {});
       renderQueue(status.open_reflection_tasks || []);
       renderSelfModel(status.self_model || {});
       renderGovernedContext(status.governed_context || {});
@@ -1544,6 +1552,30 @@ def _live_chat_html() -> str:
       notYet.innerHTML = `<div class="item-title">What not to do yet</div>
         <div class="item-meta">${escapeHtml((plan.what_not_to_do_yet || []).join(' / ') || 'none')}</div>`;
       dailyPlan.appendChild(notYet);
+    }
+
+    function renderCertification(record) {
+      if (!record || !record.summary) {
+        empty(certification, 'No certification analysis available.');
+        return;
+      }
+      certification.innerHTML = '';
+      const top = document.createElement('div');
+      top.className = 'item';
+      top.innerHTML = `<div class="item-title">${record.certifiable ? 'Certifiable' : 'Not certifiable'} / ${escapeHtml(record.continuity_claim || 'unknown')}</div>
+        <div class="item-meta">${escapeHtml(record.summary || '')}</div>
+        <div class="item-meta">identity state: ${escapeHtml(record.identity_state || 'unknown')}</div>`;
+      certification.appendChild(top);
+      const blockers = document.createElement('div');
+      blockers.className = 'item';
+      blockers.innerHTML = `<div class="item-title">Why</div>
+        <div class="item-meta">${escapeHtml((record.blockers || []).slice(0, 4).join(' / ') || 'none')}</div>`;
+      certification.appendChild(blockers);
+      const actions = document.createElement('div');
+      actions.className = 'item';
+      actions.innerHTML = `<div class="item-title">Next steward action</div>
+        <div class="item-meta">${escapeHtml((record.steward_actions || []).slice(0, 3).join(' / ') || 'none')}</div>`;
+      certification.appendChild(actions);
     }
 
     function renderGoals(records, missionRecords) {
