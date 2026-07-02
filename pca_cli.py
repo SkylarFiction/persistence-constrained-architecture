@@ -118,6 +118,7 @@ from pca import (
     dry_run_tool_for_step,
     render_constitution_markdown,
     render_continuity_certification_text,
+    render_build_review_text,
     render_daily_command_center_text,
     render_daily_plan_text,
     render_project_build_brief_text,
@@ -136,6 +137,7 @@ from pca import (
     latest_session_id,
     write_session_replay_html,
     project_build_brief,
+    build_review,
 )
 from pca.live_chat import chat_once, run_live_chat_server
 from pca.demo_live import run_demo
@@ -279,6 +281,8 @@ def main() -> int:
     daily_plan_parser.add_argument("--json", action="store_true")
     project_brief_parser = subparsers.add_parser("project-brief")
     project_brief_parser.add_argument("--json", action="store_true")
+    build_review_parser = subparsers.add_parser("build-review")
+    build_review_parser.add_argument("--json", action="store_true")
     subparsers.add_parser("model-diagnostic")
     subparsers.add_parser("workbench-status")
     chat_once_parser = subparsers.add_parser("chat-once")
@@ -845,6 +849,14 @@ def main() -> int:
             print_json({"project_brief": brief})
         else:
             print(render_project_build_brief_text(brief))
+        return 0
+
+    if args.command == "build-review":
+        review = build_review(Path.cwd())
+        if args.json:
+            print_json({"build_review": review})
+        else:
+            print(render_build_review_text(review))
         return 0
 
     if args.command == "workbench-status":

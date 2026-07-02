@@ -28,6 +28,7 @@ from .brain_router import (
     classify_brain_task,
     select_brain_route,
 )
+from .build_review import build_review, render_build_review_text
 from .claims import (
     ContinuityClaimRecord,
     claim_reason,
@@ -360,6 +361,7 @@ __all__ = [
     "AuthorizationDecision",
     "AuthorizationPolicy",
     "BrainRouteDecision",
+    "build_review",
     "ChatSessionRecord",
     "ChatTurnRecord",
     "FollowUpRecord",
@@ -549,6 +551,7 @@ __all__ = [
     "record_growth_conflict",
     "record_memory_signal",
     "record_reflection",
+    "render_build_review_text",
     "render_daily_plan_text",
     "required_evidence_for",
     "required_checks_for_audit",

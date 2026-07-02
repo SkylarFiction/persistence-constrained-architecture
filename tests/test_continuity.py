@@ -63,6 +63,7 @@ from pca import (
     adapter_from_environment,
     authorize,
     auto_propose_skill_candidates,
+    build_review,
     build_governed_context,
     build_trace_report,
     build_manifest_from_packs,
@@ -119,6 +120,7 @@ from pca import (
     open_tasks_from_reflection,
     required_evidence_for,
     render_dashboard_html,
+    render_build_review_text,
     render_project_build_brief_text,
     render_constitution_markdown,
     render_lucien_cockpit_html,
@@ -2691,6 +2693,70 @@ def test_project_build_brief_recommends_next_step_when_clean(tmp_path):
     assert brief["changed_file_count"] == 0
     assert brief["status_message"] == "clean"
     assert "next governed build step" in brief["recommended_action"]
+
+
+def test_build_review_recommends_checks_and_commit_message(tmp_path):
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    (project_root / "pca").mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    (project_root / "pca" / "live_chat.py").write_text("print('old')\n", encoding="utf-8")
+    subprocess.run(["git", "add", "pca/live_chat.py"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
+    )
+    (project_root / "pca" / "live_chat.py").write_text("print('new')\n", encoding="utf-8")
+
+    review = build_review(project_root)
+    rendered = render_build_review_text(review)
+
+    assert review["available"] is True
+    assert review["risk_level"] == "low-medium"
+    assert review["ready_to_commit"] is True
+    assert review["suggested_commit_message"] == "Improve Lucien workbench governance"
+    assert any("py_compile" in check for check in review["recommended_checks"])
+    assert any(area["area"] == "core_pca_code" for area in review["risk_areas"])
+    assert "Build Review Assistant" in rendered
+
+
+def test_build_review_blocks_generated_artifacts(tmp_path):
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    (project_root / "scenario_runs").mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    (project_root / "scenario_runs" / "result.json").write_text("{}", encoding="utf-8")
+    subprocess.run(["git", "add", "scenario_runs/result.json"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
+    )
+    (project_root / "scenario_runs" / "result.json").write_text('{"changed": true}', encoding="utf-8")
+
+    review = build_review(project_root)
+
+    assert review["risk_level"] == "medium"
+    assert review["ready_to_commit"] is False
+    assert "generated artifacts are changed" in review["commit_blockers"]
+    assert any("clean_local_artifacts" in check for check in review["recommended_checks"])
 
 
 def test_suggest_next_build_tool_is_planning_only(tmp_path):

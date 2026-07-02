@@ -12,6 +12,7 @@ from lucien import LucienChatShell
 
 from .constitution import write_constitution_markdown
 from .certification import continuity_certification
+from .build_review import build_review
 from .daily_command_center import daily_command_center
 from .growth import (
     GrowthReviewDecision,
@@ -740,6 +741,7 @@ def _status_payload(
         "summary": summary,
         "daily": daily_command_center(ledger, manifest),
         "project_brief": project_build_brief(Path.cwd()),
+        "build_review": build_review(Path.cwd()),
         "continuity_certification": continuity_certification(ledger, manifest).to_dict(),
         "workbench": workbench_status(ledger, manifest),
         "model_adapter": _model_diagnostic_with_runtime(),
@@ -1128,6 +1130,8 @@ def _live_chat_html() -> str:
       </div>
       <div id="projectBriefCards" class="mission-card-grid"></div>
       <div id="projectBriefFiles" class="queue"></div>
+      <div id="buildReviewCards" class="mission-card-grid"></div>
+      <div id="buildReviewDetails" class="queue"></div>
     </section>
     <section class="mission-dashboard">
       <div class="mission-controls">
@@ -1362,6 +1366,7 @@ def _live_chat_html() -> str:
       const missionView = renderMissionDashboard(status);
       renderDailyCommandCenter(status.daily || {}, status.workbench || {}, status, missionView.activeMission);
       renderProjectBrief(status.project_brief || {});
+      renderBuildReview(status.build_review || {});
       document.getElementById('claim').textContent = plainContinuity(summary.current_continuity_claim || 'unknown');
       document.getElementById('csm').textContent = status.csm_state || 'unknown';
       const gate = status.output_gate || {};
@@ -1601,6 +1606,45 @@ def _live_chat_html() -> str:
         row.className = 'item';
         row.innerHTML = `<div class="item-title">${escapeHtml(file.path || 'unknown')}</div><div class="item-meta">${escapeHtml(file.status || 'changed')}</div>`;
         fileHost.appendChild(row);
+      }
+    }
+
+    function renderBuildReview(review) {
+      const cardHost = document.getElementById('buildReviewCards');
+      const detailHost = document.getElementById('buildReviewDetails');
+      cardHost.innerHTML = '';
+      detailHost.innerHTML = '';
+      const cards = [
+        ['Build Risk', review.risk_level || 'unknown'],
+        ['Ready to Commit', review.ready_to_commit ? 'yes' : 'no'],
+        ['Suggested Commit', review.suggested_commit_message || 'none'],
+        ['Summary', review.summary || 'No build review available.'],
+      ];
+      for (const [title, value] of cards) {
+        const row = document.createElement('div');
+        row.className = 'item mission-card';
+        row.innerHTML = `<div class="item-title">${escapeHtml(title)}</div><div class="item-meta">${escapeHtml(value)}</div>`;
+        cardHost.appendChild(row);
+      }
+      const checks = review.recommended_checks || [];
+      const blockers = review.commit_blockers || [];
+      const risks = review.risk_areas || [];
+      const sections = [
+        ['Recommended Checks', checks],
+        ['Commit Blockers', blockers],
+        ['Risk Areas', risks.map(area => `${area.area}: ${area.reason}`)],
+      ];
+      let rendered = false;
+      for (const [title, values] of sections) {
+        if (!values.length) continue;
+        rendered = true;
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = `<div class="item-title">${escapeHtml(title)}</div><div class="item-meta">${escapeHtml(values.join(' / '))}</div>`;
+        detailHost.appendChild(row);
+      }
+      if (!rendered) {
+        empty(detailHost, 'No build review pressure detected.');
       }
     }
 
