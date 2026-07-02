@@ -36,6 +36,7 @@ from .claims import (
     current_claim_record,
 )
 from .commit_readiness import commit_readiness, render_commit_readiness_text
+from .checkpoint_story import checkpoint_story, render_checkpoint_story_markdown
 from .chat_sessions import (
     ChatSessionRecord,
     ChatTurnRecord,
@@ -363,6 +364,7 @@ __all__ = [
     "AuthorizationPolicy",
     "BrainRouteDecision",
     "build_review",
+    "checkpoint_story",
     "ChatSessionRecord",
     "commit_readiness",
     "ChatTurnRecord",
@@ -554,6 +556,7 @@ __all__ = [
     "record_memory_signal",
     "record_reflection",
     "render_build_review_text",
+    "render_checkpoint_story_markdown",
     "render_commit_readiness_text",
     "render_daily_plan_text",
     "required_evidence_for",

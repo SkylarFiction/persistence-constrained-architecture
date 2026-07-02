@@ -119,6 +119,7 @@ from pca import (
     render_constitution_markdown,
     render_continuity_certification_text,
     render_build_review_text,
+    render_checkpoint_story_markdown,
     render_commit_readiness_text,
     render_daily_command_center_text,
     render_daily_plan_text,
@@ -139,6 +140,7 @@ from pca import (
     write_session_replay_html,
     project_build_brief,
     build_review,
+    checkpoint_story,
     commit_readiness,
 )
 from pca.live_chat import chat_once, run_live_chat_server
@@ -287,6 +289,8 @@ def main() -> int:
     build_review_parser.add_argument("--json", action="store_true")
     commit_readiness_parser = subparsers.add_parser("commit-readiness")
     commit_readiness_parser.add_argument("--json", action="store_true")
+    checkpoint_story_parser = subparsers.add_parser("checkpoint-story")
+    checkpoint_story_parser.add_argument("--json", action="store_true")
     subparsers.add_parser("model-diagnostic")
     subparsers.add_parser("workbench-status")
     chat_once_parser = subparsers.add_parser("chat-once")
@@ -869,6 +873,14 @@ def main() -> int:
             print_json({"commit_readiness": readiness})
         else:
             print(render_commit_readiness_text(readiness))
+        return 0
+
+    if args.command == "checkpoint-story":
+        story = checkpoint_story(Path.cwd())
+        if args.json:
+            print_json({"checkpoint_story": story})
+        else:
+            print(render_checkpoint_story_markdown(story))
         return 0
 
     if args.command == "workbench-status":

@@ -72,6 +72,7 @@ from pca import (
     claims_from_events,
     chat_sessions_from_events,
     chat_turns_from_events,
+    checkpoint_story,
     compile_self_model,
     commit_readiness,
     continuity_claim_from_followups,
@@ -122,6 +123,7 @@ from pca import (
     required_evidence_for,
     render_dashboard_html,
     render_build_review_text,
+    render_checkpoint_story_markdown,
     render_commit_readiness_text,
     render_project_build_brief_text,
     render_constitution_markdown,
@@ -2845,6 +2847,67 @@ def test_commit_readiness_blocks_generated_artifacts(tmp_path):
     assert readiness["ready_to_stage"] is False
     assert "generated artifacts are changed" in readiness["blockers"]
     assert any("clean_local_artifacts" in action for action in readiness["required_actions"])
+
+
+def test_checkpoint_story_describes_clean_latest_checkpoint(tmp_path):
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    (project_root / "README.md").write_text("project", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Add project seed"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
+    )
+
+    story = checkpoint_story(project_root)
+    rendered = render_checkpoint_story_markdown(story)
+
+    assert story["changed_file_count"] == 0
+    assert story["readiness_state"] == "nothing_to_commit"
+    assert story["title"] == "Add project seed"
+    assert "Working tree is clean" in story["summary"]
+    assert "# Add project seed" in rendered
+
+
+def test_checkpoint_story_describes_uncommitted_work(tmp_path):
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    (project_root / "pca").mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    (project_root / "pca" / "module.py").write_text("VALUE = 1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "pca/module.py"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
+    )
+    (project_root / "pca" / "module.py").write_text("VALUE = 2\n", encoding="utf-8")
+
+    story = checkpoint_story(project_root)
+
+    assert story["changed_file_count"] == 1
+    assert story["readiness_state"] == "checks_required"
+    assert story["suggested_commit_message"] == "Improve Lucien workbench governance"
+    assert any("core_pca_code" in item for item in story["bullets"])
+    assert "Run checks" in story["push_note"]
 
 
 def test_suggest_next_build_tool_is_planning_only(tmp_path):

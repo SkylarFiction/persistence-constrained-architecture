@@ -13,6 +13,7 @@ from lucien import LucienChatShell
 from .constitution import write_constitution_markdown
 from .certification import continuity_certification
 from .build_review import build_review
+from .checkpoint_story import checkpoint_story
 from .commit_readiness import commit_readiness
 from .daily_command_center import daily_command_center
 from .growth import (
@@ -743,6 +744,7 @@ def _status_payload(
         "daily": daily_command_center(ledger, manifest),
         "project_brief": project_build_brief(Path.cwd()),
         "build_review": build_review(Path.cwd()),
+        "checkpoint_story": checkpoint_story(Path.cwd()),
         "commit_readiness": commit_readiness(Path.cwd()),
         "continuity_certification": continuity_certification(ledger, manifest).to_dict(),
         "workbench": workbench_status(ledger, manifest),
@@ -1136,6 +1138,7 @@ def _live_chat_html() -> str:
       <div id="buildReviewDetails" class="queue"></div>
       <div id="commitReadinessCards" class="mission-card-grid"></div>
       <div id="commitReadinessDetails" class="queue"></div>
+      <div id="checkpointStory" class="queue"></div>
     </section>
     <section class="mission-dashboard">
       <div class="mission-controls">
@@ -1372,6 +1375,7 @@ def _live_chat_html() -> str:
       renderProjectBrief(status.project_brief || {});
       renderBuildReview(status.build_review || {});
       renderCommitReadiness(status.commit_readiness || {});
+      renderCheckpointStory(status.checkpoint_story || {});
       document.getElementById('claim').textContent = plainContinuity(summary.current_continuity_claim || 'unknown');
       document.getElementById('csm').textContent = status.csm_state || 'unknown';
       const gate = status.output_gate || {};
@@ -1682,6 +1686,24 @@ def _live_chat_html() -> str:
         row.className = 'item';
         row.innerHTML = `<div class="item-title">${escapeHtml(title)}</div><div class="item-meta">${escapeHtml(values.join(' / '))}</div>`;
         detailHost.appendChild(row);
+      }
+    }
+
+    function renderCheckpointStory(story) {
+      const host = document.getElementById('checkpointStory');
+      host.innerHTML = '';
+      const top = document.createElement('div');
+      top.className = 'item';
+      top.innerHTML = `<div class="item-title">Checkpoint Story / ${escapeHtml(story.title || 'Lucien checkpoint')}</div>
+        <div class="item-meta">${escapeHtml(story.summary || 'No story available.')}</div>
+        <div class="item-meta">Push: ${escapeHtml(story.push_note || 'No push guidance available.')}</div>`;
+      host.appendChild(top);
+      const bullets = story.bullets || [];
+      if (bullets.length) {
+        const detail = document.createElement('div');
+        detail.className = 'item';
+        detail.innerHTML = `<div class="item-title">What Changed</div><div class="item-meta">${escapeHtml(bullets.slice(0, 5).join(' / '))}</div>`;
+        host.appendChild(detail);
       }
     }
 
