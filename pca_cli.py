@@ -120,6 +120,7 @@ from pca import (
     render_continuity_certification_text,
     render_daily_command_center_text,
     render_daily_plan_text,
+    render_project_build_brief_text,
     run_tool_for_step,
     tool_execution_records_from_events,
     tool_permission_records_from_events,
@@ -134,6 +135,7 @@ from pca import (
     build_session_replay,
     latest_session_id,
     write_session_replay_html,
+    project_build_brief,
 )
 from pca.live_chat import chat_once, run_live_chat_server
 from pca.demo_live import run_demo
@@ -275,6 +277,8 @@ def main() -> int:
     certification_parser.add_argument("--json", action="store_true")
     daily_plan_parser = subparsers.add_parser("daily-plan")
     daily_plan_parser.add_argument("--json", action="store_true")
+    project_brief_parser = subparsers.add_parser("project-brief")
+    project_brief_parser.add_argument("--json", action="store_true")
     subparsers.add_parser("model-diagnostic")
     subparsers.add_parser("workbench-status")
     chat_once_parser = subparsers.add_parser("chat-once")
@@ -833,6 +837,14 @@ def main() -> int:
             print_json({"daily_plan": plan})
         else:
             print(render_daily_plan_text(plan))
+        return 0
+
+    if args.command == "project-brief":
+        brief = project_build_brief(Path.cwd())
+        if args.json:
+            print_json({"project_brief": brief})
+        else:
+            print(render_project_build_brief_text(brief))
         return 0
 
     if args.command == "workbench-status":

@@ -119,6 +119,7 @@ from pca import (
     open_tasks_from_reflection,
     required_evidence_for,
     render_dashboard_html,
+    render_project_build_brief_text,
     render_constitution_markdown,
     render_lucien_cockpit_html,
     render_session_replay_html,
@@ -127,6 +128,7 @@ from pca import (
     safe_load_policy_pack,
     select_brain_route,
     propose_growth,
+    project_build_brief,
     propose_skill_candidate,
     propose_mission_step,
     record_memory_signal,
@@ -2629,6 +2631,66 @@ def test_project_snapshot_tool_reports_repo_state_without_writing(tmp_path):
     assert "Latest commit" in result["output"]
     assert "Changed Files Summary" in result["output"]
     assert "README.md" in result["output"]
+
+
+def test_project_build_brief_reports_changed_repo_state(tmp_path):
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    (project_root / "README.md").write_text("project", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
+    )
+    (project_root / "README.md").write_text("changed", encoding="utf-8")
+
+    brief = project_build_brief(project_root)
+    rendered = render_project_build_brief_text(brief)
+
+    assert brief["available"] is True
+    assert brief["changed_file_count"] == 1
+    assert brief["changed_summary"]["modified"] == 1
+    assert "run checks" in brief["recommended_action"]
+    assert "Project Build Brief" in rendered
+    assert "README.md" in rendered
+
+
+def test_project_build_brief_recommends_next_step_when_clean(tmp_path):
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    (project_root / "README.md").write_text("project", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
+    )
+
+    brief = project_build_brief(project_root)
+
+    assert brief["available"] is True
+    assert brief["changed_file_count"] == 0
+    assert brief["status_message"] == "clean"
+    assert "next governed build step" in brief["recommended_action"]
 
 
 def test_suggest_next_build_tool_is_planning_only(tmp_path):

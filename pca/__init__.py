@@ -257,6 +257,7 @@ from .policy_packs import (
     safe_load_policy_pack,
     validate_policy_pack,
 )
+from .project_brief import project_build_brief, render_project_build_brief_text
 from .recovery import (
     RecoveryRecord,
     RecoveryStatus,
@@ -431,6 +432,7 @@ __all__ = [
     "PolicyDecision",
     "PolicyEngine",
     "PolicyPackLoadResult",
+    "project_build_brief",
     "RecoveryRecord",
     "RecoveryStatus",
     "ReflectionRecord",
@@ -574,6 +576,7 @@ __all__ = [
     "render_daily_command_center_text",
     "render_dashboard_html",
     "render_lucien_cockpit_html",
+    "render_project_build_brief_text",
     "render_session_replay_html",
     "report_scenario",
     "run_all_scenarios",

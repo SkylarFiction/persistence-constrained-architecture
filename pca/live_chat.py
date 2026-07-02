@@ -57,6 +57,7 @@ from .missions import (
 )
 from .model_adapter import model_environment_diagnostic, normalize_model_mode
 from .context_builder import build_governed_context
+from .project_brief import project_build_brief
 from .reflection_queue import (
     open_tasks_from_reflection,
     resolve_matching_reflection_tasks,
@@ -738,6 +739,7 @@ def _status_payload(
     return {
         "summary": summary,
         "daily": daily_command_center(ledger, manifest),
+        "project_brief": project_build_brief(Path.cwd()),
         "continuity_certification": continuity_certification(ledger, manifest).to_dict(),
         "workbench": workbench_status(ledger, manifest),
         "model_adapter": _model_diagnostic_with_runtime(),
@@ -1119,6 +1121,17 @@ def _live_chat_html() -> str:
     <section class="mission-dashboard">
       <div class="mission-controls">
         <div>
+          <h2>Project Build Brief</h2>
+          <div class="item-meta">Local repo state and the safest next engineering move.</div>
+        </div>
+        <button type="button" id="refreshProjectBrief" class="secondary">Refresh Brief</button>
+      </div>
+      <div id="projectBriefCards" class="mission-card-grid"></div>
+      <div id="projectBriefFiles" class="queue"></div>
+    </section>
+    <section class="mission-dashboard">
+      <div class="mission-controls">
+        <div>
           <h2>Mission Dashboard</h2>
           <div class="item-meta">Choose the active mission and move from status to the next safe action.</div>
         </div>
@@ -1348,6 +1361,7 @@ def _live_chat_html() -> str:
       const summary = status.summary || {};
       const missionView = renderMissionDashboard(status);
       renderDailyCommandCenter(status.daily || {}, status.workbench || {}, status, missionView.activeMission);
+      renderProjectBrief(status.project_brief || {});
       document.getElementById('claim').textContent = plainContinuity(summary.current_continuity_claim || 'unknown');
       document.getElementById('csm').textContent = status.csm_state || 'unknown';
       const gate = status.output_gate || {};
@@ -1552,6 +1566,42 @@ def _live_chat_html() -> str:
       notYet.innerHTML = `<div class="item-title">What not to do yet</div>
         <div class="item-meta">${escapeHtml((plan.what_not_to_do_yet || []).join(' / ') || 'none')}</div>`;
       dailyPlan.appendChild(notYet);
+    }
+
+    function renderProjectBrief(brief) {
+      const cardHost = document.getElementById('projectBriefCards');
+      const fileHost = document.getElementById('projectBriefFiles');
+      cardHost.innerHTML = '';
+      fileHost.innerHTML = '';
+      const cards = [
+        ['Branch', brief.branch || 'unknown'],
+        ['Sync', brief.sync_state || (brief.available ? 'unknown' : 'unavailable')],
+        ['Latest Commit', brief.latest_commit || 'none'],
+        ['Changed Files', String(brief.changed_file_count || 0)],
+        ['Recommended Action', brief.recommended_action || 'No recommendation available.'],
+        ['Check Command', brief.check_command || 'python3 scripts/check_all.py'],
+      ];
+      for (const [title, value] of cards) {
+        const row = document.createElement('div');
+        row.className = 'item mission-card';
+        row.innerHTML = `<div class="item-title">${escapeHtml(title)}</div><div class="item-meta">${escapeHtml(value)}</div>`;
+        cardHost.appendChild(row);
+      }
+      const files = brief.changed_files || [];
+      if (!brief.available) {
+        empty(fileHost, brief.status_message || 'Project brief unavailable.');
+        return;
+      }
+      if (!files.length) {
+        empty(fileHost, 'Working tree is clean. Lucien can propose the next governed build step.');
+        return;
+      }
+      for (const file of files.slice(0, 8)) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = `<div class="item-title">${escapeHtml(file.path || 'unknown')}</div><div class="item-meta">${escapeHtml(file.status || 'changed')}</div>`;
+        fileHost.appendChild(row);
+      }
     }
 
     function renderCertification(record) {
@@ -2371,6 +2421,7 @@ def _live_chat_html() -> str:
 
     document.getElementById('homeDailyPlan').addEventListener('click', generatePlan);
     document.getElementById('generateDailyPlan').addEventListener('click', generatePlan);
+    document.getElementById('refreshProjectBrief').addEventListener('click', refresh);
 
     document.getElementById('homeStartMission').addEventListener('click', () => {
       document.getElementById('missionTitle').focus();
