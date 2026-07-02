@@ -13,6 +13,7 @@ from lucien import LucienChatShell
 from .constitution import write_constitution_markdown
 from .certification import continuity_certification
 from .build_review import build_review
+from .commit_readiness import commit_readiness
 from .daily_command_center import daily_command_center
 from .growth import (
     GrowthReviewDecision,
@@ -742,6 +743,7 @@ def _status_payload(
         "daily": daily_command_center(ledger, manifest),
         "project_brief": project_build_brief(Path.cwd()),
         "build_review": build_review(Path.cwd()),
+        "commit_readiness": commit_readiness(Path.cwd()),
         "continuity_certification": continuity_certification(ledger, manifest).to_dict(),
         "workbench": workbench_status(ledger, manifest),
         "model_adapter": _model_diagnostic_with_runtime(),
@@ -1132,6 +1134,8 @@ def _live_chat_html() -> str:
       <div id="projectBriefFiles" class="queue"></div>
       <div id="buildReviewCards" class="mission-card-grid"></div>
       <div id="buildReviewDetails" class="queue"></div>
+      <div id="commitReadinessCards" class="mission-card-grid"></div>
+      <div id="commitReadinessDetails" class="queue"></div>
     </section>
     <section class="mission-dashboard">
       <div class="mission-controls">
@@ -1367,6 +1371,7 @@ def _live_chat_html() -> str:
       renderDailyCommandCenter(status.daily || {}, status.workbench || {}, status, missionView.activeMission);
       renderProjectBrief(status.project_brief || {});
       renderBuildReview(status.build_review || {});
+      renderCommitReadiness(status.commit_readiness || {});
       document.getElementById('claim').textContent = plainContinuity(summary.current_continuity_claim || 'unknown');
       document.getElementById('csm').textContent = status.csm_state || 'unknown';
       const gate = status.output_gate || {};
@@ -1645,6 +1650,38 @@ def _live_chat_html() -> str:
       }
       if (!rendered) {
         empty(detailHost, 'No build review pressure detected.');
+      }
+    }
+
+    function renderCommitReadiness(readiness) {
+      const cardHost = document.getElementById('commitReadinessCards');
+      const detailHost = document.getElementById('commitReadinessDetails');
+      cardHost.innerHTML = '';
+      detailHost.innerHTML = '';
+      const cards = [
+        ['Commit Readiness', readiness.state || 'unknown'],
+        ['Ready to Stage', readiness.ready_to_stage ? 'yes' : 'no'],
+        ['Ready After Checks', readiness.ready_to_commit_after_checks ? 'yes' : 'no'],
+        ['Commit Message', readiness.suggested_commit_message || 'none'],
+      ];
+      for (const [title, value] of cards) {
+        const row = document.createElement('div');
+        row.className = 'item mission-card';
+        row.innerHTML = `<div class="item-title">${escapeHtml(title)}</div><div class="item-meta">${escapeHtml(value)}</div>`;
+        cardHost.appendChild(row);
+      }
+      const sections = [
+        ['Summary', [readiness.summary || 'No readiness summary available.']],
+        ['Blockers', readiness.blockers || []],
+        ['Warnings', readiness.warnings || []],
+        ['Required Actions', readiness.required_actions || []],
+      ];
+      for (const [title, values] of sections) {
+        if (!values.length) continue;
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = `<div class="item-title">${escapeHtml(title)}</div><div class="item-meta">${escapeHtml(values.join(' / '))}</div>`;
+        detailHost.appendChild(row);
       }
     }
 

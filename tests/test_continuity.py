@@ -73,6 +73,7 @@ from pca import (
     chat_sessions_from_events,
     chat_turns_from_events,
     compile_self_model,
+    commit_readiness,
     continuity_claim_from_followups,
     continuity_certification,
     current_claim_record,
@@ -121,6 +122,7 @@ from pca import (
     required_evidence_for,
     render_dashboard_html,
     render_build_review_text,
+    render_commit_readiness_text,
     render_project_build_brief_text,
     render_constitution_markdown,
     render_lucien_cockpit_html,
@@ -2757,6 +2759,92 @@ def test_build_review_blocks_generated_artifacts(tmp_path):
     assert review["ready_to_commit"] is False
     assert "generated artifacts are changed" in review["commit_blockers"]
     assert any("clean_local_artifacts" in check for check in review["recommended_checks"])
+
+
+def test_commit_readiness_requires_local_changes(tmp_path):
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    (project_root / "README.md").write_text("project", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
+    )
+
+    readiness = commit_readiness(project_root)
+    rendered = render_commit_readiness_text(readiness)
+
+    assert readiness["state"] == "nothing_to_commit"
+    assert readiness["ready_to_stage"] is False
+    assert "Commit Readiness Gate" in rendered
+
+
+def test_commit_readiness_flags_untracked_files_for_review(tmp_path):
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    (project_root / "README.md").write_text("project", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
+    )
+    (project_root / "new_module.py").write_text("VALUE = 1\n", encoding="utf-8")
+
+    readiness = commit_readiness(project_root)
+
+    assert readiness["state"] == "needs_review"
+    assert readiness["ready_to_stage"] is False
+    assert any("untracked files" in warning for warning in readiness["warnings"])
+
+
+def test_commit_readiness_blocks_generated_artifacts(tmp_path):
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    (project_root / "scenario_runs").mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    (project_root / "scenario_runs" / "result.json").write_text("{}", encoding="utf-8")
+    subprocess.run(["git", "add", "scenario_runs/result.json"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
+    )
+    (project_root / "scenario_runs" / "result.json").write_text('{"changed": true}', encoding="utf-8")
+
+    readiness = commit_readiness(project_root)
+
+    assert readiness["state"] == "blocked"
+    assert readiness["ready_to_stage"] is False
+    assert "generated artifacts are changed" in readiness["blockers"]
+    assert any("clean_local_artifacts" in action for action in readiness["required_actions"])
 
 
 def test_suggest_next_build_tool_is_planning_only(tmp_path):

@@ -35,6 +35,7 @@ from .claims import (
     claims_from_events,
     current_claim_record,
 )
+from .commit_readiness import commit_readiness, render_commit_readiness_text
 from .chat_sessions import (
     ChatSessionRecord,
     ChatTurnRecord,
@@ -363,6 +364,7 @@ __all__ = [
     "BrainRouteDecision",
     "build_review",
     "ChatSessionRecord",
+    "commit_readiness",
     "ChatTurnRecord",
     "FollowUpRecord",
     "FollowUpStatus",
@@ -552,6 +554,7 @@ __all__ = [
     "record_memory_signal",
     "record_reflection",
     "render_build_review_text",
+    "render_commit_readiness_text",
     "render_daily_plan_text",
     "required_evidence_for",
     "required_checks_for_audit",

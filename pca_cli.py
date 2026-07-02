@@ -119,6 +119,7 @@ from pca import (
     render_constitution_markdown,
     render_continuity_certification_text,
     render_build_review_text,
+    render_commit_readiness_text,
     render_daily_command_center_text,
     render_daily_plan_text,
     render_project_build_brief_text,
@@ -138,6 +139,7 @@ from pca import (
     write_session_replay_html,
     project_build_brief,
     build_review,
+    commit_readiness,
 )
 from pca.live_chat import chat_once, run_live_chat_server
 from pca.demo_live import run_demo
@@ -283,6 +285,8 @@ def main() -> int:
     project_brief_parser.add_argument("--json", action="store_true")
     build_review_parser = subparsers.add_parser("build-review")
     build_review_parser.add_argument("--json", action="store_true")
+    commit_readiness_parser = subparsers.add_parser("commit-readiness")
+    commit_readiness_parser.add_argument("--json", action="store_true")
     subparsers.add_parser("model-diagnostic")
     subparsers.add_parser("workbench-status")
     chat_once_parser = subparsers.add_parser("chat-once")
@@ -857,6 +861,14 @@ def main() -> int:
             print_json({"build_review": review})
         else:
             print(render_build_review_text(review))
+        return 0
+
+    if args.command == "commit-readiness":
+        readiness = commit_readiness(Path.cwd())
+        if args.json:
+            print_json({"commit_readiness": readiness})
+        else:
+            print(render_commit_readiness_text(readiness))
         return 0
 
     if args.command == "workbench-status":
