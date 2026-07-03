@@ -88,9 +88,30 @@ def daily_command_center(
         evidence_needed_count=evidence_needed_count,
         workbench_next_action=str(workbench.get("recommended_next_action", "")),
     )
+    guided_actions = _guided_actions(
+        active_mission=active_mission,
+        recommended_first_action=recommended_first_action,
+        high_priority_count=len(high_priority_items),
+        blocked_mission_count=blocked_mission_count,
+        open_inbox_count=len(inbox_items),
+        evidence_needed_count=evidence_needed_count,
+        local_available=bool(model_adapter.get("local_model_configured")),
+        local_model=str(model_adapter.get("local_model") or "local model"),
+    )
+    default_work_mode = _default_work_mode(active_mission)
+    guided_action = guided_actions.get(default_work_mode) or guided_actions["research"]
     return {
         "briefing": briefing,
         "recommended_first_action": recommended_first_action,
+        "plain_status": _plain_status(
+            active_mission=active_mission,
+            high_priority_count=len(high_priority_items),
+            blocked_mission_count=blocked_mission_count,
+            evidence_needed_count=evidence_needed_count,
+        ),
+        "default_work_mode": default_work_mode,
+        "guided_action": guided_action,
+        "guided_actions": guided_actions,
         "continuity_state": claim,
         "output_gate_mode": gate.mode.value,
         "model_mode": workbench.get("model_mode", "auto"),
@@ -123,6 +144,17 @@ def daily_command_center(
                 "Use Local Model for routine work."
                 if model_adapter.get("local_model_configured")
                 else "Use Brain Router; Echo fallback remains available."
+            ),
+        },
+        "review_needed": {
+            "title": "Review Needed",
+            "open_count": len(inbox_items),
+            "high_priority_count": len(high_priority_items),
+            "blocks_today": bool(high_priority_items or blocked_mission_count),
+            "summary": _review_needed_summary(
+                len(inbox_items),
+                len(high_priority_items),
+                blocked_mission_count,
             ),
         },
         "cards": {
@@ -273,6 +305,220 @@ def _recommended_first_action(
     if ready_step_count:
         return "Review ready mission steps and run approved low-risk actions."
     return workbench_next_action or "Continue the active mission."
+
+
+def _default_work_mode(active_mission: dict[str, Any] | None) -> str:
+    if not active_mission:
+        return "research"
+    title = str(active_mission.get("title") or "").lower()
+    if any(token in title for token in ["write", "narrative", "paper", "readme", "public"]):
+        return "write"
+    if any(token in title for token in ["build", "app", "code", "repo"]):
+        return "build"
+    return "research"
+
+
+def _plain_status(
+    active_mission: dict[str, Any] | None,
+    high_priority_count: int,
+    blocked_mission_count: int,
+    evidence_needed_count: int,
+) -> str:
+    if active_mission is None:
+        return "Choose a mission before starting governed work."
+    if high_priority_count:
+        return "Needs review before high-impact work."
+    if blocked_mission_count:
+        return "Blocked until mission review is cleared."
+    if evidence_needed_count:
+        return "Ready to work, but some evidence needs review before becoming trusted."
+    phase = str(active_mission.get("phase") or "")
+    return {
+        "intervention_ready": "Ready for next action.",
+        "planning": "Ready to plan the next step.",
+        "evidence_review": "Evidence needs review before stronger claims.",
+        "lesson_review": "Ready to review what was learned.",
+        "outcome_review": "Ready to review the outcome.",
+        "intake": "Ready to shape the mission.",
+        "blocked": "Blocked until review is cleared.",
+    }.get(phase, "Ready for guided work.")
+
+
+def _review_needed_summary(
+    open_count: int,
+    high_priority_count: int,
+    blocked_mission_count: int,
+) -> str:
+    if not open_count and not blocked_mission_count:
+        return "Nothing needs steward review before today's guided action."
+    if high_priority_count:
+        return (
+            f"{high_priority_count} high-priority item(s) need review before high-impact "
+            "work. Routine sandbox drafting stays safe."
+        )
+    if blocked_mission_count:
+        return f"{blocked_mission_count} mission(s) need review before advancing."
+    return f"{open_count} proposed item(s) need review later; they do not block sandbox work."
+
+
+def _guided_actions(
+    active_mission: dict[str, Any] | None,
+    recommended_first_action: str,
+    high_priority_count: int,
+    blocked_mission_count: int,
+    open_inbox_count: int,
+    evidence_needed_count: int,
+    local_available: bool,
+    local_model: str,
+) -> dict[str, dict[str, Any]]:
+    if active_mission is None:
+        base = _guided_action(
+            work_mode="research",
+            action_id="open_mission",
+            title="Open a Mission",
+            primary_label="Start Mission",
+            status="Choose what Coherence AI should help with today.",
+            target_kind="start_mission",
+            what_it_does=[
+                "Opens the mission form so you can name the work.",
+                "Keeps chat, memory, evidence, and claims governed by PCA.",
+            ],
+            what_it_will_not_do=[
+                "Will not run tools.",
+                "Will not write files.",
+                "Will not publish anything.",
+                "Will not accept claims as proven.",
+            ],
+            local_available=local_available,
+            local_model=local_model,
+            requires_approval=False,
+            creates_persistent_change=False,
+            allowed=True,
+        )
+        return {"research": base, "write": base | {"work_mode": "write"}, "build": base | {"work_mode": "build"}}
+
+    blocked = bool(high_priority_count or blocked_mission_count)
+    allowed = not bool(high_priority_count)
+    review_note = (
+        "Steward review is needed before high-impact work."
+        if blocked
+        else "Steward review is not blocking this sandbox action."
+    )
+    return {
+        "research": _guided_action(
+            work_mode="research",
+            action_id="generate_research_brief",
+            title="Generate a Research Brief",
+            primary_label="Start Research Brief",
+            status=(
+                "Ready to gather proposed research notes."
+                if allowed
+                else "Review is needed first for high-impact work; sandbox drafting remains constrained."
+            ),
+            target_kind="research_brief",
+            what_it_does=[
+                "Creates a sandbox research brief linked to the active mission.",
+                "Uses the local model path when available.",
+                "Creates proposed evidence for later review.",
+                review_note,
+            ],
+            what_it_will_not_do=[
+                "Will not write project files.",
+                "Will not publish anything.",
+                "Will not accept claims as proven.",
+                "Will not create durable memory without review.",
+            ],
+            local_available=local_available,
+            local_model=local_model,
+            requires_approval=False,
+            creates_persistent_change=True,
+            allowed=True,
+        ),
+        "write": _guided_action(
+            work_mode="write",
+            action_id="start_sandbox_draft",
+            title="Start a Sandbox Draft",
+            primary_label="Start Draft",
+            status="Ready to draft without treating the draft as truth.",
+            target_kind="paper_draft",
+            what_it_does=[
+                "Creates a sandbox draft for the active mission.",
+                "Uses local model mode by default.",
+                "Keeps claims proposed until steward review.",
+                review_note,
+            ],
+            what_it_will_not_do=[
+                "Will not edit README or paper files directly.",
+                "Will not publish or post anything.",
+                "Will not accept the draft as memory.",
+                "Will not spend OpenAI money unless Cloud Assist is explicitly enabled.",
+            ],
+            local_available=local_available,
+            local_model=local_model,
+            requires_approval=False,
+            creates_persistent_change=True,
+            allowed=True,
+        ),
+        "build": _guided_action(
+            work_mode="build",
+            action_id="review_next_build",
+            title="Review the Next Build",
+            primary_label="Review Build Path",
+            status="Ready to inspect the next safe engineering move.",
+            target_kind="build_review",
+            what_it_does=[
+                "Shows the next recommended app improvement.",
+                "Shows changed files, checks, and commit readiness.",
+                "Keeps code changes behind Codex and test review.",
+                recommended_first_action,
+            ],
+            what_it_will_not_do=[
+                "Will not edit files by itself.",
+                "Will not run tools automatically.",
+                "Will not commit or push.",
+                "Will not spend OpenAI money.",
+            ],
+            local_available=local_available,
+            local_model=local_model,
+            requires_approval=True,
+            creates_persistent_change=False,
+            allowed=True,
+        ),
+    }
+
+
+def _guided_action(
+    work_mode: str,
+    action_id: str,
+    title: str,
+    primary_label: str,
+    status: str,
+    target_kind: str,
+    what_it_does: list[str],
+    what_it_will_not_do: list[str],
+    local_available: bool,
+    local_model: str,
+    requires_approval: bool,
+    creates_persistent_change: bool,
+    allowed: bool,
+) -> dict[str, Any]:
+    brain = f"Ollama / {local_model}" if local_available else "Echo Local fallback"
+    return {
+        "action_id": action_id,
+        "work_mode": work_mode,
+        "title": title,
+        "primary_label": primary_label,
+        "plain_english_status": status,
+        "target_kind": target_kind,
+        "what_it_does": what_it_does,
+        "what_it_will_not_do": what_it_will_not_do,
+        "risk_level": "low" if not requires_approval else "medium",
+        "cost_estimate": "$0 API money in Local Mode",
+        "brain": brain,
+        "requires_approval": requires_approval,
+        "creates_persistent_change": creates_persistent_change,
+        "allowed_under_current_governance": allowed,
+    }
 
 
 def _work_today_card(

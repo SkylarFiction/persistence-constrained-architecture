@@ -1064,6 +1064,45 @@ def _live_chat_html() -> str:
     .home-title { font-size: 25px; font-weight: 900; margin: 0 0 4px; }
     .home-subtitle { color: var(--muted); font-size: 14px; }
     .home-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .guided-workbench {
+      display: grid;
+      grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+      gap: 12px;
+      align-items: stretch;
+    }
+    .mode-picker { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+    .mode-pill {
+      min-height: 38px;
+      background: rgba(255,255,255,.055);
+      border-color: rgba(255,255,255,.16);
+      box-shadow: none;
+    }
+    .mode-pill.active {
+      background: linear-gradient(180deg, #28765d, #1e5b49);
+      border-color: rgba(84,196,179,.7);
+      box-shadow: 0 10px 26px rgba(0,0,0,.22);
+    }
+    .guided-action {
+      border: 1px solid rgba(84,196,179,.26);
+      background: linear-gradient(180deg, rgba(84,196,179,.10), rgba(255,255,255,.045));
+    }
+    .guided-action-title { font-size: 22px; font-weight: 900; margin: 4px 0 6px; }
+    .guided-status { color: #dff3eb; font-size: 14px; line-height: 1.45; }
+    .impact-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .impact-list { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .impact-list li { margin: 4px 0; }
+    .guided-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+    .guided-fact {
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 8px;
+      padding: 9px;
+      background: rgba(0,0,0,.14);
+      color: #dfe8e3;
+      font-size: 12px;
+    }
+    .review-needed {
+      border-left: 4px solid var(--amber);
+    }
     .mission-dashboard { grid-column: 1 / -1; display: grid; gap: 12px; }
     .mission-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
     .mission-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
@@ -1184,7 +1223,7 @@ def _live_chat_html() -> str:
     .advanced-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 0 16px 16px; }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #9ee7c0; }
     ::placeholder { color: #73867d; }
-    @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px; } form { grid-template-columns: 1fr; } .home-top, .brain-mode-row, .mission-controls, .advanced-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px; } form { grid-template-columns: 1fr; } .home-top, .brain-mode-row, .mission-controls, .advanced-grid, .guided-workbench, .impact-grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -1209,6 +1248,38 @@ def _live_chat_html() -> str:
           <button type="button" id="homeSessionReplay" class="secondary">View Session Replay</button>
         </div>
       </div>
+      <div class="guided-workbench">
+        <div id="guidedAction" class="item guided-action">
+          <div class="label">What do you want Coherence AI to help with today?</div>
+          <div class="mode-picker" role="group" aria-label="Work mode">
+            <button type="button" class="mode-pill" data-work-mode="research">Research</button>
+            <button type="button" class="mode-pill" data-work-mode="write">Write</button>
+            <button type="button" class="mode-pill" data-work-mode="build">Build</button>
+          </div>
+          <div class="label">Today's Focus</div>
+          <div id="guidedFocus" class="guided-action-title">loading</div>
+          <div id="guidedStatus" class="guided-status">loading</div>
+          <div class="actions">
+            <button type="button" id="guidedPrimary">Start</button>
+            <button type="button" id="guidedChangeFocus" class="secondary">Change Focus</button>
+          </div>
+        </div>
+        <div id="guidedImpact" class="item">
+          <div class="item-title">What This Will Do</div>
+          <div class="impact-grid">
+            <div>
+              <div class="label">This will</div>
+              <ul id="guidedDoes" class="impact-list"></ul>
+            </div>
+            <div>
+              <div class="label">This will not</div>
+              <ul id="guidedDoesNot" class="impact-list"></ul>
+            </div>
+          </div>
+          <div id="guidedFacts" class="guided-facts"></div>
+        </div>
+      </div>
+      <div id="reviewNeededCard" class="item review-needed"></div>
       <div id="dailyBriefing" class="item"></div>
       <div id="dailyResearchLoop" class="item"></div>
       <div id="dailyCards" class="mission-card-grid"></div>
@@ -1480,6 +1551,8 @@ def _live_chat_html() -> str:
     const certification = document.getElementById('certification');
     let activeInboxFilter = 'all';
     let selectedMissionId = window.localStorage.getItem('lucien.activeMissionId') || '';
+    let selectedWorkMode = window.localStorage.getItem('lucien.workMode') || '';
+    let currentGuidedAction = null;
     let currentStatus = null;
     let lastLucien = '';
 
@@ -1648,6 +1721,7 @@ def _live_chat_html() -> str:
       const missionCandidate = selectedMission || workbench.active_mission || null;
       const mission = missionCandidate && missionCandidate.mission_id ? missionCandidate : null;
       document.getElementById('homeSubtitle').textContent = mission ? 'Current governed mission' : 'What are we working on today?';
+      renderGuidedWorkbench(daily, workbench, mission);
       const briefing = document.getElementById('dailyBriefing');
       briefing.innerHTML = `<div class="item-title">Opening Briefing</div><div class="item-meta">${escapeHtml(daily.briefing || 'Daily briefing unavailable.')}</div>`;
       const dailyLoop = document.getElementById('dailyResearchLoop');
@@ -1689,6 +1763,66 @@ def _live_chat_html() -> str:
         row.className = 'item-meta';
         row.textContent = mission ? 'No mission blockers detected.' : 'No active mission. Start one to turn chat into governed work.';
         blockerList.appendChild(row);
+      }
+    }
+
+    function renderGuidedWorkbench(daily, workbench, mission) {
+      const actions = daily.guided_actions || {};
+      if (!selectedWorkMode || !actions[selectedWorkMode]) {
+        selectedWorkMode = daily.default_work_mode || 'research';
+        window.localStorage.setItem('lucien.workMode', selectedWorkMode);
+      }
+      const action = actions[selectedWorkMode] || daily.guided_action || {};
+      currentGuidedAction = action;
+      for (const control of document.querySelectorAll('[data-work-mode]')) {
+        control.classList.toggle('active', control.dataset.workMode === selectedWorkMode);
+      }
+      document.getElementById('guidedFocus').textContent = mission ? mission.title : 'No active mission';
+      document.getElementById('guidedStatus').textContent = `${action.title || 'Choose work'} - ${action.plain_english_status || daily.plain_status || 'Ready for guided work.'}`;
+      const primary = document.getElementById('guidedPrimary');
+      primary.textContent = action.primary_label || 'Start';
+      primary.disabled = action.allowed_under_current_governance === false;
+      renderList(document.getElementById('guidedDoes'), action.what_it_does || ['Shows the next safe action.']);
+      renderList(document.getElementById('guidedDoesNot'), action.what_it_will_not_do || ['Will not run tools or publish anything automatically.']);
+      const facts = [
+        ['Brain', action.brain || plainBrainMode(workbench.model_mode || 'local_ollama')],
+        ['Cost', action.cost_estimate || '$0 API money in Local Mode'],
+        ['Risk', action.risk_level || 'low'],
+        ['Approval', action.requires_approval ? 'Review required before action' : 'No extra approval for sandbox action'],
+        ['Persistent Change', action.creates_persistent_change ? 'Creates a governed ledger record' : 'No durable content change'],
+        ['Governance', action.allowed_under_current_governance === false ? 'Blocked by current governance' : 'Allowed under current governance']
+      ];
+      const factHost = document.getElementById('guidedFacts');
+      factHost.innerHTML = '';
+      for (const [label, value] of facts) {
+        const row = document.createElement('div');
+        row.className = 'guided-fact';
+        row.innerHTML = `<div class="label">${escapeHtml(label)}</div><div>${escapeHtml(value)}</div>`;
+        factHost.appendChild(row);
+      }
+      const review = daily.review_needed || {};
+      document.getElementById('reviewNeededCard').innerHTML = `<div class="item-title">Review Needed</div>
+        <div class="item-meta">${escapeHtml(review.summary || "Nothing needs review before today's guided action.")}</div>
+        <div class="actions">
+          <button type="button" class="secondary" id="guidedReviewNow">Review Now</button>
+          <button type="button" class="secondary" id="guidedReviewLater">Review Later</button>
+        </div>`;
+      document.getElementById('guidedReviewNow').addEventListener('click', () => {
+        activeInboxFilter = (review.high_priority_count || 0) ? 'high' : 'all';
+        stewardInbox.scrollIntoView({behavior: 'smooth', block: 'center'});
+        renderStewardInbox((currentStatus || {}).steward_inbox || []);
+      });
+      document.getElementById('guidedReviewLater').addEventListener('click', () => {
+        addMessage('lucien', 'Review left for later. Sandbox drafts can continue, but proposed evidence, memory, and claims still need steward review before becoming trusted.');
+      });
+    }
+
+    function renderList(host, values) {
+      host.innerHTML = '';
+      for (const value of values) {
+        const item = document.createElement('li');
+        item.textContent = value;
+        host.appendChild(item);
       }
     }
 
@@ -2769,6 +2903,45 @@ def _live_chat_html() -> str:
 
     document.getElementById('homeReviewInbox').addEventListener('click', () => {
       stewardInbox.scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
+
+    for (const control of document.querySelectorAll('[data-work-mode]')) {
+      control.addEventListener('click', () => {
+        selectedWorkMode = control.dataset.workMode;
+        window.localStorage.setItem('lucien.workMode', selectedWorkMode);
+        if (currentStatus) renderStatus(currentStatus);
+      });
+    }
+
+    document.getElementById('guidedPrimary').addEventListener('click', () => {
+      const action = currentGuidedAction || {};
+      if (action.allowed_under_current_governance === false) {
+        addMessage('lucien', 'That action is blocked by the current governance state. Review the Steward Inbox first.');
+        return;
+      }
+      if (action.target_kind === 'start_mission') {
+        document.getElementById('missionTitle').focus();
+        document.getElementById('missionTitle').scrollIntoView({behavior: 'smooth', block: 'center'});
+        return;
+      }
+      if (action.target_kind === 'research_brief') {
+        createResearch('research_brief');
+        return;
+      }
+      if (action.target_kind === 'paper_draft') {
+        createResearch('paper_draft');
+        return;
+      }
+      if (action.target_kind === 'build_review') {
+        document.getElementById('nextBuild').scrollIntoView({behavior: 'smooth', block: 'center'});
+        return;
+      }
+      addMessage('lucien', 'No guided action is available yet. Start or select a mission first.');
+    });
+
+    document.getElementById('guidedChangeFocus').addEventListener('click', () => {
+      activeMissionSelect.scrollIntoView({behavior: 'smooth', block: 'center'});
+      activeMissionSelect.focus();
     });
 
     function createResearch(kind) {

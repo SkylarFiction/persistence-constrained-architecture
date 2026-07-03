@@ -1131,6 +1131,15 @@ def test_live_chat_html_contains_mission_first_home():
     html = _live_chat_html()
 
     assert "Daily Command Center" in html
+    assert "What do you want Coherence AI to help with today?" in html
+    assert "Research" in html
+    assert "Write" in html
+    assert "Build" in html
+    assert "What This Will Do" in html
+    assert "This will not" in html
+    assert "guidedPrimary" in html
+    assert "guidedReviewNow" in html
+    assert "guidedChangeFocus" in html
     assert "Continuity Certification" in html
     assert "certification" in html
     assert "dailyBriefing" in html
@@ -2373,6 +2382,9 @@ def test_daily_command_center_recommends_mission_when_none_exists(tmp_path):
     assert "Open or resume a mission" in daily["recommended_first_action"]
     assert "No active mission" in daily["briefing"]
     assert "openai_spend_gated" in daily["cost_brain_mode"]
+    assert daily["guided_action"]["action_id"] == "open_mission"
+    assert daily["guided_action"]["target_kind"] == "start_mission"
+    assert daily["guided_action"]["cost_estimate"] == "$0 API money in Local Mode"
 
 
 def test_daily_command_center_shows_active_mission_phase_and_next_action(tmp_path):
@@ -2391,6 +2403,11 @@ def test_daily_command_center_shows_active_mission_phase_and_next_action(tmp_pat
     assert daily["mission_phase"] == "intake"
     assert daily["next_safe_action"]
     assert "Daily mission" in daily["briefing"]
+    assert daily["plain_status"] == "Ready to shape the mission."
+    assert set(daily["guided_actions"]) == {"research", "write", "build"}
+    assert daily["guided_actions"]["research"]["target_kind"] == "research_brief"
+    assert "Will not publish anything." in daily["guided_actions"]["research"]["what_it_will_not_do"]
+    assert daily["review_needed"]["blocks_today"] is False
 
 
 def test_daily_command_center_surfaces_blockers_and_steward_pressure(tmp_path):
@@ -2426,6 +2443,9 @@ def test_daily_command_center_surfaces_blockers_and_steward_pressure(tmp_path):
     assert daily["open_steward_inbox_count"] >= 1
     assert daily["high_priority_steward_count"] >= 1
     assert "Review high-priority" in daily["recommended_first_action"]
+    assert daily["plain_status"] == "Needs review before high-impact work."
+    assert daily["review_needed"]["blocks_today"] is True
+    assert "high-priority" in daily["review_needed"]["summary"]
 
 
 def test_daily_command_center_surfaces_ready_steps(tmp_path):
