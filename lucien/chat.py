@@ -178,6 +178,7 @@ class LucienChatShell:
         user_message: str,
         model_mode: str | None = None,
         use_openai: bool = False,
+        mission_id: str | None = None,
         responder: LocalLucienResponder | None = None,
     ) -> LucienChatResult:
         session_id = self.start_session()
@@ -185,7 +186,11 @@ class LucienChatShell:
         claim, _, _ = derive_current_claim(self.ledger, self.manifest)
         self_model = derive_self_model(self.ledger.events(), self.manifest.system_id)
         memory_cards = memory_cards_from_self_model(self_model)
-        governed_context = build_governed_context(self.ledger, self.manifest)
+        governed_context = build_governed_context(
+            self.ledger,
+            self.manifest,
+            mission_id=mission_id,
+        )
         classified = classify_growth(user_message)
         prompt_context = governed_context.render_prompt_context()
         brain_route = select_brain_route(
@@ -280,6 +285,7 @@ class LucienChatShell:
                 "brain_route_id": brain_route.route_id,
                 "brain_route_task_type": brain_route.task_type,
                 "brain_route_reason": brain_route.reason,
+                "mission_id": mission_id,
                 "provider": provider_name,
                 "model": model_name,
                 "context_sha256": _text_hash(prompt_context),

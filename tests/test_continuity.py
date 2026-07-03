@@ -1140,6 +1140,7 @@ def test_live_chat_html_contains_mission_first_home():
     assert "guidedPrimary" in html
     assert "guidedReviewNow" in html
     assert "guidedChangeFocus" in html
+    assert "mission_id: selectedMissionId || null" in html
     assert "Continuity Certification" in html
     assert "certification" in html
     assert "dailyBriefing" in html
@@ -1695,6 +1696,51 @@ def test_local_lucien_responder_uses_steward_inbox_next_action(tmp_path):
     assert "Steward Inbox" in result.response_text
     assert "Next safe move" in result.response_text
     assert result.output_allowed is True
+
+
+def test_lucien_chat_shell_scopes_context_to_selected_mission(tmp_path):
+    class CapturingResponder:
+        def __init__(self):
+            self.governed_context = ""
+
+        def generate(self, **kwargs):
+            self.governed_context = kwargs["governed_context"]
+            return "Selected mission context received."
+
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    first = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Alpha Mission Context",
+        problem_statement="This mission should not be in the selected prompt.",
+    )
+    second = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Beta Mission Context",
+        problem_statement="This mission should be in the selected prompt.",
+    )
+    shell = LucienChatShell(manifest=manifest, ledger=ledger)
+    responder = CapturingResponder()
+
+    result = shell.handle_message(
+        "What should I do next in this mission?",
+        mission_id=second.mission_id,
+        responder=responder,
+    )
+    generated_events = [
+        event
+        for event in ledger.events()
+        if event.event_type == "chat.model_response_generated"
+    ]
+
+    assert result.output_allowed is True
+    assert "Beta Mission Context" in responder.governed_context
+    assert second.mission_id in responder.governed_context
+    assert "Alpha Mission Context" not in responder.governed_context
+    assert first.mission_id not in responder.governed_context
+    assert generated_events[-1].payload["mission_id"] == second.mission_id
 
 
 def test_context_builder_prompt_context_is_hash_and_status_based(tmp_path):

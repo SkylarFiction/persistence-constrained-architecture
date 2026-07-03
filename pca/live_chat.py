@@ -169,6 +169,7 @@ def run_live_chat_server(
                 return
             model_mode = normalize_model_mode(str(payload.get("model_mode", "")))
             use_openai = bool(payload.get("use_openai"))
+            mission_id = str(payload.get("mission_id", "")).strip() or None
             before_count = len(ledger.events())
             received_event = ledger.append(
                 "chat.user_message_received",
@@ -178,12 +179,14 @@ def run_live_chat_server(
                     "surface": "live_chat",
                     "model_mode": model_mode,
                     "openai_requested": use_openai,
+                    "mission_id": mission_id,
                 },
             )
             result = shell.handle_message(
                 message,
                 model_mode=model_mode,
                 use_openai=use_openai,
+                mission_id=mission_id,
             )
             reflection = None
             opened_tasks = []
@@ -2806,7 +2809,8 @@ def _live_chat_html() -> str:
         body: JSON.stringify({
           message: text,
           model_mode: modelMode,
-          use_openai: useOpenAI
+          use_openai: useOpenAI,
+          mission_id: selectedMissionId || null
         })
       });
       const data = await res.json();
