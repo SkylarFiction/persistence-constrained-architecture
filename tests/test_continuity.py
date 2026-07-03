@@ -1182,10 +1182,16 @@ def test_live_chat_html_contains_mission_first_home():
     assert "brainRoute" in html
     assert "brainTask" in html
     assert "auto" in html
-    assert "Local Model" in html
+    assert "Local Mode" in html
     assert "local_ollama" in html
     assert "local_first" in html
     assert "localStatus" in html
+    assert "Research Sandbox" in html
+    assert "Generate Research Brief" in html
+    assert "Create Claim Map" in html
+    assert "Draft Paper" in html
+    assert "renderDailyCommandCenter(status.daily || {}, status.workbench || {}, missionView.activeMission)" in html
+    assert "renderDailyCommandCenter(status.daily || {}, status.workbench || {}, status, missionView.activeMission)" not in html
 
 
 def test_live_status_includes_tool_router_state(tmp_path):
@@ -2199,6 +2205,65 @@ def test_resolved_mission_review_allows_flow_to_continue(tmp_path):
     assert flow.open_task_ids == []
 
 
+def test_steward_inbox_action_resolves_mission_review_blockers(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Inbox mission review",
+        problem_statement="Mission review should be clearable from steward inbox.",
+    )
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "hypothesis",
+        "Pilot can be tested.",
+        confidence="medium",
+    )
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "evidence",
+        "Evidence is strong enough to plan.",
+        confidence="high",
+    )
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "plan_step",
+        "Start with one bounded pilot.",
+        confidence="medium",
+    )
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "risk",
+        "Risk requires review before intervention.",
+        confidence="medium",
+    )
+    inbox_id = f"mission_review:{mission.mission_id}"
+
+    result = apply_steward_inbox_action(
+        ledger,
+        manifest,
+        inbox_id,
+        "resolve",
+        reason="mission reviewed from unified inbox",
+    )
+    flow = mission_flow(ledger, mission.mission_id)
+
+    assert result["item"]["source_type"] == "mission_review"
+    assert result["tasks"]
+    assert all(task["status"] == "resolved" for task in result["tasks"])
+    assert flow.phase == MissionPhase.INTERVENTION_READY
+    assert flow.open_task_ids == []
+
+
 def test_mission_flow_reports_all_missions(tmp_path):
     manifest = load_manifest()
     ledger = ContinuityLedger(tmp_path / "continuity.log")
@@ -2510,6 +2575,7 @@ def test_research_sandbox_brief_creates_proposed_output_without_high_priority_bl
     assert evidence[-1].review_status.value == "raw"
     assert sandbox["proposed_output_count"] == 1
     assert not [task for task in tasks if task.severity in {"high", "critical"}]
+    assert steward_inbox(ledger) == []
 
 
 def test_research_sandbox_classifies_restricted_actions():

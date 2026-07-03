@@ -1495,7 +1495,7 @@ def _live_chat_html() -> str:
       currentStatus = status;
       const summary = status.summary || {};
       const missionView = renderMissionDashboard(status);
-      renderDailyCommandCenter(status.daily || {}, status.workbench || {}, status, missionView.activeMission);
+      renderDailyCommandCenter(status.daily || {}, status.workbench || {}, missionView.activeMission);
       renderProjectBrief(status.project_brief || {});
       renderBuildReview(status.build_review || {});
       renderCommitReadiness(status.commit_readiness || {});

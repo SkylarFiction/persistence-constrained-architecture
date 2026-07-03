@@ -217,6 +217,33 @@ def apply_steward_inbox_action(
             "resolution": resolution.to_dict(),
             "resolved_tasks": [task.to_dict() for task in resolved_tasks],
         }
+    if item.source_type == "mission_review":
+        if normalized_action not in {"resolve", "dismiss"}:
+            raise ValueError("mission review action must be resolve or dismiss")
+        status = (
+            ReflectionTaskStatus.RESOLVED
+            if normalized_action == "resolve"
+            else ReflectionTaskStatus.DISMISSED
+        )
+        updated_tasks = []
+        for task in active_reflection_tasks(ledger.events()):
+            if task.kind.value != "review_mission":
+                continue
+            if item.source_id not in task.reason:
+                continue
+            updated_tasks.append(
+                update_reflection_task(
+                    ledger,
+                    manifest.system_id,
+                    task.task_id,
+                    status,
+                    reason=reason,
+                )
+            )
+        return {
+            "item": item.to_dict(),
+            "tasks": [task.to_dict() for task in updated_tasks],
+        }
     raise ValueError(
         f"Actions for {item.source_type} are not routed yet; use the linked workflow."
     )
@@ -296,6 +323,11 @@ def _skill_items(events) -> list[StewardInboxItem]:
 def _evidence_items(events) -> list[StewardInboxItem]:
     items = []
     for record in evidence_records_from_events(events):
+        if (
+            record.review_status == EvidenceReviewStatus.RAW
+            and record.reason.startswith("research sandbox proposed evidence")
+        ):
+            continue
         if record.review_status not in {
             EvidenceReviewStatus.RAW,
             EvidenceReviewStatus.DISPUTED,
