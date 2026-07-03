@@ -58,6 +58,7 @@ from pca import (
     add_evidence_claim,
     append_ledger_anchor,
     active_followups,
+    auto_propose_checkpoint_skill_candidates,
     authorization_policy_from_packs,
     adapter_for_model_mode,
     adapter_from_environment,
@@ -75,6 +76,7 @@ from pca import (
     checkpoint_history,
     checkpoint_link_records_from_events,
     checkpoint_lesson_candidates_from_events,
+    checkpoint_skill_candidates_from_events,
     checkpoint_story,
     compile_self_model,
     commit_readiness,
@@ -3174,6 +3176,134 @@ def test_checkpoint_lesson_proposes_mission_lesson_and_growth(tmp_path):
     assert growth[-1].kind.value == "memory"
     assert growth[-1].status.value == "proposed"
     assert record.link_id in growth[-1].evidence_refs
+
+
+def test_repeated_checkpoint_links_propose_skill_candidate(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    (project_root / "README.md").write_text("project", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Add skill checkpoint"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
+    )
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Skill mission",
+        problem_statement="Find repeatable checkpoint procedures.",
+    )
+    steps = []
+    for index in range(2):
+        step = propose_mission_step(
+            ledger,
+            manifest.system_id,
+            mission.mission_id,
+            description=f"Run repeatable check {index}",
+            risk_level="low",
+            required_tool="project_snapshot",
+            expected_outcome="Project snapshot reviewed.",
+        )
+        complete_mission_step(
+            ledger,
+            manifest.system_id,
+            step.step_id,
+            actual_outcome="Project snapshot completed.",
+        )
+        steps.append(step)
+        link_checkpoint_to_mission(
+            ledger,
+            manifest.system_id,
+            mission.mission_id,
+            commit_hash="HEAD",
+            mission_step_ids=[step.step_id],
+            project_root=project_root,
+        )
+
+    candidates = auto_propose_checkpoint_skill_candidates(
+        ledger,
+        manifest.system_id,
+        minimum_checkpoints=2,
+    )
+    checkpoint_skill_events = checkpoint_skill_candidates_from_events(ledger.events())
+
+    assert len(candidates) == 1
+    assert candidates[0].required_tool == "project_snapshot"
+    assert candidates[0].status.value == "proposed"
+    assert {step.step_id for step in steps} == set(candidates[0].source_step_ids)
+    assert checkpoint_skill_events[-1]["skill_id"] == candidates[0].skill_id
+
+
+def test_single_checkpoint_does_not_propose_skill_candidate(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    (project_root / "README.md").write_text("project", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Add one checkpoint"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
+    )
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Single checkpoint mission",
+        problem_statement="One checkpoint is not enough to learn a skill.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Run once.",
+        risk_level="low",
+        required_tool="project_snapshot",
+        expected_outcome="One snapshot.",
+    )
+    complete_mission_step(
+        ledger,
+        manifest.system_id,
+        step.step_id,
+        actual_outcome="Completed once.",
+    )
+    link_checkpoint_to_mission(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        commit_hash="HEAD",
+        mission_step_ids=[step.step_id],
+        project_root=project_root,
+    )
+
+    candidates = auto_propose_checkpoint_skill_candidates(
+        ledger,
+        manifest.system_id,
+        minimum_checkpoints=2,
+    )
+
+    assert candidates == []
 
 
 def test_suggest_next_build_tool_is_planning_only(tmp_path):

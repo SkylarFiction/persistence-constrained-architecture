@@ -142,6 +142,7 @@ from pca import (
     write_session_replay_html,
     project_build_brief,
     build_review,
+    auto_propose_checkpoint_skill_candidates,
     checkpoint_history,
     checkpoint_story,
     commit_readiness,
@@ -315,6 +316,8 @@ def main() -> int:
     checkpoint_lesson_parser.add_argument("--summary", required=True)
     checkpoint_lesson_parser.add_argument("--confidence", default="medium")
     checkpoint_lesson_parser.add_argument("--reason", default="")
+    checkpoint_skills_parser = subparsers.add_parser("checkpoint-skills")
+    checkpoint_skills_parser.add_argument("--minimum", type=int, default=2)
     subparsers.add_parser("model-diagnostic")
     subparsers.add_parser("workbench-status")
     chat_once_parser = subparsers.add_parser("chat-once")
@@ -949,6 +952,15 @@ def main() -> int:
             reason=args.reason,
         )
         print_json({"checkpoint_lesson": result})
+        return 0
+
+    if args.command == "checkpoint-skills":
+        records = auto_propose_checkpoint_skill_candidates(
+            ledger,
+            manifest.system_id,
+            minimum_checkpoints=args.minimum,
+        )
+        print_json({"skill_candidates": [record.to_dict() for record in records]})
         return 0
 
     if args.command == "workbench-status":

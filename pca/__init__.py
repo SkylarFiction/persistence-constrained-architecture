@@ -39,9 +39,11 @@ from .commit_readiness import commit_readiness, render_commit_readiness_text
 from .checkpoint_story import checkpoint_story, render_checkpoint_story_markdown
 from .checkpoint_links import (
     CheckpointLinkRecord,
+    auto_propose_checkpoint_skill_candidates,
     checkpoint_history,
     checkpoint_link_records_from_events,
     checkpoint_lesson_candidates_from_events,
+    checkpoint_skill_candidates_from_events,
     link_checkpoint_to_mission,
     propose_checkpoint_lesson,
     render_checkpoint_history_text,
@@ -376,9 +378,11 @@ __all__ = [
     "BrainRouteDecision",
     "build_review",
     "CheckpointLinkRecord",
+    "auto_propose_checkpoint_skill_candidates",
     "checkpoint_history",
     "checkpoint_link_records_from_events",
     "checkpoint_lesson_candidates_from_events",
+    "checkpoint_skill_candidates_from_events",
     "checkpoint_story",
     "ChatSessionRecord",
     "commit_readiness",

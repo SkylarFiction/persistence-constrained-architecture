@@ -10,8 +10,9 @@ import uuid
 from .checkpoint_story import checkpoint_story
 from .evidence_locker import require_evidence
 from .ledger import ContinuityEvent, ContinuityLedger
-from .mission_steps import require_mission_step
+from .mission_steps import MissionStepExecutionStatus, require_mission_step
 from .missions import add_mission_item, require_mission
+from .skill_memory import SkillCandidateRecord, skill_candidates_from_events
 
 
 @dataclass(frozen=True)
@@ -246,6 +247,82 @@ def checkpoint_lesson_candidates_from_events(
         event.payload
         for event in events
         if event.event_type == "checkpoint.lesson_candidate_proposed"
+    ]
+
+
+def auto_propose_checkpoint_skill_candidates(
+    ledger: ContinuityLedger,
+    identity_id: str,
+    minimum_checkpoints: int = 2,
+) -> list[SkillCandidateRecord]:
+    events = ledger.events()
+    existing_source_steps = {
+        step_id
+        for candidate in skill_candidates_from_events(events)
+        for step_id in candidate.source_step_ids
+    }
+    grouped: dict[tuple[str, str], list[tuple[CheckpointLinkRecord, Any]]] = {}
+    for link in checkpoint_link_records_from_events(events):
+        for step_id in link.mission_step_ids:
+            if step_id in existing_source_steps:
+                continue
+            step = require_mission_step(events, step_id)
+            if step.execution_status != MissionStepExecutionStatus.COMPLETED:
+                continue
+            key = (step.required_tool, step.risk_level.value)
+            grouped.setdefault(key, []).append((link, step))
+    records: list[SkillCandidateRecord] = []
+    for (required_tool, risk_level), pairs in grouped.items():
+        checkpoint_ids = {link.link_id for link, _step in pairs}
+        if len(checkpoint_ids) < minimum_checkpoints:
+            continue
+        steps = []
+        seen_steps = set()
+        for _link, step in pairs:
+            if step.step_id in seen_steps:
+                continue
+            seen_steps.add(step.step_id)
+            steps.append(step)
+        if len(steps) < minimum_checkpoints:
+            continue
+        procedure = (
+            f"Derived from {len(checkpoint_ids)} mission-linked checkpoint(s) "
+            f"and {len(steps)} completed step(s) using {required_tool} at "
+            f"{risk_level} risk. Reuse only after steward acceptance."
+        )
+        record = SkillCandidateRecord.create(
+            identity_id=identity_id,
+            name=f"Checkpoint-derived {required_tool} procedure",
+            source_step_ids=[step.step_id for step in steps],
+            required_tool=required_tool,
+            risk_level=risk_level,
+            procedure=procedure,
+            reason="auto-proposed from repeated mission-linked checkpoints",
+        )
+        ledger.append("skill.candidate_proposed", identity_id, record.to_dict())
+        ledger.append(
+            "checkpoint.skill_candidate_proposed",
+            identity_id,
+            {
+                "skill_id": record.skill_id,
+                "checkpoint_link_ids": sorted(checkpoint_ids),
+                "source_step_ids": record.source_step_ids,
+                "required_tool": required_tool,
+                "risk_level": risk_level,
+                "minimum_checkpoints": minimum_checkpoints,
+            },
+        )
+        records.append(record)
+    return records
+
+
+def checkpoint_skill_candidates_from_events(
+    events: list[ContinuityEvent],
+) -> list[dict[str, Any]]:
+    return [
+        event.payload
+        for event in events
+        if event.event_type == "checkpoint.skill_candidate_proposed"
     ]
 
 
