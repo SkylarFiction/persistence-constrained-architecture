@@ -58,6 +58,8 @@ from pca import (
     derive_current_claim,
     evidence_for_target,
     evidence_locker_snapshot,
+    execute_approved_autonomy_actions,
+    execute_autonomy_action,
     export_latest_anchor,
     find_followup,
     find_recovery,
@@ -335,6 +337,10 @@ def main() -> int:
     autonomy_reject_parser = subparsers.add_parser("autonomy-reject")
     autonomy_reject_parser.add_argument("item_id")
     autonomy_reject_parser.add_argument("--reason", default="")
+    autonomy_execute_parser = subparsers.add_parser("autonomy-execute")
+    autonomy_execute_parser.add_argument("item_id")
+    autonomy_execute_parser.add_argument("--reason", default="")
+    subparsers.add_parser("autonomy-execute-approved")
     subparsers.add_parser("model-diagnostic")
     subparsers.add_parser("workbench-status")
     chat_once_parser = subparsers.add_parser("chat-once")
@@ -1022,6 +1028,26 @@ def main() -> int:
             reason=args.reason,
         )
         print_json({"autonomy_item": item.to_dict()})
+        return 0
+
+    if args.command == "autonomy-execute":
+        result = execute_autonomy_action(
+            ledger,
+            manifest,
+            args.item_id,
+            project_root=Path.cwd(),
+            reason=args.reason,
+        )
+        print_json({"autonomy_execution": result})
+        return 0
+
+    if args.command == "autonomy-execute-approved":
+        results = execute_approved_autonomy_actions(
+            ledger,
+            manifest,
+            project_root=Path.cwd(),
+        )
+        print_json({"autonomy_executions": results})
         return 0
 
     if args.command == "workbench-status":

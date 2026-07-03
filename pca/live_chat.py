@@ -11,7 +11,12 @@ from urllib.parse import parse_qs, urlparse
 from lucien import LucienChatShell
 
 from .constitution import write_constitution_markdown
-from .autonomy_queue import autonomy_queue_items_from_events, review_autonomy_action
+from .autonomy_queue import (
+    autonomy_execution_records_from_events,
+    autonomy_queue_items_from_events,
+    execute_autonomy_action,
+    review_autonomy_action,
+)
 from .certification import continuity_certification
 from .build_review import build_review
 from .checkpoint_story import checkpoint_story
@@ -603,6 +608,19 @@ def _apply_steward_action(
         )
         return {"autonomy_item": item.to_dict()}
 
+    if action == "autonomy_execute":
+        item_id = str(payload.get("item_id", "")).strip()
+        if not item_id:
+            raise ValueError("item_id is required")
+        result = execute_autonomy_action(
+            ledger,
+            manifest,
+            item_id,
+            project_root=Path.cwd(),
+            reason=reason,
+        )
+        return {"autonomy_execution": result}
+
     raise ValueError(f"unknown steward action: {action}")
 
 
@@ -771,6 +789,10 @@ def _status_payload(
         "model_usage": model_usage,
         "autonomy_queue": [
             item.to_dict() for item in autonomy_queue_items_from_events(ledger.events())
+        ],
+        "autonomy_executions": [
+            record.to_dict()
+            for record in autonomy_execution_records_from_events(ledger.events())
         ],
         "steward_inbox": [item.to_dict() for item in steward_inbox(ledger)],
         "csm_state": latest_signal["state"] if latest_signal else "unknown",
@@ -1443,7 +1465,7 @@ def _live_chat_html() -> str:
       renderMissions(status.missions || [], status.mission_flows || {}, status.mission_autonomy || []);
       renderMissionSteps(status.mission_steps || [], status.tools || {}, status.tool_executions || [], status.tool_previews || []);
       renderSkillMemory(status.skill_candidates || [], status.accepted_skills || []);
-      renderAutonomyQueue(status.autonomy_queue || []);
+      renderAutonomyQueue(status.autonomy_queue || [], status.autonomy_executions || []);
       renderStewardInbox(status.steward_inbox || []);
       renderLearningReview(status.learning_reviews || []);
       renderGrowth(status.active_growth || []);
@@ -2002,13 +2024,15 @@ def _live_chat_html() -> str:
       }
     }
 
-    function renderAutonomyQueue(items) {
+    function renderAutonomyQueue(items, executions) {
       if (!items.length) {
         empty(autonomyQueue, 'No autonomy actions proposed.');
         return;
       }
+      const executionByItem = new Map((executions || []).map(record => [record.item_id, record]));
       autonomyQueue.innerHTML = '';
       for (const item of items.slice().reverse()) {
+        const execution = executionByItem.get(item.item_id);
         const row = document.createElement('div');
         row.className = 'item';
         const title = document.createElement('div');
@@ -2016,7 +2040,9 @@ def _live_chat_html() -> str:
         title.textContent = `${item.status} / ${item.risk} / ${item.action_type}`;
         const meta = document.createElement('div');
         meta.className = 'item-meta';
-        meta.textContent = `${item.item_id} / ${item.reason}`;
+        meta.textContent = execution
+          ? `${item.item_id} / ${item.reason} / executed: ${execution.status} / evidence: ${execution.evidence_id || 'none'}`
+          : `${item.item_id} / ${item.reason}`;
         const actions = document.createElement('div');
         actions.className = 'actions';
         if (item.status === 'proposed') {
@@ -2031,6 +2057,13 @@ def _live_chat_html() -> str:
             item_id: item.item_id,
             decision: 'reject',
             reason: 'rejected from live autonomy queue'
+          }));
+        }
+        if (item.status === 'approved' && !execution) {
+          actions.appendChild(button('Run', {
+            action: 'autonomy_execute',
+            item_id: item.item_id,
+            reason: 'ran approved autonomy action from live autonomy queue'
           }));
         }
         row.append(title, meta, actions);

@@ -91,6 +91,8 @@ from pca import (
     estimate_model_usage,
     evidence_for_target,
     evidence_locker_snapshot,
+    execute_approved_autonomy_actions,
+    execute_autonomy_action,
     evidence_records_from_events,
     accept_growth,
     add_mission_item,
@@ -130,6 +132,7 @@ from pca import (
     open_mission,
     open_tasks_from_reflection,
     required_evidence_for,
+    autonomy_execution_records_from_events,
     render_dashboard_html,
     render_build_review_text,
     render_autonomy_queue_text,
@@ -2665,6 +2668,141 @@ def test_autonomy_queue_rejects_unknown_action_type(tmp_path):
         pass
     else:
         raise AssertionError("unknown autonomy action type was accepted")
+
+
+def test_approved_autonomy_action_executes_read_only_project_brief(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = _make_tiny_git_project(tmp_path)
+    item = propose_autonomy_action(
+        ledger,
+        manifest.system_id,
+        "project_brief",
+        reason="Lucien recommends summarizing project state.",
+    )
+    review_autonomy_action(
+        ledger,
+        manifest.system_id,
+        item.item_id,
+        "approve",
+        reason="read-only project brief is safe",
+    )
+
+    result = execute_autonomy_action(
+        ledger,
+        manifest,
+        item.item_id,
+        project_root=project_root,
+        reason="test read-only execution",
+    )
+    records = autonomy_execution_records_from_events(ledger.events())
+
+    assert result["execution"]["status"] == "completed"
+    assert result["evidence"]["source_type"] == "tool_output"
+    assert "Project Build Brief" in result["output"]
+    assert records[0].item_id == item.item_id
+    assert records[0].evidence_id == result["evidence"]["evidence_id"]
+
+
+def test_unapproved_autonomy_action_cannot_execute(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = _make_tiny_git_project(tmp_path)
+    item = propose_autonomy_action(
+        ledger,
+        manifest.system_id,
+        "project_brief",
+        reason="Lucien recommends summarizing project state.",
+    )
+
+    try:
+        execute_autonomy_action(ledger, manifest, item.item_id, project_root=project_root)
+    except ValueError as exc:
+        assert "Only approved" in str(exc)
+    else:
+        raise AssertionError("unapproved autonomy action executed")
+
+
+def test_failed_autonomy_execution_routes_reflection_task(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = _make_tiny_git_project(tmp_path)
+    item = propose_autonomy_action(
+        ledger,
+        manifest.system_id,
+        "open_mission",
+        reason="Lucien recommends opening a mission.",
+    )
+    review_autonomy_action(
+        ledger,
+        manifest.system_id,
+        item.item_id,
+        "approve",
+        reason="approval-only action is allowed to fail execution",
+    )
+
+    result = execute_autonomy_action(
+        ledger,
+        manifest,
+        item.item_id,
+        project_root=project_root,
+    )
+    tasks = reflection_task_records_from_events(ledger.events())
+
+    assert result["execution"]["status"] == "failed"
+    assert result["reflection"] is not None
+    assert result["reflection_task"] is not None
+    assert tasks[-1].kind.value == "review_mission"
+
+
+def test_execute_approved_autonomy_actions_skips_already_executed(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = _make_tiny_git_project(tmp_path)
+    item = propose_autonomy_action(
+        ledger,
+        manifest.system_id,
+        "project_brief",
+        reason="Lucien recommends summarizing project state.",
+    )
+    review_autonomy_action(
+        ledger,
+        manifest.system_id,
+        item.item_id,
+        "approve",
+        reason="read-only project brief is safe",
+    )
+
+    first = execute_approved_autonomy_actions(ledger, manifest, project_root=project_root)
+    second = execute_approved_autonomy_actions(ledger, manifest, project_root=project_root)
+
+    assert len(first) == 1
+    assert first[0]["execution"]["status"] == "completed"
+    assert second == []
+
+
+def _make_tiny_git_project(tmp_path):
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    (project_root / "README.md").write_text("# Tiny project\n", encoding="utf-8")
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(["git", "add", "README.md"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.email=test@example.com",
+            "-c",
+            "user.name=Test User",
+            "commit",
+            "-m",
+            "Initial commit",
+        ],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+    )
+    return project_root
 
 
 def test_tool_router_lists_governed_tools():
