@@ -75,6 +75,7 @@ from pca import (
     chat_sessions_from_events,
     chat_turns_from_events,
     checkpoint_history,
+    seed_coherence_physics_goals,
     checkpoint_link_records_from_events,
     checkpoint_lesson_candidates_from_events,
     checkpoint_skill_candidates_from_events,
@@ -138,6 +139,7 @@ from pca import (
     render_autonomy_queue_text,
     render_checkpoint_history_text,
     render_checkpoint_story_markdown,
+    render_coherence_seed_text,
     render_commit_readiness_text,
     render_project_build_brief_text,
     render_constitution_markdown,
@@ -2428,6 +2430,29 @@ def test_goal_engine_links_goal_to_mission(tmp_path):
     assert goal_records_from_events(ledger.events())[-1].linked_mission_ids == [
         mission.mission_id
     ]
+
+
+def test_coherence_seed_creates_linked_goals_and_missions_idempotently(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    first = seed_coherence_physics_goals(ledger, manifest)
+    second = seed_coherence_physics_goals(ledger, manifest)
+    goals = goal_records_from_events(ledger.events())
+    mission_briefs = mission_briefs_from_events(ledger.events())
+    rendered = render_coherence_seed_text(first)
+
+    assert len(first) == 5
+    assert len(second) == 5
+    assert len(goals) == 5
+    assert len(mission_briefs) == 5
+    assert "Coherence Physics Seed" in rendered
+    assert all(result.created_goal for result in first)
+    assert all(result.created_mission for result in first)
+    assert all(not result.created_goal for result in second)
+    assert all(not result.created_mission for result in second)
+    assert all(len(result.linked_goal.linked_mission_ids) == 1 for result in first)
+    assert all(len(brief.items) == 4 for brief in mission_briefs)
 
 
 def test_daily_plan_includes_active_goal_and_safe_next_action(tmp_path):

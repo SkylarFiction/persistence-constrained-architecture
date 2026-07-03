@@ -50,6 +50,13 @@ from .claims import (
     claims_from_events,
     current_claim_record,
 )
+from .coherence_seed import (
+    COHERENCE_PHYSICS_SEED_SPECS,
+    CoherenceSeedResult,
+    CoherenceSeedSpec,
+    render_coherence_seed_text,
+    seed_coherence_physics_goals,
+)
 from .commit_readiness import commit_readiness, render_commit_readiness_text
 from .checkpoint_story import checkpoint_story, render_checkpoint_story_markdown
 from .checkpoint_links import (
@@ -407,6 +414,9 @@ __all__ = [
     "checkpoint_skill_candidates_from_events",
     "checkpoint_story",
     "ChatSessionRecord",
+    "COHERENCE_PHYSICS_SEED_SPECS",
+    "CoherenceSeedResult",
+    "CoherenceSeedSpec",
     "commit_readiness",
     "ChatTurnRecord",
     "FollowUpRecord",
@@ -606,6 +616,7 @@ __all__ = [
     "render_autonomy_queue_text",
     "render_checkpoint_history_text",
     "render_checkpoint_story_markdown",
+    "render_coherence_seed_text",
     "render_commit_readiness_text",
     "render_daily_plan_text",
     "required_evidence_for",
@@ -647,6 +658,7 @@ __all__ = [
     "safe_load_policy_pack",
     "scenario_ids",
     "select_brain_route",
+    "seed_coherence_physics_goals",
     "skill_candidates_from_events",
     "skill_suggestions_for_mission",
     "start_chat_session",

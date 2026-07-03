@@ -50,6 +50,7 @@ from pca import (
     chat_sessions_from_events,
     chat_turns_from_events,
     compile_self_model,
+    seed_coherence_physics_goals,
     current_claim_record,
     current_recovery_record,
     daily_command_center,
@@ -125,6 +126,7 @@ from pca import (
     render_autonomy_queue_text,
     render_checkpoint_history_text,
     render_checkpoint_story_markdown,
+    render_coherence_seed_text,
     render_commit_readiness_text,
     render_daily_command_center_text,
     render_daily_plan_text,
@@ -440,6 +442,8 @@ def main() -> int:
 
     goals_parser = subparsers.add_parser("goals")
     goals_parser.add_argument("--active", action="store_true")
+    coherence_seed_parser = subparsers.add_parser("coherence-seed")
+    coherence_seed_parser.add_argument("--json", action="store_true")
 
     goal_status_parser = subparsers.add_parser("goal-status")
     goal_status_parser.add_argument("goal_id")
@@ -1453,6 +1457,14 @@ def main() -> int:
                 "goals": [goal.to_dict() for goal in goals],
             }
         )
+        return 0
+
+    if args.command == "coherence-seed":
+        results = seed_coherence_physics_goals(ledger, manifest)
+        if args.json:
+            print_json({"coherence_seed": [result.to_dict() for result in results]})
+        else:
+            print(render_coherence_seed_text(results))
         return 0
 
     if args.command == "goal-status":
