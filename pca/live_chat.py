@@ -11,6 +11,10 @@ from urllib.parse import parse_qs, urlparse
 from lucien import LucienChatShell
 
 from .constitution import write_constitution_markdown
+from .auto_daily_loop import (
+    latest_auto_daily_research_loop,
+    run_auto_daily_research_loop,
+)
 from .autonomy_queue import (
     autonomy_execution_records_from_events,
     autonomy_queue_items_from_events,
@@ -110,6 +114,16 @@ def run_live_chat_server(
         dashboard_path="reports/lucien_chat_dashboard.html",
         cockpit_path="reports/lucien_cockpit.html",
     )
+    startup_loop = run_auto_daily_research_loop(
+        ledger,
+        manifest,
+        project_root=Path.cwd(),
+        reason="live app startup daily research loop",
+    )
+    if startup_loop.get("already_prepared"):
+        print("Daily research loop: already prepared for today", flush=True)
+    else:
+        print("Daily research loop: prepared today's research agenda", flush=True)
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
@@ -592,6 +606,18 @@ def _apply_steward_action(
     if action == "generate_daily_plan":
         return {"daily_plan": daily_plan(ledger, manifest)}
 
+    if action == "run_daily_research_loop":
+        force = bool(payload.get("force"))
+        return {
+            "daily_research_loop": run_auto_daily_research_loop(
+                ledger,
+                manifest,
+                project_root=Path.cwd(),
+                force=force,
+                reason=reason or "live daily research loop",
+            )
+        }
+
     if action == "autonomy_review":
         item_id = str(payload.get("item_id", "")).strip()
         decision = str(payload.get("decision", "")).strip()
@@ -769,6 +795,7 @@ def _status_payload(
     latest_signal = report.runtime_signals[-1] if report.runtime_signals else None
     latest_gate = report.output_gate_events[-1] if report.output_gate_events else None
     model_usage = _model_usage_summary(ledger.events())
+    latest_daily_loop = latest_auto_daily_research_loop(ledger.events())
     session_id = latest_session_id(ledger)
     session_replay = (
         build_session_replay(ledger, manifest, session_id).to_dict()
@@ -787,6 +814,7 @@ def _status_payload(
         "workbench": workbench_status(ledger, manifest),
         "model_adapter": _model_diagnostic_with_runtime(),
         "model_usage": model_usage,
+        "daily_research_loop": latest_daily_loop.to_dict() if latest_daily_loop else None,
         "autonomy_queue": [
             item.to_dict() for item in autonomy_queue_items_from_events(ledger.events())
         ],
@@ -1148,6 +1176,7 @@ def _live_chat_html() -> str:
         <div class="home-actions">
           <button type="button" id="homeStartMission">Start Mission</button>
           <button type="button" id="homeCleanSession" class="secondary">Start Clean Daily Session</button>
+          <button type="button" id="homeResearchLoop" class="secondary">Launch Research Loop</button>
           <button type="button" id="homeDailyPlan" class="secondary">Generate Daily Plan</button>
           <button type="button" id="homeLearningReview" class="secondary">Review Session for Learning</button>
           <button type="button" id="homeReviewInbox" class="secondary">Review Inbox</button>
@@ -1155,6 +1184,7 @@ def _live_chat_html() -> str:
         </div>
       </div>
       <div id="dailyBriefing" class="item"></div>
+      <div id="dailyResearchLoop" class="item"></div>
       <div id="dailyCards" class="mission-card-grid"></div>
       <div class="metrics">
         <div class="metric"><div class="label">Active Mission</div><div id="homeMission" class="value">loading</div></div>
@@ -1576,6 +1606,13 @@ def _live_chat_html() -> str:
       document.getElementById('homeSubtitle').textContent = mission ? 'Current governed mission' : 'What are we working on today?';
       const briefing = document.getElementById('dailyBriefing');
       briefing.innerHTML = `<div class="item-title">Opening Briefing</div><div class="item-meta">${escapeHtml(daily.briefing || 'Daily briefing unavailable.')}</div>`;
+      const dailyLoop = document.getElementById('dailyResearchLoop');
+      const loop = currentStatus.daily_research_loop || null;
+      dailyLoop.innerHTML = loop
+        ? `<div class="item-title">Research Loop / ${escapeHtml(loop.status || 'prepared')}</div>
+           <div class="item-meta">Focus: ${escapeHtml(loop.focus_goal_title || 'none')} / Mission: ${escapeHtml(loop.mission_title || 'none')}</div>
+           <div class="item-meta">Prepared: ${escapeHtml(loop.loop_date || 'unknown')} / Proposed actions: ${(loop.proposed_item_ids || []).length}</div>`
+        : `<div class="item-title">Research Loop</div><div class="item-meta">Not prepared yet. Launch the research loop to seed today's governed work.</div>`;
       const cardHost = document.getElementById('dailyCards');
       cardHost.innerHTML = '';
       const cards = daily.cards || {};
@@ -2059,12 +2096,18 @@ def _live_chat_html() -> str:
             reason: 'rejected from live autonomy queue'
           }));
         }
-        if (item.status === 'approved' && !execution) {
+        const executableActions = new Set(['run_check_all', 'project_brief', 'build_review', 'commit_readiness', 'next_build', 'daily_plan', 'review_inbox', 'generate_story']);
+        if (item.status === 'approved' && !execution && executableActions.has(item.action_type)) {
           actions.appendChild(button('Run', {
             action: 'autonomy_execute',
             item_id: item.item_id,
             reason: 'ran approved autonomy action from live autonomy queue'
           }));
+        } else if (item.status === 'approved' && !execution) {
+          const note = document.createElement('span');
+          note.className = 'item-meta';
+          note.textContent = 'Approval recorded; this action is advisory in this version.';
+          actions.appendChild(note);
         }
         row.append(title, meta, actions);
         autonomyQueue.appendChild(row);
@@ -2637,6 +2680,10 @@ def _live_chat_html() -> str:
       steward({action: 'start_clean_daily_session', reason: 'started clean daily session from command center'});
       messages.innerHTML = '';
       lastLucien = '';
+    });
+
+    document.getElementById('homeResearchLoop').addEventListener('click', () => {
+      steward({action: 'run_daily_research_loop', reason: 'launched from daily command center'});
     });
 
     function generatePlan() {

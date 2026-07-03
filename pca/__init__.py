@@ -23,6 +23,13 @@ from .authorization import (
     authorize,
     parse_authority,
 )
+from .auto_daily_loop import (
+    AutoDailyResearchLoopRecord,
+    auto_daily_research_loop_records_from_events,
+    latest_auto_daily_research_loop,
+    render_auto_daily_research_loop_text,
+    run_auto_daily_research_loop,
+)
 from .autonomy_queue import (
     AutonomyActionType,
     AutonomyExecutionRecord,
@@ -397,6 +404,7 @@ __all__ = [
     "AuthorityClass",
     "AuthorizationDecision",
     "AuthorizationPolicy",
+    "AutoDailyResearchLoopRecord",
     "AutonomyActionType",
     "AutonomyExecutionRecord",
     "AutonomyExecutionStatus",
@@ -406,6 +414,7 @@ __all__ = [
     "build_review",
     "CheckpointLinkRecord",
     "auto_propose_checkpoint_skill_candidates",
+    "auto_daily_research_loop_records_from_events",
     "autonomy_execution_records_from_events",
     "autonomy_queue_items_from_events",
     "checkpoint_history",
@@ -584,6 +593,7 @@ __all__ = [
     "link_evidence",
     "link_goal_mission",
     "latest_session_id",
+    "latest_auto_daily_research_loop",
     "load_anchor_records",
     "load_policy_directory",
     "load_policy_pack",
@@ -614,6 +624,7 @@ __all__ = [
     "record_reflection",
     "render_build_review_text",
     "render_autonomy_queue_text",
+    "render_auto_daily_research_loop_text",
     "render_checkpoint_history_text",
     "render_checkpoint_story_markdown",
     "render_coherence_seed_text",
@@ -653,6 +664,7 @@ __all__ = [
     "render_session_replay_html",
     "report_scenario",
     "run_all_scenarios",
+    "run_auto_daily_research_loop",
     "run_scenario",
     "safe_load_policy_directory",
     "safe_load_policy_pack",

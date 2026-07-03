@@ -58,6 +58,7 @@ from pca import (
     add_evidence_claim,
     append_ledger_anchor,
     active_followups,
+    auto_daily_research_loop_records_from_events,
     autonomy_queue_items_from_events,
     auto_propose_checkpoint_skill_candidates,
     authorization_policy_from_packs,
@@ -76,6 +77,7 @@ from pca import (
     chat_turns_from_events,
     checkpoint_history,
     seed_coherence_physics_goals,
+    latest_auto_daily_research_loop,
     checkpoint_link_records_from_events,
     checkpoint_lesson_candidates_from_events,
     checkpoint_skill_candidates_from_events,
@@ -124,6 +126,7 @@ from pca import (
     run_learning_review,
     run_latest_session_learning_review,
     learning_review_records_from_events,
+    run_auto_daily_research_loop,
     mission_flow,
     mission_flows_from_events,
     mission_items_from_events,
@@ -2453,6 +2456,64 @@ def test_coherence_seed_creates_linked_goals_and_missions_idempotently(tmp_path)
     assert all(not result.created_mission for result in second)
     assert all(len(result.linked_goal.linked_mission_ids) == 1 for result in first)
     assert all(len(brief.items) == 4 for brief in mission_briefs)
+
+
+def test_auto_daily_research_loop_seeds_and_proposes_work_once_per_day(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    first = run_auto_daily_research_loop(
+        ledger,
+        manifest,
+        project_root=tmp_path,
+        loop_date="2026-07-03",
+    )
+    second = run_auto_daily_research_loop(
+        ledger,
+        manifest,
+        project_root=tmp_path,
+        loop_date="2026-07-03",
+    )
+    records = auto_daily_research_loop_records_from_events(ledger.events())
+    latest = latest_auto_daily_research_loop(ledger.events(), "2026-07-03")
+    queue = autonomy_queue_items_from_events(ledger.events())
+
+    assert first["seeded"] is True
+    assert first["already_prepared"] is False
+    assert second["already_prepared"] is True
+    assert len(records) == 1
+    assert latest is not None
+    assert latest.focus_goal_title
+    assert latest.mission_title
+    assert len(first["proposed_items"]) >= 3
+    assert len(queue) == len(first["proposed_items"])
+    assert all(item.proposed_by == "auto_daily_research_loop" for item in queue)
+
+
+def test_auto_daily_research_loop_force_can_prepare_again_without_duplicate_actions(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    first = run_auto_daily_research_loop(
+        ledger,
+        manifest,
+        project_root=tmp_path,
+        loop_date="2026-07-03",
+    )
+    forced = run_auto_daily_research_loop(
+        ledger,
+        manifest,
+        project_root=tmp_path,
+        loop_date="2026-07-03",
+        force=True,
+    )
+    records = auto_daily_research_loop_records_from_events(ledger.events())
+    queue = autonomy_queue_items_from_events(ledger.events())
+
+    assert len(records) == 2
+    assert forced["already_prepared"] is False
+    assert forced["proposed_items"] == []
+    assert len(queue) == len(first["proposed_items"])
 
 
 def test_daily_plan_includes_active_goal_and_safe_next_action(tmp_path):

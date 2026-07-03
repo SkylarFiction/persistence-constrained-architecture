@@ -39,6 +39,7 @@ from pca import (
     append_ledger_anchor,
     apply_steward_inbox_action,
     accepted_skills_from_events,
+    run_auto_daily_research_loop,
     authorization_policy_from_packs,
     autonomy_queue_items_from_events,
     auto_propose_skill_candidates,
@@ -124,6 +125,7 @@ from pca import (
     render_continuity_certification_text,
     render_build_review_text,
     render_autonomy_queue_text,
+    render_auto_daily_research_loop_text,
     render_checkpoint_history_text,
     render_checkpoint_story_markdown,
     render_coherence_seed_text,
@@ -294,6 +296,9 @@ def main() -> int:
     subparsers.add_parser("status")
     daily_parser = subparsers.add_parser("daily")
     daily_parser.add_argument("--json", action="store_true")
+    daily_research_parser = subparsers.add_parser("daily-research-loop")
+    daily_research_parser.add_argument("--json", action="store_true")
+    daily_research_parser.add_argument("--force", action="store_true")
     certification_parser = subparsers.add_parser("continuity-certification")
     certification_parser.add_argument("--json", action="store_true")
     daily_plan_parser = subparsers.add_parser("daily-plan")
@@ -887,6 +892,20 @@ def main() -> int:
             print_json({"daily": daily})
         else:
             print(render_daily_command_center_text(daily))
+        return 0
+
+    if args.command == "daily-research-loop":
+        result = run_auto_daily_research_loop(
+            ledger,
+            manifest,
+            project_root=Path.cwd(),
+            force=args.force,
+            reason="manual CLI daily research loop",
+        )
+        if args.json:
+            print_json({"daily_research_loop": result})
+        else:
+            print(render_auto_daily_research_loop_text(result))
         return 0
 
     if args.command == "continuity-certification":
