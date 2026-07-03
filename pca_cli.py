@@ -119,6 +119,7 @@ from pca import (
     render_constitution_markdown,
     render_continuity_certification_text,
     render_build_review_text,
+    render_checkpoint_history_text,
     render_checkpoint_story_markdown,
     render_commit_readiness_text,
     render_daily_command_center_text,
@@ -141,8 +142,10 @@ from pca import (
     write_session_replay_html,
     project_build_brief,
     build_review,
+    checkpoint_history,
     checkpoint_story,
     commit_readiness,
+    link_checkpoint_to_mission,
     next_governed_build,
 )
 from pca.live_chat import chat_once, run_live_chat_server
@@ -295,6 +298,17 @@ def main() -> int:
     checkpoint_story_parser.add_argument("--json", action="store_true")
     next_build_parser = subparsers.add_parser("next-build")
     next_build_parser.add_argument("--json", action="store_true")
+    link_checkpoint_parser = subparsers.add_parser("link-checkpoint")
+    link_checkpoint_parser.add_argument("--mission", required=True)
+    link_checkpoint_parser.add_argument("--commit", default="HEAD")
+    link_checkpoint_parser.add_argument("--step", action="append", default=[])
+    link_checkpoint_parser.add_argument("--evidence", action="append", default=[])
+    link_checkpoint_parser.add_argument("--check", action="append", default=[])
+    link_checkpoint_parser.add_argument("--lesson", default="")
+    link_checkpoint_parser.add_argument("--reason", default="")
+    checkpoint_history_parser = subparsers.add_parser("checkpoint-history")
+    checkpoint_history_parser.add_argument("--mission")
+    checkpoint_history_parser.add_argument("--json", action="store_true")
     subparsers.add_parser("model-diagnostic")
     subparsers.add_parser("workbench-status")
     chat_once_parser = subparsers.add_parser("chat-once")
@@ -893,6 +907,30 @@ def main() -> int:
             print_json({"next_build": proposal})
         else:
             print(render_next_governed_build_text(proposal))
+        return 0
+
+    if args.command == "link-checkpoint":
+        record = link_checkpoint_to_mission(
+            ledger=ledger,
+            identity_id=manifest.system_id,
+            mission_id=args.mission,
+            commit_hash=args.commit,
+            mission_step_ids=args.step,
+            evidence_ids=args.evidence,
+            verification_checks=args.check,
+            lesson_candidate=args.lesson,
+            reason=args.reason,
+            project_root=Path.cwd(),
+        )
+        print_json({"checkpoint_link": record.to_dict()})
+        return 0
+
+    if args.command == "checkpoint-history":
+        history = checkpoint_history(ledger, args.mission)
+        if args.json:
+            print_json({"checkpoint_history": history})
+        else:
+            print(render_checkpoint_history_text(history))
         return 0
 
     if args.command == "workbench-status":

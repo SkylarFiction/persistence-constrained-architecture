@@ -72,6 +72,8 @@ from pca import (
     claims_from_events,
     chat_sessions_from_events,
     chat_turns_from_events,
+    checkpoint_history,
+    checkpoint_link_records_from_events,
     checkpoint_story,
     compile_self_model,
     commit_readiness,
@@ -124,6 +126,7 @@ from pca import (
     required_evidence_for,
     render_dashboard_html,
     render_build_review_text,
+    render_checkpoint_history_text,
     render_checkpoint_story_markdown,
     render_commit_readiness_text,
     render_project_build_brief_text,
@@ -147,6 +150,7 @@ from pca import (
     resolve_growth_conflict,
     resolve_matching_reflection_tasks,
     review_evidence,
+    link_checkpoint_to_mission,
     link_evidence,
     link_goal_mission,
     review_skill_candidate,
@@ -2987,6 +2991,131 @@ def test_next_governed_build_advances_active_mission_when_repo_clean(tmp_path):
     assert proposal["does_not_execute"] is True
     assert proposal["context"]["active_mission_count"] == 1
     assert "mission" in proposal["reason"].lower()
+
+
+def test_link_checkpoint_records_mission_checkpoint_history(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    (project_root / "README.md").write_text("project", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Add mission checkpoint"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
+    )
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Checkpoint mission",
+        problem_statement="Link work back to mission state.",
+    )
+    step = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        description="Create checkpoint link.",
+        risk_level="low",
+        required_tool="project_snapshot",
+        expected_outcome="Checkpoint link exists.",
+    )
+    evidence = add_evidence(
+        ledger,
+        manifest.system_id,
+        source_type="test_result",
+        source="check_all passed",
+        summary="Project checks passed before checkpoint link.",
+        confidence="high",
+    )
+
+    record = link_checkpoint_to_mission(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        commit_hash="HEAD",
+        mission_step_ids=[step.step_id],
+        evidence_ids=[evidence.evidence_id],
+        verification_checks=["python3 scripts/check_all.py"],
+        lesson_candidate="Checkpoint links should capture mission evidence.",
+        project_root=project_root,
+    )
+    records = checkpoint_link_records_from_events(ledger.events(), mission.mission_id)
+    history = checkpoint_history(ledger, mission.mission_id)
+    rendered = render_checkpoint_history_text(history)
+
+    assert record.mission_id == mission.mission_id
+    assert len(record.commit_hash) == 40
+    assert records[0].link_id == record.link_id
+    assert history["count"] == 1
+    assert step.step_id in rendered
+    assert "Checkpoint History" in rendered
+
+
+def test_link_checkpoint_rejects_step_from_other_mission(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    (project_root / "README.md").write_text("project", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
+    )
+    mission_a = open_mission(
+        ledger,
+        manifest.system_id,
+        title="A",
+        problem_statement="First mission.",
+    )
+    mission_b = open_mission(
+        ledger,
+        manifest.system_id,
+        title="B",
+        problem_statement="Second mission.",
+    )
+    step_b = propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission_b.mission_id,
+        description="Wrong mission step.",
+        risk_level="low",
+        required_tool="project_snapshot",
+    )
+
+    try:
+        link_checkpoint_to_mission(
+            ledger,
+            manifest.system_id,
+            mission_a.mission_id,
+            commit_hash="HEAD",
+            mission_step_ids=[step_b.step_id],
+            project_root=project_root,
+        )
+    except ValueError as exc:
+        assert "does not belong" in str(exc)
+    else:
+        raise AssertionError("checkpoint link accepted a step from another mission")
 
 
 def test_suggest_next_build_tool_is_planning_only(tmp_path):

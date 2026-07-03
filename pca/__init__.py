@@ -37,6 +37,13 @@ from .claims import (
 )
 from .commit_readiness import commit_readiness, render_commit_readiness_text
 from .checkpoint_story import checkpoint_story, render_checkpoint_story_markdown
+from .checkpoint_links import (
+    CheckpointLinkRecord,
+    checkpoint_history,
+    checkpoint_link_records_from_events,
+    link_checkpoint_to_mission,
+    render_checkpoint_history_text,
+)
 from .chat_sessions import (
     ChatSessionRecord,
     ChatTurnRecord,
@@ -365,6 +372,9 @@ __all__ = [
     "AuthorizationPolicy",
     "BrainRouteDecision",
     "build_review",
+    "CheckpointLinkRecord",
+    "checkpoint_history",
+    "checkpoint_link_records_from_events",
     "checkpoint_story",
     "ChatSessionRecord",
     "commit_readiness",
@@ -528,6 +538,7 @@ __all__ = [
     "growth_conflict_records_from_events",
     "growth_conflict_resolution_records_from_events",
     "lineage_records",
+    "link_checkpoint_to_mission",
     "link_evidence",
     "link_goal_mission",
     "latest_session_id",
@@ -558,6 +569,7 @@ __all__ = [
     "record_memory_signal",
     "record_reflection",
     "render_build_review_text",
+    "render_checkpoint_history_text",
     "render_checkpoint_story_markdown",
     "render_commit_readiness_text",
     "render_daily_plan_text",
