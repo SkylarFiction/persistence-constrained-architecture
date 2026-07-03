@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlparse
 from lucien import LucienChatShell
 
 from .constitution import write_constitution_markdown
+from .autonomy_queue import autonomy_queue_items_from_events, review_autonomy_action
 from .certification import continuity_certification
 from .build_review import build_review
 from .checkpoint_story import checkpoint_story
@@ -586,6 +587,22 @@ def _apply_steward_action(
     if action == "generate_daily_plan":
         return {"daily_plan": daily_plan(ledger, manifest)}
 
+    if action == "autonomy_review":
+        item_id = str(payload.get("item_id", "")).strip()
+        decision = str(payload.get("decision", "")).strip()
+        if not item_id:
+            raise ValueError("item_id is required")
+        if decision not in {"approve", "reject"}:
+            raise ValueError("decision must be approve or reject")
+        item = review_autonomy_action(
+            ledger,
+            manifest.system_id,
+            item_id,
+            decision,
+            reason=reason,
+        )
+        return {"autonomy_item": item.to_dict()}
+
     raise ValueError(f"unknown steward action: {action}")
 
 
@@ -752,6 +769,9 @@ def _status_payload(
         "workbench": workbench_status(ledger, manifest),
         "model_adapter": _model_diagnostic_with_runtime(),
         "model_usage": model_usage,
+        "autonomy_queue": [
+            item.to_dict() for item in autonomy_queue_items_from_events(ledger.events())
+        ],
         "steward_inbox": [item.to_dict() for item in steward_inbox(ledger)],
         "csm_state": latest_signal["state"] if latest_signal else "unknown",
         "output_gate": latest_gate or {},
@@ -1229,6 +1249,11 @@ def _live_chat_html() -> str:
         </div>
       </section>
       <section>
+        <h2>Autonomy Queue</h2>
+        <div class="item-meta">Proposed actions that need steward approval before any future execution path may use them.</div>
+        <div id="autonomyQueue" class="queue"></div>
+      </section>
+      <section>
         <h2>Steward Inbox</h2>
         <div class="actions">
           <button type="button" class="secondary" data-inbox-filter="all">All</button>
@@ -1354,6 +1379,7 @@ def _live_chat_html() -> str:
     const dailyPlan = document.getElementById('dailyPlan');
     const missionSteps = document.getElementById('missionSteps');
     const skillMemory = document.getElementById('skillMemory');
+    const autonomyQueue = document.getElementById('autonomyQueue');
     const stewardInbox = document.getElementById('stewardInbox');
     const learningReview = document.getElementById('learningReview');
     const certification = document.getElementById('certification');
@@ -1417,6 +1443,7 @@ def _live_chat_html() -> str:
       renderMissions(status.missions || [], status.mission_flows || {}, status.mission_autonomy || []);
       renderMissionSteps(status.mission_steps || [], status.tools || {}, status.tool_executions || [], status.tool_previews || []);
       renderSkillMemory(status.skill_candidates || [], status.accepted_skills || []);
+      renderAutonomyQueue(status.autonomy_queue || []);
       renderStewardInbox(status.steward_inbox || []);
       renderLearningReview(status.learning_reviews || []);
       renderGrowth(status.active_growth || []);
@@ -1972,6 +1999,42 @@ def _live_chat_html() -> str:
         }
         row.append(title, meta, actions);
         stewardInbox.appendChild(row);
+      }
+    }
+
+    function renderAutonomyQueue(items) {
+      if (!items.length) {
+        empty(autonomyQueue, 'No autonomy actions proposed.');
+        return;
+      }
+      autonomyQueue.innerHTML = '';
+      for (const item of items.slice().reverse()) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        const title = document.createElement('div');
+        title.className = 'item-title';
+        title.textContent = `${item.status} / ${item.risk} / ${item.action_type}`;
+        const meta = document.createElement('div');
+        meta.className = 'item-meta';
+        meta.textContent = `${item.item_id} / ${item.reason}`;
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        if (item.status === 'proposed') {
+          actions.appendChild(button('Approve', {
+            action: 'autonomy_review',
+            item_id: item.item_id,
+            decision: 'approve',
+            reason: 'approved from live autonomy queue'
+          }));
+          actions.appendChild(button('Reject', {
+            action: 'autonomy_review',
+            item_id: item.item_id,
+            decision: 'reject',
+            reason: 'rejected from live autonomy queue'
+          }));
+        }
+        row.append(title, meta, actions);
+        autonomyQueue.appendChild(row);
       }
     }
 

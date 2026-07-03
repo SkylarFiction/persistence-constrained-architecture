@@ -58,6 +58,7 @@ from pca import (
     add_evidence_claim,
     append_ledger_anchor,
     active_followups,
+    autonomy_queue_items_from_events,
     auto_propose_checkpoint_skill_candidates,
     authorization_policy_from_packs,
     adapter_for_model_mode,
@@ -114,6 +115,7 @@ from pca import (
     next_governed_build,
     recommend_next_mission_step,
     propose_autonomous_mission_step,
+    propose_autonomy_action,
     propose_checkpoint_lesson,
     mission_autonomy_recommendations_from_events,
     run_learning_review,
@@ -130,6 +132,7 @@ from pca import (
     required_evidence_for,
     render_dashboard_html,
     render_build_review_text,
+    render_autonomy_queue_text,
     render_checkpoint_history_text,
     render_checkpoint_story_markdown,
     render_commit_readiness_text,
@@ -154,6 +157,7 @@ from pca import (
     resolve_growth_conflict,
     resolve_matching_reflection_tasks,
     review_evidence,
+    review_autonomy_action,
     link_checkpoint_to_mission,
     link_evidence,
     link_goal_mission,
@@ -2581,6 +2585,86 @@ def test_medium_risk_mission_step_requires_approval_before_start(tmp_path):
 
     assert approved.approval_status == MissionStepApprovalStatus.APPROVED
     assert started.execution_status == MissionStepExecutionStatus.RUNNING
+
+
+def test_autonomy_queue_proposes_and_approves_action(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    item = propose_autonomy_action(
+        ledger,
+        manifest.system_id,
+        "run_check_all",
+        reason="Lucien recommends running checks before commit.",
+        payload={"command": "python3 scripts/check_all.py"},
+    )
+    approved = review_autonomy_action(
+        ledger,
+        manifest.system_id,
+        item.item_id,
+        "approve",
+        reason="safe verification step",
+    )
+    queue = autonomy_queue_items_from_events(ledger.events())
+    rendered = render_autonomy_queue_text(queue)
+
+    assert item.status.value == "proposed"
+    assert item.risk == "medium"
+    assert approved.status.value == "approved"
+    assert queue[0].item_id == item.item_id
+    assert queue[0].status.value == "approved"
+    assert "Autonomy Queue" in rendered
+
+
+def test_autonomy_queue_rejects_and_blocks_double_review(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    item = propose_autonomy_action(
+        ledger,
+        manifest.system_id,
+        "review_inbox",
+        reason="Lucien recommends reviewing open steward items.",
+    )
+
+    rejected = review_autonomy_action(
+        ledger,
+        manifest.system_id,
+        item.item_id,
+        "reject",
+        reason="not needed right now",
+    )
+
+    try:
+        review_autonomy_action(
+            ledger,
+            manifest.system_id,
+            item.item_id,
+            "approve",
+            reason="second review should fail",
+        )
+    except ValueError as exc:
+        assert "already rejected" in str(exc)
+    else:
+        raise AssertionError("autonomy item accepted a second review")
+
+    assert rejected.status.value == "rejected"
+
+
+def test_autonomy_queue_rejects_unknown_action_type(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    try:
+        propose_autonomy_action(
+            ledger,
+            manifest.system_id,
+            "delete_everything",
+            reason="invalid action",
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("unknown autonomy action type was accepted")
 
 
 def test_tool_router_lists_governed_tools():

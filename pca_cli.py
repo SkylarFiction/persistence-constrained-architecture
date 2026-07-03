@@ -40,6 +40,7 @@ from pca import (
     apply_steward_inbox_action,
     accepted_skills_from_events,
     authorization_policy_from_packs,
+    autonomy_queue_items_from_events,
     auto_propose_skill_candidates,
     authorize,
     build_governed_context,
@@ -119,6 +120,7 @@ from pca import (
     render_constitution_markdown,
     render_continuity_certification_text,
     render_build_review_text,
+    render_autonomy_queue_text,
     render_checkpoint_history_text,
     render_checkpoint_story_markdown,
     render_commit_readiness_text,
@@ -149,6 +151,8 @@ from pca import (
     link_checkpoint_to_mission,
     next_governed_build,
     propose_checkpoint_lesson,
+    propose_autonomy_action,
+    review_autonomy_action,
 )
 from pca.live_chat import chat_once, run_live_chat_server
 from pca.demo_live import run_demo
@@ -318,6 +322,19 @@ def main() -> int:
     checkpoint_lesson_parser.add_argument("--reason", default="")
     checkpoint_skills_parser = subparsers.add_parser("checkpoint-skills")
     checkpoint_skills_parser.add_argument("--minimum", type=int, default=2)
+    autonomy_queue_parser = subparsers.add_parser("autonomy-queue")
+    autonomy_queue_parser.add_argument("--status")
+    autonomy_queue_parser.add_argument("--json", action="store_true")
+    autonomy_propose_parser = subparsers.add_parser("autonomy-propose")
+    autonomy_propose_parser.add_argument("--type", required=True)
+    autonomy_propose_parser.add_argument("--reason", required=True)
+    autonomy_propose_parser.add_argument("--payload", default="{}")
+    autonomy_approve_parser = subparsers.add_parser("autonomy-approve")
+    autonomy_approve_parser.add_argument("item_id")
+    autonomy_approve_parser.add_argument("--reason", default="")
+    autonomy_reject_parser = subparsers.add_parser("autonomy-reject")
+    autonomy_reject_parser.add_argument("item_id")
+    autonomy_reject_parser.add_argument("--reason", default="")
     subparsers.add_parser("model-diagnostic")
     subparsers.add_parser("workbench-status")
     chat_once_parser = subparsers.add_parser("chat-once")
@@ -961,6 +978,50 @@ def main() -> int:
             minimum_checkpoints=args.minimum,
         )
         print_json({"skill_candidates": [record.to_dict() for record in records]})
+        return 0
+
+    if args.command == "autonomy-queue":
+        items = autonomy_queue_items_from_events(ledger.events(), args.status)
+        if args.json:
+            print_json({"autonomy_queue": [item.to_dict() for item in items]})
+        else:
+            print(render_autonomy_queue_text(items))
+        return 0
+
+    if args.command == "autonomy-propose":
+        payload = json.loads(args.payload)
+        if not isinstance(payload, dict):
+            raise ValueError("--payload must be a JSON object")
+        item = propose_autonomy_action(
+            ledger,
+            manifest.system_id,
+            args.type,
+            reason=args.reason,
+            payload=payload,
+        )
+        print_json({"autonomy_item": item.to_dict()})
+        return 0
+
+    if args.command == "autonomy-approve":
+        item = review_autonomy_action(
+            ledger,
+            manifest.system_id,
+            args.item_id,
+            "approve",
+            reason=args.reason,
+        )
+        print_json({"autonomy_item": item.to_dict()})
+        return 0
+
+    if args.command == "autonomy-reject":
+        item = review_autonomy_action(
+            ledger,
+            manifest.system_id,
+            args.item_id,
+            "reject",
+            reason=args.reason,
+        )
+        print_json({"autonomy_item": item.to_dict()})
         return 0
 
     if args.command == "workbench-status":
