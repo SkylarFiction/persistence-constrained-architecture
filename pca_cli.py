@@ -91,6 +91,7 @@ from pca import (
     mission_step_records_from_events,
     add_mission_item,
     create_goal_record,
+    create_research_output,
     open_mission,
     open_tasks_from_reflection,
     propose_growth,
@@ -134,6 +135,7 @@ from pca import (
     render_daily_plan_text,
     render_next_governed_build_text,
     render_project_build_brief_text,
+    render_research_outputs_text,
     run_tool_for_step,
     tool_execution_records_from_events,
     tool_permission_records_from_events,
@@ -159,6 +161,8 @@ from pca import (
     propose_checkpoint_lesson,
     propose_autonomy_action,
     review_autonomy_action,
+    research_outputs_from_events,
+    research_sandbox_status,
 )
 from pca.live_chat import chat_once, run_live_chat_server
 from pca.demo_live import run_demo
@@ -299,6 +303,20 @@ def main() -> int:
     daily_research_parser = subparsers.add_parser("daily-research-loop")
     daily_research_parser.add_argument("--json", action="store_true")
     daily_research_parser.add_argument("--force", action="store_true")
+    research_sandbox_parser = subparsers.add_parser("research-sandbox")
+    research_sandbox_parser.add_argument("--json", action="store_true")
+    research_brief_parser = subparsers.add_parser("research-brief")
+    research_brief_parser.add_argument("mission_id")
+    research_brief_parser.add_argument("--json", action="store_true")
+    research_claim_map_parser = subparsers.add_parser("research-claim-map")
+    research_claim_map_parser.add_argument("mission_id")
+    research_claim_map_parser.add_argument("--json", action="store_true")
+    research_paper_parser = subparsers.add_parser("research-paper-draft")
+    research_paper_parser.add_argument("mission_id")
+    research_paper_parser.add_argument("--json", action="store_true")
+    research_outputs_parser = subparsers.add_parser("research-outputs")
+    research_outputs_parser.add_argument("--mission")
+    research_outputs_parser.add_argument("--json", action="store_true")
     certification_parser = subparsers.add_parser("continuity-certification")
     certification_parser.add_argument("--json", action="store_true")
     daily_plan_parser = subparsers.add_parser("daily-plan")
@@ -906,6 +924,64 @@ def main() -> int:
             print_json({"daily_research_loop": result})
         else:
             print(render_auto_daily_research_loop_text(result))
+        return 0
+
+    if args.command == "research-sandbox":
+        status = research_sandbox_status(ledger, manifest)
+        if args.json:
+            print_json({"research_sandbox": status})
+        else:
+            print_json(status)
+        return 0
+
+    if args.command == "research-brief":
+        result = create_research_output(
+            ledger,
+            manifest,
+            args.mission_id,
+            "research_brief",
+            reason="manual research sandbox brief",
+        )
+        if args.json:
+            print_json({"research_output": result})
+        else:
+            print(result["content"])
+        return 0
+
+    if args.command == "research-claim-map":
+        result = create_research_output(
+            ledger,
+            manifest,
+            args.mission_id,
+            "claim_map_draft",
+            reason="manual research sandbox claim map",
+        )
+        if args.json:
+            print_json({"research_output": result})
+        else:
+            print(result["content"])
+        return 0
+
+    if args.command == "research-paper-draft":
+        result = create_research_output(
+            ledger,
+            manifest,
+            args.mission_id,
+            "paper_draft",
+            reason="manual research sandbox paper draft",
+        )
+        if args.json:
+            print_json({"research_output": result})
+        else:
+            print(result["content"])
+        return 0
+
+    if args.command == "research-outputs":
+        outputs = research_outputs_from_events(ledger.events(), args.mission)
+        if args.json:
+            print_json({"research_outputs": [output.to_dict() for output in outputs]})
+        else:
+            print(render_research_outputs_text(outputs))
         return 0
 
     if args.command == "continuity-certification":

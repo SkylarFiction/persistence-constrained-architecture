@@ -259,6 +259,7 @@ def _seed_mission_items(
             status="proposed",
             confidence="low",
             reason="seeded Coherence Physics hypothesis",
+            bridge_reflection=False,
         ),
         add_mission_item(
             ledger,
@@ -269,6 +270,7 @@ def _seed_mission_items(
             status="needed",
             confidence="unknown",
             reason="seeded Coherence Physics evidence need",
+            bridge_reflection=False,
         ),
         add_mission_item(
             ledger,
@@ -279,6 +281,7 @@ def _seed_mission_items(
             status="open",
             confidence="medium",
             reason="seeded Coherence Physics research risk",
+            bridge_reflection=False,
         ),
         add_mission_item(
             ledger,
@@ -289,5 +292,6 @@ def _seed_mission_items(
             status="proposed",
             confidence="medium",
             reason="seeded Coherence Physics first plan step",
+            bridge_reflection=False,
         ),
     ]

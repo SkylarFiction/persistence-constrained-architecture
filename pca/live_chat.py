@@ -72,6 +72,11 @@ from .model_adapter import model_environment_diagnostic, normalize_model_mode
 from .next_build import next_governed_build
 from .context_builder import build_governed_context
 from .project_brief import project_build_brief
+from .research_sandbox import (
+    create_research_output,
+    research_outputs_from_events,
+    research_sandbox_status,
+)
 from .reflection_queue import (
     open_tasks_from_reflection,
     resolve_matching_reflection_tasks,
@@ -618,6 +623,23 @@ def _apply_steward_action(
             )
         }
 
+    if action == "create_research_output":
+        mission_id = str(payload.get("mission_id", "")).strip()
+        kind = str(payload.get("kind", "")).strip()
+        if not mission_id:
+            raise ValueError("mission_id is required")
+        if not kind:
+            raise ValueError("kind is required")
+        return {
+            "research_output": create_research_output(
+                ledger,
+                manifest,
+                mission_id,
+                kind,
+                reason=reason or "live research sandbox output",
+            )
+        }
+
     if action == "autonomy_review":
         item_id = str(payload.get("item_id", "")).strip()
         decision = str(payload.get("decision", "")).strip()
@@ -815,6 +837,10 @@ def _status_payload(
         "model_adapter": _model_diagnostic_with_runtime(),
         "model_usage": model_usage,
         "daily_research_loop": latest_daily_loop.to_dict() if latest_daily_loop else None,
+        "research_sandbox": research_sandbox_status(ledger, manifest),
+        "research_outputs": [
+            output.to_dict() for output in research_outputs_from_events(ledger.events())
+        ],
         "autonomy_queue": [
             item.to_dict() for item in autonomy_queue_items_from_events(ledger.events())
         ],
@@ -1228,6 +1254,21 @@ def _live_chat_html() -> str:
     <section class="mission-dashboard">
       <div class="mission-controls">
         <div>
+          <h2>Research Sandbox</h2>
+          <div class="item-meta">Draft freely. Nothing becomes accepted memory, evidence, or truth until steward review.</div>
+        </div>
+        <div class="actions">
+          <button type="button" id="researchBriefBtn" class="secondary">Generate Research Brief</button>
+          <button type="button" id="claimMapBtn" class="secondary">Create Claim Map</button>
+          <button type="button" id="paperDraftBtn" class="secondary">Draft Paper</button>
+        </div>
+      </div>
+      <div id="researchSandboxStatus" class="item"></div>
+      <div id="researchOutputs" class="queue"></div>
+    </section>
+    <section class="mission-dashboard">
+      <div class="mission-controls">
+        <div>
           <h2>Goals</h2>
           <div class="item-meta">Durable directions that can link to missions without executing actions automatically.</div>
         </div>
@@ -1429,6 +1470,8 @@ def _live_chat_html() -> str:
     const activeMissionSelect = document.getElementById('activeMissionSelect');
     const goals = document.getElementById('goals');
     const dailyPlan = document.getElementById('dailyPlan');
+    const researchSandboxStatus = document.getElementById('researchSandboxStatus');
+    const researchOutputs = document.getElementById('researchOutputs');
     const missionSteps = document.getElementById('missionSteps');
     const skillMemory = document.getElementById('skillMemory');
     const autonomyQueue = document.getElementById('autonomyQueue');
@@ -1493,6 +1536,7 @@ def _live_chat_html() -> str:
       renderGoals(status.goals || [], status.missions || []);
       renderDailyPlan(status.daily_plan || {});
       renderMissions(status.missions || [], status.mission_flows || {}, status.mission_autonomy || []);
+      renderResearchSandbox(status.research_sandbox || {}, status.research_outputs || [], missionView.activeMission);
       renderMissionSteps(status.mission_steps || [], status.tools || {}, status.tool_executions || [], status.tool_previews || []);
       renderSkillMemory(status.skill_candidates || [], status.accepted_skills || []);
       renderAutonomyQueue(status.autonomy_queue || [], status.autonomy_executions || []);
@@ -1670,6 +1714,30 @@ def _live_chat_html() -> str:
       notYet.innerHTML = `<div class="item-title">What not to do yet</div>
         <div class="item-meta">${escapeHtml((plan.what_not_to_do_yet || []).join(' / ') || 'none')}</div>`;
       dailyPlan.appendChild(notYet);
+    }
+
+    function renderResearchSandbox(sandbox, outputs, selectedMission) {
+      researchSandboxStatus.innerHTML = `<div class="item-title">Research Sandbox</div>
+        <div class="item-meta">${escapeHtml(sandbox.law || 'Research freely; governed action only.')}</div>
+        <div class="item-meta">Proposed outputs: ${sandbox.proposed_output_count || 0} / Restricted actions still require explicit approval.</div>`;
+      researchOutputs.innerHTML = '';
+      const visible = (outputs || [])
+        .filter(output => !selectedMission || output.mission_id === selectedMission.mission_id)
+        .slice()
+        .reverse()
+        .slice(0, 8);
+      if (!visible.length) {
+        empty(researchOutputs, selectedMission ? 'No research outputs for this mission yet.' : 'Select a mission to draft research outputs.');
+        return;
+      }
+      for (const output of visible) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = `<div class="item-title">${escapeHtml(output.kind)} / ${escapeHtml(output.status)}</div>
+          <div class="item-meta">${escapeHtml(output.title || output.output_id)}</div>
+          <div class="item-meta">confidence: ${escapeHtml(output.confidence || 'low')} / claims: ${output.claim_count || 0} / evidence: ${(output.evidence_ids || []).length}</div>`;
+        researchOutputs.appendChild(row);
+      }
     }
 
     function renderProjectBrief(brief) {
@@ -2702,6 +2770,25 @@ def _live_chat_html() -> str:
     document.getElementById('homeReviewInbox').addEventListener('click', () => {
       stewardInbox.scrollIntoView({behavior: 'smooth', block: 'center'});
     });
+
+    function createResearch(kind) {
+      const selected = (currentStatus && (currentStatus.missions || []).find(item => item.mission && item.mission.mission_id === selectedMissionId) || null);
+      const selectedMission = selected ? selected.mission : ((currentStatus && currentStatus.workbench) ? currentStatus.workbench.active_mission : null);
+      if (!selectedMission || !selectedMission.mission_id) {
+        alert('Select or open a mission before creating research output.');
+        return;
+      }
+      steward({
+        action: 'create_research_output',
+        mission_id: selectedMission.mission_id,
+        kind,
+        reason: `created ${kind} from research sandbox`
+      });
+    }
+
+    document.getElementById('researchBriefBtn').addEventListener('click', () => createResearch('research_brief'));
+    document.getElementById('claimMapBtn').addEventListener('click', () => createResearch('claim_map_draft'));
+    document.getElementById('paperDraftBtn').addEventListener('click', () => createResearch('paper_draft'));
 
     document.getElementById('homeSessionReplay').addEventListener('click', () => {
       document.getElementById('advancedDiagnostics').open = true;

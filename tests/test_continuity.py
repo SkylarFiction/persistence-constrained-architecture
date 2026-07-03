@@ -76,6 +76,8 @@ from pca import (
     chat_sessions_from_events,
     chat_turns_from_events,
     checkpoint_history,
+    classify_research_action,
+    create_research_output,
     seed_coherence_physics_goals,
     latest_auto_daily_research_loop,
     checkpoint_link_records_from_events,
@@ -145,12 +147,15 @@ from pca import (
     render_coherence_seed_text,
     render_commit_readiness_text,
     render_project_build_brief_text,
+    render_research_outputs_text,
     render_constitution_markdown,
     render_lucien_cockpit_html,
     render_next_governed_build_text,
     render_session_replay_html,
     render_trace_report_html,
     recovery_records_from_events,
+    research_outputs_from_events,
+    research_sandbox_status,
     safe_load_policy_pack,
     select_brain_route,
     propose_growth,
@@ -2456,6 +2461,61 @@ def test_coherence_seed_creates_linked_goals_and_missions_idempotently(tmp_path)
     assert all(not result.created_mission for result in second)
     assert all(len(result.linked_goal.linked_mission_ids) == 1 for result in first)
     assert all(len(brief.items) == 4 for brief in mission_briefs)
+
+
+def test_coherence_seed_does_not_create_mission_review_blocker_spam(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    seed_coherence_physics_goals(ledger, manifest)
+    tasks = reflection_task_records_from_events(ledger.events())
+
+    assert tasks == []
+
+
+def test_research_sandbox_brief_creates_proposed_output_without_high_priority_blocker(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Research sandbox mission",
+        problem_statement="Draft freely without accepting claims as truth.",
+    )
+    add_mission_item(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        "hypothesis",
+        "A draft can be useful without becoming accepted memory.",
+        bridge_reflection=False,
+    )
+
+    result = create_research_output(
+        ledger,
+        manifest,
+        mission.mission_id,
+        "research_brief",
+    )
+    outputs = research_outputs_from_events(ledger.events(), mission.mission_id)
+    rendered = render_research_outputs_text(outputs)
+    tasks = reflection_task_records_from_events(ledger.events())
+    evidence = evidence_records_from_events(ledger.events())
+    sandbox = research_sandbox_status(ledger, manifest)
+
+    assert result["output"]["status"] == "proposed"
+    assert result["output"]["kind"] == "research_brief"
+    assert outputs[0].confidence == "low"
+    assert "Research Outputs" in rendered
+    assert evidence[-1].review_status.value == "raw"
+    assert sandbox["proposed_output_count"] == 1
+    assert not [task for task in tasks if task.severity in {"high", "critical"}]
+
+
+def test_research_sandbox_classifies_restricted_actions():
+    assert classify_research_action("research_brief").value == "free_research"
+    assert classify_research_action("accept_memory").value == "review_required"
+    assert classify_research_action("file_write").value == "restricted"
 
 
 def test_auto_daily_research_loop_seeds_and_proposes_work_once_per_day(tmp_path):
