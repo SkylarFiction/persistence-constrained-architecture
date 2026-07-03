@@ -11,7 +11,7 @@ from .checkpoint_story import checkpoint_story
 from .evidence_locker import require_evidence
 from .ledger import ContinuityEvent, ContinuityLedger
 from .mission_steps import require_mission_step
-from .missions import require_mission
+from .missions import add_mission_item, require_mission
 
 
 @dataclass(frozen=True)
@@ -181,6 +181,72 @@ def render_checkpoint_history_text(history: dict[str, Any]) -> str:
             ]
         )
     return "\n".join(lines)
+
+
+def propose_checkpoint_lesson(
+    ledger: ContinuityLedger,
+    identity_id: str,
+    link_id: str,
+    lesson_summary: str,
+    confidence: str = "medium",
+    reason: str = "",
+) -> dict[str, Any]:
+    link = require_checkpoint_link(ledger.events(), link_id)
+    before = len(ledger.events())
+    lesson = add_mission_item(
+        ledger,
+        identity_id,
+        link.mission_id,
+        "lesson",
+        lesson_summary,
+        status="proposed",
+        confidence=confidence,
+        evidence_refs=[link.link_id, link.commit_hash, *link.evidence_ids],
+        reason=reason or f"checkpoint lesson from {link.link_id}",
+    )
+    event = ledger.append(
+        "checkpoint.lesson_candidate_proposed",
+        identity_id,
+        {
+            "link_id": link.link_id,
+            "mission_id": link.mission_id,
+            "mission_item_id": lesson.item_id,
+            "commit_hash": link.commit_hash,
+            "confidence": confidence,
+            "reason": reason,
+        },
+    )
+    growth = [
+        created.payload
+        for created in ledger.events()[before:]
+        if created.event_type == "lucien.growth_proposed"
+    ]
+    return {
+        "checkpoint_link": link.to_dict(),
+        "mission_lesson": lesson.to_dict(),
+        "growth_candidates": growth,
+        "event": event.to_dict(),
+    }
+
+
+def require_checkpoint_link(
+    events: list[ContinuityEvent],
+    link_id: str,
+) -> CheckpointLinkRecord:
+    for record in checkpoint_link_records_from_events(events):
+        if record.link_id == link_id:
+            return record
+    raise ValueError(f"Checkpoint link not found: {link_id}")
+
+
+def checkpoint_lesson_candidates_from_events(
+    events: list[ContinuityEvent],
+) -> list[dict[str, Any]]:
+    return [
+        event.payload
+        for event in events
+        if event.event_type == "checkpoint.lesson_candidate_proposed"
+    ]
 
 
 def _resolve_commit_hash(commit_hash: str, project_root: Path) -> str:

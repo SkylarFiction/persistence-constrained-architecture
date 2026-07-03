@@ -74,6 +74,7 @@ from pca import (
     chat_turns_from_events,
     checkpoint_history,
     checkpoint_link_records_from_events,
+    checkpoint_lesson_candidates_from_events,
     checkpoint_story,
     compile_self_model,
     commit_readiness,
@@ -111,6 +112,7 @@ from pca import (
     next_governed_build,
     recommend_next_mission_step,
     propose_autonomous_mission_step,
+    propose_checkpoint_lesson,
     mission_autonomy_recommendations_from_events,
     run_learning_review,
     run_latest_session_learning_review,
@@ -3116,6 +3118,62 @@ def test_link_checkpoint_rejects_step_from_other_mission(tmp_path):
         assert "does not belong" in str(exc)
     else:
         raise AssertionError("checkpoint link accepted a step from another mission")
+
+
+def test_checkpoint_lesson_proposes_mission_lesson_and_growth(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    (project_root / "README.md").write_text("project", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Add lesson checkpoint"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
+    )
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Lesson mission",
+        problem_statement="Turn checkpoint outcomes into governed lessons.",
+    )
+    record = link_checkpoint_to_mission(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        commit_hash="HEAD",
+        project_root=project_root,
+    )
+
+    result = propose_checkpoint_lesson(
+        ledger,
+        manifest.system_id,
+        record.link_id,
+        "Checkpoint-linked lessons must remain reviewable before becoming memory.",
+        confidence="high",
+    )
+    lesson_candidates = checkpoint_lesson_candidates_from_events(ledger.events())
+    items = mission_items_from_events(ledger.events(), mission.mission_id)
+    growth = growth_records_from_events(ledger.events())
+
+    assert result["checkpoint_link"]["link_id"] == record.link_id
+    assert result["mission_lesson"]["kind"] == "lesson"
+    assert result["growth_candidates"]
+    assert lesson_candidates[-1]["mission_item_id"] == result["mission_lesson"]["item_id"]
+    assert items[-1].kind.value == "lesson"
+    assert growth[-1].kind.value == "memory"
+    assert growth[-1].status.value == "proposed"
+    assert record.link_id in growth[-1].evidence_refs
 
 
 def test_suggest_next_build_tool_is_planning_only(tmp_path):

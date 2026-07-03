@@ -147,6 +147,7 @@ from pca import (
     commit_readiness,
     link_checkpoint_to_mission,
     next_governed_build,
+    propose_checkpoint_lesson,
 )
 from pca.live_chat import chat_once, run_live_chat_server
 from pca.demo_live import run_demo
@@ -309,6 +310,11 @@ def main() -> int:
     checkpoint_history_parser = subparsers.add_parser("checkpoint-history")
     checkpoint_history_parser.add_argument("--mission")
     checkpoint_history_parser.add_argument("--json", action="store_true")
+    checkpoint_lesson_parser = subparsers.add_parser("checkpoint-lesson")
+    checkpoint_lesson_parser.add_argument("link_id")
+    checkpoint_lesson_parser.add_argument("--summary", required=True)
+    checkpoint_lesson_parser.add_argument("--confidence", default="medium")
+    checkpoint_lesson_parser.add_argument("--reason", default="")
     subparsers.add_parser("model-diagnostic")
     subparsers.add_parser("workbench-status")
     chat_once_parser = subparsers.add_parser("chat-once")
@@ -931,6 +937,18 @@ def main() -> int:
             print_json({"checkpoint_history": history})
         else:
             print(render_checkpoint_history_text(history))
+        return 0
+
+    if args.command == "checkpoint-lesson":
+        result = propose_checkpoint_lesson(
+            ledger,
+            manifest.system_id,
+            args.link_id,
+            lesson_summary=args.summary,
+            confidence=args.confidence,
+            reason=args.reason,
+        )
+        print_json({"checkpoint_lesson": result})
         return 0
 
     if args.command == "workbench-status":
