@@ -1103,6 +1103,30 @@ def _live_chat_html() -> str:
       color: #dfe8e3;
       font-size: 12px;
     }
+    .output-workspace {
+      grid-column: 1 / -1;
+      display: grid;
+      gap: 12px;
+      border-color: rgba(84,196,179,.18);
+    }
+    .output-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, .45fr);
+      gap: 12px;
+    }
+    .output-body {
+      min-height: 220px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 8px;
+      padding: 14px;
+      background: rgba(5,9,7,.42);
+      color: #eef7f1;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+      line-height: 1.55;
+    }
     .review-needed {
       border-left: 4px solid var(--amber);
     }
@@ -1226,7 +1250,7 @@ def _live_chat_html() -> str:
     .advanced-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 0 16px 16px; }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #9ee7c0; }
     ::placeholder { color: #73867d; }
-    @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px; } form { grid-template-columns: 1fr; } .home-top, .brain-mode-row, .mission-controls, .advanced-grid, .guided-workbench, .impact-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px; } form { grid-template-columns: 1fr; } .home-top, .brain-mode-row, .mission-controls, .advanced-grid, .guided-workbench, .impact-grid, .output-shell { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -1297,6 +1321,29 @@ def _live_chat_html() -> str:
         <div class="metric"><div class="label">Continuity / Gate</div><div id="homeContinuity" class="value">loading</div></div>
       </div>
       <div id="homeBlockerList" class="queue"></div>
+    </section>
+    <section class="output-workspace">
+      <div class="mission-controls">
+        <div>
+          <h2>Output Workspace</h2>
+          <div class="item-meta">Read the latest draft for the active mission. Drafts stay proposed until steward review.</div>
+        </div>
+        <div class="actions">
+          <button type="button" id="workspaceRevise" class="secondary">Revise</button>
+          <button type="button" id="workspaceReview" class="secondary">Send to Review</button>
+          <button type="button" id="workspaceEvidence" class="secondary">Accept as Evidence</button>
+          <button type="button" id="workspaceKeepDraft" class="secondary">Keep as Draft</button>
+          <button type="button" id="workspaceExport" class="secondary">Export Markdown</button>
+        </div>
+      </div>
+      <div class="output-shell">
+        <div>
+          <div id="workspaceTitle" class="guided-action-title">No output selected</div>
+          <div id="workspaceMeta" class="item-meta"></div>
+          <pre id="workspaceBody" class="output-body"></pre>
+        </div>
+        <div id="workspaceDetails" class="queue"></div>
+      </div>
     </section>
     <section class="mission-dashboard">
       <div class="mission-controls">
@@ -1546,6 +1593,10 @@ def _live_chat_html() -> str:
     const dailyPlan = document.getElementById('dailyPlan');
     const researchSandboxStatus = document.getElementById('researchSandboxStatus');
     const researchOutputs = document.getElementById('researchOutputs');
+    const workspaceTitle = document.getElementById('workspaceTitle');
+    const workspaceMeta = document.getElementById('workspaceMeta');
+    const workspaceBody = document.getElementById('workspaceBody');
+    const workspaceDetails = document.getElementById('workspaceDetails');
     const missionSteps = document.getElementById('missionSteps');
     const skillMemory = document.getElementById('skillMemory');
     const autonomyQueue = document.getElementById('autonomyQueue');
@@ -1555,6 +1606,8 @@ def _live_chat_html() -> str:
     let activeInboxFilter = 'all';
     let selectedMissionId = window.localStorage.getItem('lucien.activeMissionId') || '';
     let selectedWorkMode = window.localStorage.getItem('lucien.workMode') || '';
+    let selectedOutputId = window.sessionStorage.getItem('lucien.selectedOutputId') || '';
+    let outputContentById = JSON.parse(window.sessionStorage.getItem('lucien.outputContentById') || '{}');
     let currentGuidedAction = null;
     let currentStatus = null;
     let lastLucien = '';
@@ -1572,6 +1625,7 @@ def _live_chat_html() -> str:
       const summary = status.summary || {};
       const missionView = renderMissionDashboard(status);
       renderDailyCommandCenter(status.daily || {}, status.workbench || {}, missionView.activeMission);
+      renderOutputWorkspace(status.research_outputs || [], missionView.activeMission);
       renderProjectBrief(status.project_brief || {});
       renderBuildReview(status.build_review || {});
       renderCommitReadiness(status.commit_readiness || {});
@@ -1873,8 +1927,77 @@ def _live_chat_html() -> str:
         row.innerHTML = `<div class="item-title">${escapeHtml(output.kind)} / ${escapeHtml(output.status)}</div>
           <div class="item-meta">${escapeHtml(output.title || output.output_id)}</div>
           <div class="item-meta">confidence: ${escapeHtml(output.confidence || 'low')} / claims: ${output.claim_count || 0} / evidence: ${(output.evidence_ids || []).length}</div>`;
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        actions.appendChild(localButton('View in Workspace', () => {
+          selectedOutputId = output.output_id;
+          window.sessionStorage.setItem('lucien.selectedOutputId', selectedOutputId);
+          renderOutputWorkspace(currentStatus.research_outputs || [], selectedMission);
+          workspaceTitle.scrollIntoView({behavior: 'smooth', block: 'center'});
+        }));
+        row.appendChild(actions);
         researchOutputs.appendChild(row);
       }
+    }
+
+    function renderOutputWorkspace(outputs, selectedMission) {
+      const visible = (outputs || [])
+        .filter(output => !selectedMission || output.mission_id === selectedMission.mission_id)
+        .slice()
+        .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+      let output = visible.find(item => item.output_id === selectedOutputId) || visible[visible.length - 1] || null;
+      if (!output) {
+        workspaceTitle.textContent = 'No output yet';
+        workspaceMeta.textContent = selectedMission ? 'Use Start Draft or Start Research Brief to create a proposed output.' : 'Select or open a mission before drafting.';
+        workspaceBody.textContent = 'Generated drafts will appear here as proposed workspace outputs. They will not become trusted evidence, memory, or claims until reviewed.';
+        workspaceDetails.innerHTML = '';
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = '<div class="item-title">Governance</div><div class="item-meta">No files, publishing, memory acceptance, or evidence acceptance happens from this empty state.</div>';
+        workspaceDetails.appendChild(row);
+        return;
+      }
+      selectedOutputId = output.output_id;
+      window.sessionStorage.setItem('lucien.selectedOutputId', selectedOutputId);
+      const content = outputContentById[output.output_id] || '';
+      workspaceTitle.textContent = output.title || output.output_id;
+      workspaceMeta.textContent = `${plainOutputKind(output.kind)} / ${output.status || 'proposed'} / ${selectedMission ? selectedMission.title : output.mission_id}`;
+      workspaceBody.textContent = content || [
+        'This output record is durable, but its raw draft text is not stored in the ledger.',
+        '',
+        `Content hash: ${output.content_hash || 'unknown'}`,
+        `Content length: ${output.content_length || 0} characters`,
+        '',
+        'Create or regenerate the draft in this live session to view text here, or export while the live draft is still cached.'
+      ].join('\\n');
+      workspaceDetails.innerHTML = '';
+      const details = [
+        ['Status', `${output.status || 'proposed'} - not accepted as truth`],
+        ['Created By', 'Research Sandbox / governed local workflow'],
+        ['Cost', '$0 API money in Local Mode'],
+        ['Evidence', `${(output.evidence_ids || []).length} proposed evidence item(s)`],
+        ['Claims', `${output.claim_count || 0} proposed claim(s)`],
+        ['Hash', output.content_hash ? output.content_hash.slice(0, 16) : 'none'],
+        ['Review Rule', 'Memory, evidence, and claims require steward review before becoming trusted'],
+      ];
+      for (const [title, value] of details) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = `<div class="item-title">${escapeHtml(title)}</div><div class="item-meta">${escapeHtml(value)}</div>`;
+        workspaceDetails.appendChild(row);
+      }
+    }
+
+    function plainOutputKind(kind) {
+      const labels = {
+        research_brief: 'Research Brief',
+        claim_map_draft: 'Claim Map Draft',
+        paper_draft: 'Paper Draft',
+        source_summary: 'Source Summary',
+        experiment_proposal: 'Experiment Proposal',
+        next_step_suggestion: 'Next Step Suggestion'
+      };
+      return labels[kind] || String(kind || 'Output').replaceAll('_', ' ');
     }
 
     function renderProjectBrief(brief) {
@@ -2759,9 +2882,10 @@ def _live_chat_html() -> str:
       const data = await res.json();
       if (data.error) {
         addMessage('lucien', data.error);
-        return;
+        return data;
       }
       renderStatus(data.status);
+      return data;
     }
 
     function getSelectedModelMode() {
@@ -2948,19 +3072,86 @@ def _live_chat_html() -> str:
       activeMissionSelect.focus();
     });
 
-    function createResearch(kind) {
+    function selectedWorkspaceOutput() {
+      const outputs = (currentStatus && currentStatus.research_outputs) || [];
+      return outputs.find(output => output.output_id === selectedOutputId) || null;
+    }
+
+    document.getElementById('workspaceRevise').addEventListener('click', () => {
+      const output = selectedWorkspaceOutput();
+      const box = document.getElementById('message');
+      box.value = output
+        ? `Revise this ${plainOutputKind(output.kind)} for mission ${output.mission_id}. Keep claims proposed and do not accept anything as proven.`
+        : 'Help me create a proposed draft for the active mission. Keep claims proposed and governed.';
+      box.focus();
+      box.scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
+
+    document.getElementById('workspaceReview').addEventListener('click', () => {
+      activeInboxFilter = 'all';
+      stewardInbox.scrollIntoView({behavior: 'smooth', block: 'center'});
+      renderStewardInbox((currentStatus || {}).steward_inbox || []);
+      addMessage('lucien', 'Output is still a proposed draft. Use steward review before treating any claims, memories, or evidence as trusted.');
+    });
+
+    document.getElementById('workspaceEvidence').addEventListener('click', () => {
+      activeInboxFilter = 'evidence';
+      stewardInbox.scrollIntoView({behavior: 'smooth', block: 'center'});
+      renderStewardInbox((currentStatus || {}).steward_inbox || []);
+      addMessage('lucien', 'Accepting evidence is governed. Review linked evidence in the Evidence/Steward flow before using it as support.');
+    });
+
+    document.getElementById('workspaceKeepDraft').addEventListener('click', () => {
+      addMessage('lucien', 'Kept as draft. No memory, evidence, file, or claim was accepted from the workspace.');
+    });
+
+    document.getElementById('workspaceExport').addEventListener('click', () => {
+      const output = selectedWorkspaceOutput();
+      if (!output) {
+        addMessage('lucien', 'No workspace output is selected to export.');
+        return;
+      }
+      const content = outputContentById[output.output_id];
+      if (!content) {
+        addMessage('lucien', 'This output has only a ledger hash in the current session. Regenerate or create a new draft before exporting markdown.');
+        return;
+      }
+      const header = [
+        `<!-- Lucien Output Workspace export -->`,
+        `<!-- status: ${output.status || 'proposed'}; mission: ${output.mission_id}; evidence: ${(output.evidence_ids || []).join(', ') || 'none'} -->`,
+        `<!-- governance: proposed draft only; not accepted memory, evidence, or truth -->`,
+        ''
+      ].join('\\n');
+      const blob = new Blob([header + content], {type: 'text/markdown'});
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `${plainOutputKind(output.kind).toLowerCase().replaceAll(' ', '-')}-${output.output_id.slice(-8)}.md`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
+
+    async function createResearch(kind) {
       const selected = (currentStatus && (currentStatus.missions || []).find(item => item.mission && item.mission.mission_id === selectedMissionId) || null);
       const selectedMission = selected ? selected.mission : ((currentStatus && currentStatus.workbench) ? currentStatus.workbench.active_mission : null);
       if (!selectedMission || !selectedMission.mission_id) {
         alert('Select or open a mission before creating research output.');
         return;
       }
-      steward({
+      const data = await steward({
         action: 'create_research_output',
         mission_id: selectedMission.mission_id,
         kind,
         reason: `created ${kind} from research sandbox`
       });
+      const created = data && data.result && data.result.research_output ? data.result.research_output : null;
+      if (created && created.output && created.content) {
+        outputContentById[created.output.output_id] = created.content;
+        selectedOutputId = created.output.output_id;
+        window.sessionStorage.setItem('lucien.outputContentById', JSON.stringify(outputContentById));
+        window.sessionStorage.setItem('lucien.selectedOutputId', selectedOutputId);
+        if (data.status) renderOutputWorkspace(data.status.research_outputs || [], selectedMission);
+        workspaceTitle.scrollIntoView({behavior: 'smooth', block: 'center'});
+      }
     }
 
     document.getElementById('researchBriefBtn').addEventListener('click', () => createResearch('research_brief'));

@@ -1141,6 +1141,13 @@ def test_live_chat_html_contains_mission_first_home():
     assert "guidedReviewNow" in html
     assert "guidedChangeFocus" in html
     assert "mission_id: selectedMissionId || null" in html
+    assert "Output Workspace" in html
+    assert "workspaceTitle" in html
+    assert "workspaceBody" in html
+    assert "workspaceExport" in html
+    assert "Accept as Evidence" in html
+    assert "View in Workspace" in html
+    assert "outputContentById" in html
     assert "Continuity Certification" in html
     assert "certification" in html
     assert "dailyBriefing" in html
