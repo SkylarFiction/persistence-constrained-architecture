@@ -1330,7 +1330,7 @@ def _live_chat_html() -> str:
         </div>
         <div class="actions">
           <button type="button" id="workspaceRevise" class="secondary">Revise</button>
-          <button type="button" id="workspaceReview" class="secondary">Send to Review</button>
+          <button type="button" id="workspaceReview" class="secondary">Review Draft</button>
           <button type="button" id="workspaceEvidence" class="secondary">Accept as Evidence</button>
           <button type="button" id="workspaceKeepDraft" class="secondary">Keep as Draft</button>
           <button type="button" id="workspaceExport" class="secondary">Export Markdown</button>
@@ -1415,7 +1415,7 @@ def _live_chat_html() -> str:
       <div id="messages" class="messages"></div>
       <form id="chatForm">
         <textarea id="message" placeholder="Ask Lucien what changed in his state..."></textarea>
-        <button type="submit">Send</button>
+        <button type="submit" id="sendMessage">Send</button>
         <button type="button" id="speak" class="secondary">Speak</button>
         <div class="model-controls">
           <div class="brain-mode-row">
@@ -2921,30 +2921,40 @@ def _live_chat_html() -> str:
     document.getElementById('chatForm').addEventListener('submit', async (event) => {
       event.preventDefault();
       const box = document.getElementById('message');
+      const sendButton = document.getElementById('sendMessage');
       const text = box.value.trim();
       if (!text) return;
       const modelMode = getSelectedModelMode();
       const useOpenAI = getOpenAIAllowedForSend();
       box.value = '';
       addMessage('user', text);
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          message: text,
-          model_mode: modelMode,
-          use_openai: useOpenAI,
-          mission_id: selectedMissionId || null
-        })
-      });
-      const data = await res.json();
-      if (data.error) {
-        addMessage('lucien', data.error);
-        return;
+      sendButton.disabled = true;
+      sendButton.textContent = 'Thinking...';
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            message: text,
+            model_mode: modelMode,
+            use_openai: useOpenAI,
+            mission_id: selectedMissionId || null
+          })
+        });
+        const data = await res.json();
+        if (data.error) {
+          addMessage('lucien', data.error);
+          return;
+        }
+        lastLucien = data.result.response_text;
+        addMessage('lucien', lastLucien);
+        renderStatus(data.status);
+      } catch (error) {
+        addMessage('lucien', `Lucien could not reach the live server: ${error.message}`);
+      } finally {
+        sendButton.disabled = false;
+        sendButton.textContent = 'Send';
       }
-      lastLucien = data.result.response_text;
-      addMessage('lucien', lastLucien);
-      renderStatus(data.status);
     });
 
     document.getElementById('missionForm').addEventListener('submit', (event) => {
