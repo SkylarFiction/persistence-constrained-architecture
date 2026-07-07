@@ -89,6 +89,7 @@ from .self_model import derive_self_model
 from .skill_memory import accepted_skills_from_events, skill_candidates_from_events
 from .state import derive_current_claim
 from .steward_inbox import apply_steward_inbox_action, steward_inbox
+from .startup_health import apply_startup_health_fix, startup_health
 from .tool_router import (
     dry_run_tool_for_step,
     run_tool_for_step,
@@ -497,6 +498,17 @@ def _apply_steward_action(
             reviewer=str(payload.get("reviewer", "steward")),
         )
 
+    if action == "startup_health_fix":
+        fix_action = str(payload.get("fix_action", "")).strip()
+        if not fix_action:
+            raise ValueError("fix_action is required")
+        return apply_startup_health_fix(
+            ledger,
+            manifest,
+            fix_action,
+            reason=reason,
+        )
+
     if action == "run_tool":
         step_id = str(payload.get("step_id", "")).strip()
         if not step_id:
@@ -830,6 +842,7 @@ def _status_payload(
     return {
         "summary": summary,
         "daily": daily_command_center(ledger, manifest),
+        "startup_health": startup_health(ledger, manifest),
         "project_brief": project_build_brief(Path.cwd()),
         "build_review": build_review(Path.cwd()),
         "checkpoint_story": checkpoint_story(Path.cwd()),
@@ -1130,6 +1143,15 @@ def _live_chat_html() -> str:
     .review-needed {
       border-left: 4px solid var(--amber);
     }
+    .startup-health {
+      border-left: 4px solid var(--green);
+    }
+    .startup-health.needs_attention {
+      border-left-color: var(--amber);
+    }
+    .startup-health.blocked {
+      border-left-color: var(--red);
+    }
     .mission-dashboard { grid-column: 1 / -1; display: grid; gap: 12px; }
     .mission-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
     .mission-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
@@ -1307,6 +1329,7 @@ def _live_chat_html() -> str:
         </div>
       </div>
       <div id="reviewNeededCard" class="item review-needed"></div>
+      <div id="startupHealth" class="item startup-health"></div>
       <div id="dailyBriefing" class="item"></div>
       <div id="dailyResearchLoop" class="item"></div>
       <div id="dailyCards" class="mission-card-grid"></div>
@@ -1625,6 +1648,7 @@ def _live_chat_html() -> str:
       const summary = status.summary || {};
       const missionView = renderMissionDashboard(status);
       renderDailyCommandCenter(status.daily || {}, status.workbench || {}, missionView.activeMission);
+      renderStartupHealth(status.startup_health || {});
       renderOutputWorkspace(status.research_outputs || [], missionView.activeMission);
       renderProjectBrief(status.project_brief || {});
       renderBuildReview(status.build_review || {});
@@ -1821,6 +1845,42 @@ def _live_chat_html() -> str:
         row.textContent = mission ? 'No mission blockers detected.' : 'No active mission. Start one to turn chat into governed work.';
         blockerList.appendChild(row);
       }
+    }
+
+    function renderStartupHealth(health) {
+      const node = document.getElementById('startupHealth');
+      const status = health.status || 'unknown';
+      node.className = `item startup-health ${status}`;
+      const problems = health.problems || [];
+      const actions = health.safe_actions || [];
+      const problemText = problems.length
+        ? problems.slice(0, 3).map(problem => `${problem.title}: ${problem.detail}`).join(' ')
+        : 'Cold open is clear. Lucien has no startup blockers detected.';
+      const buttons = actions.map(action => {
+        const label = escapeHtml(action.label || action.action);
+        return `<button type="button" class="secondary" data-startup-fix="${escapeHtml(action.action)}">${label}</button>`;
+      }).join('');
+      node.innerHTML = `
+        <div class="mission-controls">
+          <div>
+            <div class="item-title">Startup Health Doctor / ${escapeHtml(status.replaceAll('_', ' '))}</div>
+            <div class="item-meta">${escapeHtml(problemText)}</div>
+            <div class="item-meta">Next: ${escapeHtml(health.recommended_next_action || 'Continue the active mission.')}</div>
+          </div>
+          <div class="actions">${buttons || '<button type="button" class="secondary" id="startupHealthRefresh">Refresh Health</button>'}</div>
+        </div>
+      `;
+      for (const button of node.querySelectorAll('[data-startup-fix]')) {
+        button.addEventListener('click', () => {
+          steward({
+            action: 'startup_health_fix',
+            fix_action: button.dataset.startupFix,
+            reason: 'startup health doctor safe fix'
+          });
+        });
+      }
+      const refresh = node.querySelector('#startupHealthRefresh');
+      if (refresh) refresh.addEventListener('click', () => refreshStatus());
     }
 
     function renderGuidedWorkbench(daily, workbench, mission) {

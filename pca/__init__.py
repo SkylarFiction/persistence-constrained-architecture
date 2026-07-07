@@ -391,6 +391,11 @@ from .steward_inbox import (
     find_steward_inbox_item,
     steward_inbox,
 )
+from .startup_health import (
+    apply_startup_health_fix,
+    render_startup_health_text,
+    startup_health,
+)
 from .workbench import workbench_status
 
 __all__ = [
@@ -544,6 +549,7 @@ __all__ = [
     "add_mission_item",
     "append_ledger_anchor",
     "apply_steward_inbox_action",
+    "apply_startup_health_fix",
     "approve_mission_step",
     "auto_propose_skill_candidates",
     "authorization_policy_from_packs",
@@ -679,6 +685,7 @@ __all__ = [
     "render_next_governed_build_text",
     "render_project_build_brief_text",
     "render_research_outputs_text",
+    "render_startup_health_text",
     "render_session_replay_html",
     "report_scenario",
     "run_all_scenarios",
@@ -694,6 +701,7 @@ __all__ = [
     "start_chat_session",
     "start_mission_step",
     "steward_inbox",
+    "startup_health",
     "verify_all_scenarios",
     "verify_anchor_chain",
     "verify_latest_anchor",

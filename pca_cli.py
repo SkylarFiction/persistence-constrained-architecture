@@ -90,6 +90,7 @@ from pca import (
     mission_flows_from_events,
     mission_step_records_from_events,
     add_mission_item,
+    apply_startup_health_fix,
     create_goal_record,
     create_research_output,
     open_mission,
@@ -118,6 +119,7 @@ from pca import (
     update_reflection_task,
     start_mission_step,
     steward_inbox,
+    startup_health,
     skill_candidates_from_events,
     skill_suggestions_for_mission,
     check_tool_permission,
@@ -136,6 +138,7 @@ from pca import (
     render_next_governed_build_text,
     render_project_build_brief_text,
     render_research_outputs_text,
+    render_startup_health_text,
     run_tool_for_step,
     tool_execution_records_from_events,
     tool_permission_records_from_events,
@@ -368,6 +371,14 @@ def main() -> int:
     subparsers.add_parser("autonomy-execute-approved")
     subparsers.add_parser("model-diagnostic")
     subparsers.add_parser("workbench-status")
+    startup_health_parser = subparsers.add_parser("startup-health")
+    startup_health_parser.add_argument("--json", action="store_true")
+    startup_fix_parser = subparsers.add_parser("startup-fix")
+    startup_fix_parser.add_argument(
+        "action",
+        choices=["refresh-required-evidence", "open-coherence-research-mission"],
+    )
+    startup_fix_parser.add_argument("--reason", default="")
     chat_once_parser = subparsers.add_parser("chat-once")
     chat_once_parser.add_argument("message")
     chat_once_parser.add_argument(
@@ -1151,6 +1162,25 @@ def main() -> int:
 
     if args.command == "workbench-status":
         print_json({"workbench": workbench_status(ledger, manifest)})
+        return 0
+
+    if args.command == "startup-health":
+        health = startup_health(ledger, manifest)
+        if args.json:
+            print_json({"startup_health": health})
+        else:
+            print(render_startup_health_text(health))
+        return 0
+
+    if args.command == "startup-fix":
+        print_json(
+            apply_startup_health_fix(
+                ledger,
+                manifest,
+                args.action,
+                reason=args.reason,
+            )
+        )
         return 0
 
     if args.command == "chat-once":

@@ -181,6 +181,8 @@ from pca import (
     update_mission_status,
     update_reflection_task,
     start_mission_step,
+    startup_health,
+    apply_startup_health_fix,
     steward_inbox,
     apply_steward_inbox_action,
     run_tool_for_step,
@@ -2422,6 +2424,60 @@ def test_workbench_status_counts_blocked_mission_and_inbox(tmp_path):
     assert status["open_steward_inbox_count"] >= 1
     assert status["high_priority_inbox_count"] >= 1
     assert "Review high-priority" in status["recommended_next_action"]
+
+
+def test_startup_health_detects_missing_mission_and_stale_required_evidence(tmp_path):
+    manifest = manifest_with_freshness(freshness_seconds=-1)
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "ledger_integrity", "value": True},
+    )
+    ledger.append(
+        "constraint.checked",
+        manifest.system_id,
+        {"constraint": "origin_traceability", "value": True},
+    )
+
+    health = startup_health(ledger, manifest)
+
+    codes = {problem["code"] for problem in health["problems"]}
+    actions = {action["action"] for action in health["safe_actions"]}
+    assert health["status"] == "needs_attention"
+    assert "stale_required_evidence" in codes
+    assert "missing_active_mission" in codes
+    assert "refresh_required_evidence" in actions
+    assert "open_coherence_research_mission" in actions
+
+
+def test_startup_health_safe_fixes_restore_clean_cold_open(tmp_path):
+    manifest = manifest_with_freshness(freshness_seconds=60)
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    mission_result = apply_startup_health_fix(
+        ledger,
+        manifest,
+        "open-coherence-research-mission",
+    )
+    evidence_result = apply_startup_health_fix(
+        ledger,
+        manifest,
+        "refresh-required-evidence",
+    )
+    health = startup_health(ledger, manifest)
+
+    assert mission_result["created"] is True
+    assert evidence_result["claim_record"]["claim"] == "certified_continuity"
+    assert health["claim"] == "certified_continuity"
+    assert health["open_missions"] == 1
+    assert health["open_steward_items"] == 0
+    assert "stale_required_evidence" not in {
+        problem["code"] for problem in health["problems"]
+    }
+    assert "missing_active_mission" not in {
+        problem["code"] for problem in health["problems"]
+    }
 
 
 def test_daily_command_center_recommends_mission_when_none_exists(tmp_path):
