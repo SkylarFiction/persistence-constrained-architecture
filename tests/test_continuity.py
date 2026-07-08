@@ -1134,6 +1134,13 @@ def test_live_chat_html_contains_mission_first_home():
 
     html = _live_chat_html()
 
+    assert "Start Here" in html
+    assert "startHerePrimary" in html
+    assert "startHereStarterPack" in html
+    assert "startHereReview" in html
+    assert "renderStartHere(status, missionView.activeMission)" in html
+    assert "runStartHereAction" in html
+    assert "Lucien, what should I do next? Keep it simple and give me one safe action." in html
     assert "Daily Command Center" in html
     assert "What do you want Coherence AI to help with today?" in html
     assert "Research" in html

@@ -1098,6 +1098,35 @@ def _live_chat_html() -> str:
     h1 { margin: 0 0 6px; font-size: 30px; line-height: 1.08; }
     h2 { margin: 0 0 12px; font-size: 17px; line-height: 1.2; color: #f4f8f5; }
     main { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); gap: 18px; max-width: 1360px; margin: 0 auto; padding: 18px; }
+    .start-here {
+      grid-column: 1 / -1;
+      display: grid;
+      gap: 12px;
+      border-color: rgba(84,196,179,.32);
+      background:
+        linear-gradient(180deg, rgba(84,196,179,.12), rgba(25,36,31,.96)),
+        var(--panel);
+    }
+    .start-hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+    }
+    .start-title { font-size: 28px; line-height: 1.08; font-weight: 950; margin: 3px 0 7px; }
+    .start-summary { color: #dce8e2; line-height: 1.45; max-width: 860px; }
+    .start-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+    .start-primary { min-width: 180px; min-height: 46px; font-size: 14px; }
+    .start-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .start-step {
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 8px;
+      padding: 12px;
+      background: rgba(0,0,0,.16);
+    }
+    .start-step.ready { border-color: rgba(66,197,122,.42); }
+    .start-step.warn { border-color: rgba(216,161,58,.42); }
+    .start-step.blocked { border-color: rgba(224,100,100,.42); }
     .home { grid-column: 1 / -1; display: grid; gap: 14px; }
     .home-top { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: 12px; }
     .home-title { font-size: 25px; font-weight: 900; margin: 0 0 4px; }
@@ -1295,7 +1324,7 @@ def _live_chat_html() -> str:
     .advanced-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 0 16px 16px; }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #9ee7c0; }
     ::placeholder { color: #73867d; }
-    @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px; } form { grid-template-columns: 1fr; } .home-top, .brain-mode-row, .mission-controls, .advanced-grid, .guided-workbench, .impact-grid, .output-shell { grid-template-columns: 1fr; } }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px; } form { grid-template-columns: 1fr; } .home-top, .brain-mode-row, .mission-controls, .advanced-grid, .guided-workbench, .impact-grid, .output-shell, .start-hero, .start-steps { grid-template-columns: 1fr; } .start-actions { justify-content: flex-start; } }
   </style>
 </head>
 <body>
@@ -1304,6 +1333,37 @@ def _live_chat_html() -> str:
     <div>Talk to Lucien through PCA. The model speaks; governance decides what can become identity.</div>
   </header>
   <main>
+    <section class="start-here">
+      <div class="start-hero">
+        <div>
+          <div class="label">Start Here</div>
+          <div id="startHereTitle" class="start-title">Checking Lucien</div>
+          <div id="startHereSummary" class="start-summary">Lucien is checking startup health, current mission, steward review pressure, and brain mode.</div>
+        </div>
+        <div class="start-actions">
+          <button type="button" id="startHerePrimary" class="start-primary">Show Me What To Do</button>
+          <button type="button" id="startHereStarterPack" class="secondary">Create Starter Pack</button>
+          <button type="button" id="startHereReview" class="secondary">Review Inbox</button>
+        </div>
+      </div>
+      <div class="start-steps">
+        <div id="startStepMissionCard" class="start-step">
+          <div class="label">1 / Mission</div>
+          <div class="item-title" id="startStepMissionTitle">Choose work</div>
+          <div class="item-meta" id="startStepMission">Loading mission state.</div>
+        </div>
+        <div id="startStepSetupCard" class="start-step">
+          <div class="label">2 / Setup</div>
+          <div class="item-title" id="startStepSetupTitle">Prepare the work</div>
+          <div class="item-meta" id="startStepSetup">Loading starter state.</div>
+        </div>
+        <div id="startStepChatCard" class="start-step">
+          <div class="label">3 / Chat</div>
+          <div class="item-title" id="startStepChatTitle">Ask Lucien</div>
+          <div class="item-meta" id="startStepChat">Loading brain mode.</div>
+        </div>
+      </div>
+    </section>
     <section class="home">
       <div class="home-top">
         <div>
@@ -1655,6 +1715,7 @@ def _live_chat_html() -> str:
     let selectedOutputId = window.sessionStorage.getItem('lucien.selectedOutputId') || '';
     let outputContentById = JSON.parse(window.sessionStorage.getItem('lucien.outputContentById') || '{}');
     let currentGuidedAction = null;
+    let currentStartHereAction = {kind: 'wait'};
     let currentStatus = null;
     let lastLucien = '';
 
@@ -1670,6 +1731,7 @@ def _live_chat_html() -> str:
       currentStatus = status;
       const summary = status.summary || {};
       const missionView = renderMissionDashboard(status);
+      renderStartHere(status, missionView.activeMission);
       renderDailyCommandCenter(status.daily || {}, status.workbench || {}, missionView.activeMission);
       renderStartupHealth(status.startup_health || {});
       renderOutputWorkspace(status.research_outputs || [], missionView.activeMission);
@@ -1819,6 +1881,95 @@ def _live_chat_html() -> str:
         localWarning ? `<br>${escapeHtml(localWarning)}` : ''
       ].join(' &nbsp; ');
       updateBrainModeControls();
+    }
+
+    function setStartStep(cardId, titleId, bodyId, title, body, state) {
+      const card = document.getElementById(cardId);
+      card.className = `start-step ${state || ''}`;
+      document.getElementById(titleId).textContent = title;
+      document.getElementById(bodyId).textContent = body;
+    }
+
+    function renderStartHere(status, selectedMission) {
+      const health = status.startup_health || {};
+      const workbench = status.workbench || {};
+      const modelAdapter = status.model_adapter || {};
+      const usage = status.model_usage || {};
+      const mission = selectedMission && selectedMission.mission_id ? selectedMission : null;
+      const onboarding = mission && status.mission_onboarding ? status.mission_onboarding[mission.mission_id] : null;
+      const healthActions = health.safe_actions || [];
+      const inboxOpen = workbench.open_steward_inbox_count || 0;
+      const inboxHigh = workbench.high_priority_inbox_count || 0;
+      const localRuntime = modelAdapter.local_runtime || {};
+      const localReady = localRuntime.available !== false;
+      const title = document.getElementById('startHereTitle');
+      const summary = document.getElementById('startHereSummary');
+      const primary = document.getElementById('startHerePrimary');
+      const starter = document.getElementById('startHereStarterPack');
+      const review = document.getElementById('startHereReview');
+      let action = {kind: 'ask_next'};
+
+      if (healthActions.length) {
+        const fix = healthActions[0];
+        title.textContent = 'Lucien needs one setup fix';
+        summary.textContent = `${fix.label || 'Apply safe startup fix'} before normal work. This does not delete durable memory, missions, evidence, skills, or ledger history.`;
+        primary.textContent = fix.label || 'Apply Safe Fix';
+        action = {kind: 'startup_fix', fix_action: fix.action};
+      } else if (!mission) {
+        title.textContent = 'Start by choosing a mission';
+        summary.textContent = 'Lucien works best when the chat is tied to a mission. Open a mission first, then ask for the next safe step.';
+        primary.textContent = 'Start Mission';
+        action = {kind: 'start_mission'};
+      } else if (onboarding && onboarding.ready) {
+        title.textContent = 'Set up this mission first';
+        summary.textContent = 'Create a starter pack so this mission has a first hypothesis, an evidence need, and a risk review item. Nothing becomes accepted truth automatically.';
+        primary.textContent = 'Create Starter Pack';
+        action = {kind: 'mission_onboarding', mission_id: mission.mission_id};
+      } else if (inboxHigh > 0) {
+        title.textContent = 'Review the high-priority blockers';
+        summary.textContent = `${inboxHigh} high-priority steward item(s) are blocking clean progress. Review those first, then return to the mission.`;
+        primary.textContent = 'Review High Priority';
+        action = {kind: 'review_inbox', filter: 'high'};
+      } else {
+        title.textContent = 'You can talk to Lucien now';
+        summary.textContent = `Active mission: ${mission.title}. Local brain is ${localReady ? 'ready' : 'not ready'}; last cost was $${Number(usage.latest_cost_usd || 0).toFixed(6)}. Ask Lucien for the next safe step and keep it simple.`;
+        primary.textContent = 'Ask What To Do Next';
+        action = {kind: 'ask_next', mission_id: mission.mission_id};
+      }
+
+      currentStartHereAction = action;
+      starter.style.display = onboarding && onboarding.ready ? '' : 'none';
+      review.style.display = inboxOpen ? '' : 'none';
+      review.textContent = inboxHigh > 0 ? `Review Inbox (${inboxHigh} high)` : `Review Inbox (${inboxOpen})`;
+
+      setStartStep(
+        'startStepMissionCard',
+        'startStepMissionTitle',
+        'startStepMission',
+        mission ? mission.title : 'No mission selected',
+        mission ? `Phase: ${mission.phase || 'unknown'} / Next: ${mission.next_action || workbench.recommended_next_action || 'ask Lucien for the next safe step'}` : 'Create or select one mission before trying to make Lucien work for you.',
+        mission ? 'ready' : 'warn'
+      );
+      setStartStep(
+        'startStepSetupCard',
+        'startStepSetupTitle',
+        'startStepSetup',
+        onboarding && onboarding.ready ? 'Starter pack needed' : (inboxOpen ? 'Review pressure visible' : 'Setup is clear'),
+        onboarding && onboarding.ready
+          ? 'Click Create Starter Pack. It creates proposed mission structure, not accepted truth.'
+          : (inboxOpen ? `${inboxOpen} steward item(s), ${inboxHigh} high priority. Clear only what is actually reviewed.` : 'No setup blocker is stopping this mission right now.'),
+        onboarding && onboarding.ready ? 'warn' : (inboxHigh ? 'blocked' : 'ready')
+      );
+      setStartStep(
+        'startStepChatCard',
+        'startStepChatTitle',
+        'startStepChat',
+        localReady ? 'Local brain ready' : 'Local brain unavailable',
+        localReady
+          ? `Use Local Mode for daily work. Last brain: ${usage.latest_provider || modelAdapter.local_provider || 'none'} / ${usage.latest_model || modelAdapter.local_model || 'none'}.`
+          : `Start Ollama or switch to Debug Mode. ${localRuntime.reason || ''}`,
+        localReady ? 'ready' : 'warn'
+      );
     }
 
     function renderDailyCommandCenter(daily, workbench, selectedMission) {
@@ -3163,6 +3314,61 @@ def _live_chat_html() -> str:
 
     document.getElementById('homeReviewInbox').addEventListener('click', () => {
       stewardInbox.scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
+
+    function askLucienNextStep() {
+      const box = document.getElementById('message');
+      box.value = 'Lucien, what should I do next? Keep it simple and give me one safe action.';
+      box.focus();
+      box.scrollIntoView({behavior: 'smooth', block: 'center'});
+      addMessage('lucien', 'I put a simple next-step question in the chat box. Press Send when you are ready.');
+    }
+
+    function runStartHereAction(action) {
+      const selected = action || currentStartHereAction || {};
+      if (selected.kind === 'startup_fix') {
+        steward({
+          action: 'startup_health_fix',
+          fix_action: selected.fix_action,
+          reason: 'start here safe startup fix'
+        });
+        return;
+      }
+      if (selected.kind === 'start_mission') {
+        document.getElementById('missionTitle').focus();
+        document.getElementById('missionTitle').scrollIntoView({behavior: 'smooth', block: 'center'});
+        addMessage('lucien', 'Start by naming one mission. Example: Continue Coherence Physics research.');
+        return;
+      }
+      if (selected.kind === 'mission_onboarding') {
+        const missionId = selected.mission_id || selectedMissionId;
+        if (!missionId) {
+          addMessage('lucien', 'Select an active mission before creating a starter pack.');
+          return;
+        }
+        steward({action: 'mission_onboard', mission_id: missionId, reason: 'created from Start Here'});
+        return;
+      }
+      if (selected.kind === 'review_inbox') {
+        activeInboxFilter = selected.filter || 'all';
+        renderStewardInbox((currentStatus || {}).steward_inbox || []);
+        stewardInbox.scrollIntoView({behavior: 'smooth', block: 'center'});
+        return;
+      }
+      askLucienNextStep();
+    }
+
+    document.getElementById('startHerePrimary').addEventListener('click', () => {
+      runStartHereAction(currentStartHereAction);
+    });
+
+    document.getElementById('startHereStarterPack').addEventListener('click', () => {
+      const missionId = currentStartHereAction.mission_id || selectedMissionId;
+      runStartHereAction({kind: 'mission_onboarding', mission_id: missionId});
+    });
+
+    document.getElementById('startHereReview').addEventListener('click', () => {
+      runStartHereAction({kind: 'review_inbox', filter: (currentStatus && currentStatus.workbench && currentStatus.workbench.high_priority_inbox_count) ? 'high' : 'all'});
     });
 
     for (const control of document.querySelectorAll('[data-work-mode]')) {
