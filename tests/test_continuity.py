@@ -105,6 +105,7 @@ from pca import (
     block_mission_step,
     complete_mission_step,
     create_goal_record,
+    create_mission_onboarding_pack,
     export_latest_anchor,
     fail_mission_step,
     growth_conflict_records_from_events,
@@ -131,6 +132,7 @@ from pca import (
     run_auto_daily_research_loop,
     mission_flow,
     mission_flows_from_events,
+    mission_onboarding_state,
     mission_items_from_events,
     mission_records_from_events,
     mission_step_records_from_events,
@@ -2389,6 +2391,50 @@ def test_workbench_status_shows_active_mission_intake(tmp_path):
     assert status["active_mission"]["phase"] == "intake"
     assert status["active_mission"]["next_action"]
     assert status["active_mission_count"] == 1
+
+
+def test_mission_onboarding_state_identifies_starter_needs(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Onboarding mission",
+        problem_statement="Turn a broad research goal into a testable mission.",
+    )
+
+    onboarding = mission_onboarding_state(ledger, mission.mission_id)
+
+    assert onboarding.ready is True
+    assert onboarding.phase == "intake"
+    assert onboarding.needed == ["hypothesis", "evidence", "risk"]
+    assert "starter hypothesis" in onboarding.recommended_action
+
+
+def test_create_mission_onboarding_pack_adds_proposed_starter_items(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Coherence onboarding",
+        problem_statement="Create a governed starting point for Coherence research.",
+    )
+
+    result = create_mission_onboarding_pack(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        reason="test onboarding pack",
+    )
+    brief = mission_briefs_from_events(ledger.events())[0]
+    counts = brief.to_dict()["counts"]
+
+    assert len(result["created"]) == 3
+    assert counts["hypothesis"] == 1
+    assert counts["evidence"] == 1
+    assert counts["risk"] == 1
+    assert result["onboarding"]["ready"] is False
 
 
 def test_workbench_status_counts_blocked_mission_and_inbox(tmp_path):

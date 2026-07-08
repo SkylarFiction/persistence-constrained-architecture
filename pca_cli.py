@@ -88,9 +88,11 @@ from pca import (
     propose_autonomous_mission_step,
     mission_flow,
     mission_flows_from_events,
+    mission_onboarding_state,
     mission_step_records_from_events,
     add_mission_item,
     apply_startup_health_fix,
+    create_mission_onboarding_pack,
     create_goal_record,
     create_research_output,
     open_mission,
@@ -529,6 +531,13 @@ def main() -> int:
     mission_flow_parser = subparsers.add_parser("mission-flow")
     mission_flow_parser.add_argument("mission_id", nargs="?")
     mission_flow_parser.add_argument("--all", action="store_true")
+
+    mission_onboarding_parser = subparsers.add_parser("mission-onboarding")
+    mission_onboarding_parser.add_argument("mission_id")
+
+    mission_onboard_parser = subparsers.add_parser("mission-onboard")
+    mission_onboard_parser.add_argument("mission_id")
+    mission_onboard_parser.add_argument("--reason", default="")
 
     mission_advance_parser = subparsers.add_parser("mission-advance")
     mission_advance_parser.add_argument("mission_id")
@@ -1713,6 +1722,28 @@ def main() -> int:
             raise SystemExit("mission-flow requires MISSION_ID unless --all is used.")
         flow = mission_flow(ledger, args.mission_id)
         print_json({"mission_flow": flow.to_dict()})
+        return 0
+
+    if args.command == "mission-onboarding":
+        print_json(
+            {
+                "mission_onboarding": mission_onboarding_state(
+                    ledger,
+                    args.mission_id,
+                ).to_dict()
+            }
+        )
+        return 0
+
+    if args.command == "mission-onboard":
+        print_json(
+            create_mission_onboarding_pack(
+                ledger,
+                manifest.system_id,
+                args.mission_id,
+                reason=args.reason,
+            )
+        )
         return 0
 
     if args.command == "mission-advance":

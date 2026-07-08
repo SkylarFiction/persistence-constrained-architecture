@@ -59,6 +59,10 @@ from .mission_autonomy import (
     mission_autonomy_recommendations_from_events,
     propose_autonomous_mission_step,
 )
+from .mission_onboarding import (
+    create_mission_onboarding_pack,
+    mission_onboarding_state,
+)
 from .mission_steps import mission_step_records_from_events
 from .missions import (
     MissionItemKind,
@@ -421,6 +425,17 @@ def _apply_steward_action(
             reason=reason,
         )
         return {"mission_item": item.to_dict()}
+
+    if action == "mission_onboard":
+        mission_id = str(payload.get("mission_id", "")).strip()
+        if not mission_id:
+            raise ValueError("mission_id is required")
+        return create_mission_onboarding_pack(
+            ledger,
+            manifest.system_id,
+            mission_id,
+            reason=reason,
+        )
 
     if action == "update_mission_status":
         mission_id = str(payload.get("mission_id", "")).strip()
@@ -816,6 +831,13 @@ def _status_payload(
         record.to_dict()
         for record in mission_autonomy_recommendations_from_events(ledger.events())
     ]
+    mission_onboarding = {}
+    for brief in mission_briefs_from_events(ledger.events()):
+        if brief.mission.status.value == "open":
+            mission_onboarding[brief.mission.mission_id] = mission_onboarding_state(
+                ledger,
+                brief.mission.mission_id,
+            ).to_dict()
     learning_reviews = [
         record.to_dict()
         for record in learning_review_records_from_events(ledger.events())
@@ -873,6 +895,7 @@ def _status_payload(
         "growth_conflicts": unresolved_conflicts,
         "missions": missions,
         "mission_flows": mission_flows,
+        "mission_onboarding": mission_onboarding,
         "mission_autonomy": mission_autonomy,
         "learning_reviews": learning_reviews,
         "goals": goals,
@@ -1889,7 +1912,35 @@ def _live_chat_html() -> str:
         selectedWorkMode = daily.default_work_mode || 'research';
         window.localStorage.setItem('lucien.workMode', selectedWorkMode);
       }
-      const action = actions[selectedWorkMode] || daily.guided_action || {};
+      const baseAction = actions[selectedWorkMode] || daily.guided_action || {};
+      const onboarding = mission && currentStatus && currentStatus.mission_onboarding
+        ? currentStatus.mission_onboarding[mission.mission_id]
+        : null;
+      const action = onboarding && onboarding.ready
+        ? {
+            ...baseAction,
+            title: 'Mission Onboarding',
+            plain_english_status: onboarding.recommended_action,
+            primary_label: 'Create Starter Pack',
+            target_kind: 'mission_onboarding',
+            what_it_does: [
+              'Creates a proposed first hypothesis.',
+              'Creates an evidence need.',
+              'Creates a risk review item.'
+            ],
+            what_it_will_not_do: [
+              'Will not accept the hypothesis as truth.',
+              'Will not publish or edit files.',
+              'Will not spend OpenAI money.'
+            ],
+            facts: [
+              {label: 'Phase', value: onboarding.phase},
+              {label: 'Needed', value: onboarding.needed.join(', ') || 'none'},
+              {label: 'Cost', value: '$0 API money in Local Mode'},
+              {label: 'Persistence', value: 'Ledger-backed proposed items'}
+            ]
+          }
+        : baseAction;
       currentGuidedAction = action;
       for (const control of document.querySelectorAll('[data-work-mode]')) {
         control.classList.toggle('active', control.dataset.workMode === selectedWorkMode);
@@ -2319,6 +2370,7 @@ def _live_chat_html() -> str:
       const executions = status.tool_executions || [];
       const previews = status.tool_previews || [];
       const inbox = status.steward_inbox || [];
+      const onboarding = status.mission_onboarding || {};
       return (status.missions || []).map((brief) => {
         const mission = brief.mission || {};
         const flow = flows[mission.mission_id] || {};
@@ -2340,6 +2392,7 @@ def _live_chat_html() -> str:
           latest_step: latestStep,
           latest_execution: latestExecution,
           latest_preview: latestPreview,
+          onboarding: onboarding[mission.mission_id] || null,
           counts: brief.counts || {}
         };
       });
@@ -2363,11 +2416,19 @@ def _live_chat_html() -> str:
       const tool = document.createElement('div');
       tool.className = 'item-meta';
       tool.textContent = card.latest_execution ? `last tool: ${card.latest_execution.status} / evidence ${card.latest_execution.evidence_id || 'none'}` : (card.latest_preview ? `last dry run: ${card.latest_preview.permission_decision} / would_execute ${card.latest_preview.would_execute}` : 'last tool: none');
+      const onboarding = document.createElement('div');
+      onboarding.className = 'item-meta';
+      onboarding.textContent = card.onboarding && card.onboarding.ready
+        ? `onboarding: needs ${card.onboarding.needed.join(', ')}`
+        : 'onboarding: starter structure present';
       const actions = document.createElement('div');
       actions.className = 'actions';
       actions.appendChild(localButton('Set Active', () => setActiveMission(card.mission_id)));
       if (card.status === 'open') {
         actions.appendChild(button('Suggest Next Step', {action: 'propose_next_step', mission_id: card.mission_id, reason: 'mission dashboard next-step proposal'}));
+        if (card.onboarding && card.onboarding.ready) {
+          actions.appendChild(button('Create Starter Pack', {action: 'mission_onboard', mission_id: card.mission_id, reason: 'created from mission onboarding wizard'}));
+        }
       }
       if (card.blocker_count || card.inbox_count) {
         actions.appendChild(localButton('Review Blockers', () => {
@@ -2387,7 +2448,7 @@ def _live_chat_html() -> str:
       }
       actions.appendChild(button('Pause', {action: 'update_mission_status', mission_id: card.mission_id, status: 'paused', reason: 'paused from mission dashboard'}));
       actions.appendChild(button('Complete', {action: 'update_mission_status', mission_id: card.mission_id, status: 'completed', reason: 'completed from mission dashboard'}));
-      row.append(title, meta, next, step, tool, actions);
+      row.append(title, meta, next, step, tool, onboarding, actions);
       return row;
     }
 
@@ -3125,6 +3186,14 @@ def _live_chat_html() -> str:
       }
       if (action.target_kind === 'research_brief') {
         createResearch('research_brief');
+        return;
+      }
+      if (action.target_kind === 'mission_onboarding') {
+        if (!selectedMissionId) {
+          addMessage('lucien', 'Select an active mission before creating an onboarding starter pack.');
+          return;
+        }
+        steward({action: 'mission_onboard', mission_id: selectedMissionId, reason: 'created from guided mission onboarding'});
         return;
       }
       if (action.target_kind === 'paper_draft') {

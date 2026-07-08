@@ -208,6 +208,11 @@ from .mission_flow import (
     mission_flow_from_events,
     mission_flows_from_events,
 )
+from .mission_onboarding import (
+    MissionOnboardingState,
+    create_mission_onboarding_pack,
+    mission_onboarding_state,
+)
 from .mission_autonomy import (
     MissionAutonomyRecommendation,
     mission_autonomy_recommendations_from_events,
@@ -478,6 +483,7 @@ __all__ = [
     "MissionPressureResult",
     "MissionFlowState",
     "MissionPhase",
+    "MissionOnboardingState",
     "MissionStepApprovalStatus",
     "MissionStepExecutionStatus",
     "MissionStepRecord",
@@ -582,6 +588,7 @@ __all__ = [
     "current_claim_record",
     "current_recovery_record",
     "create_goal_record",
+    "create_mission_onboarding_pack",
     "create_research_output",
     "daily_plan",
     "default_claim_for_identity_state",
@@ -626,6 +633,7 @@ __all__ = [
     "mission_flow",
     "mission_flow_from_events",
     "mission_flows_from_events",
+    "mission_onboarding_state",
     "mission_items_from_events",
     "mission_records_from_events",
     "mission_step_records_from_events",
