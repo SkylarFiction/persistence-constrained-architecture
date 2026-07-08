@@ -2292,8 +2292,9 @@ def _live_chat_html() -> str:
         empty(missionCards, 'No missions yet. Open a mission to turn Lucien into a governed workbench.');
         return {activeMission: null, cards};
       }
-      if (!selectedMissionId || !cards.some(card => card.mission_id === selectedMissionId)) {
-        const latestOpen = [...cards].reverse().find(card => card.status === 'open');
+      const selectedCard = cards.find(card => card.mission_id === selectedMissionId);
+      const latestOpen = [...cards].reverse().find(card => card.status === 'open');
+      if (!selectedCard || (latestOpen && selectedCard.status !== 'open')) {
         selectedMissionId = (latestOpen || cards[cards.length - 1]).mission_id;
         window.localStorage.setItem('lucien.activeMissionId', selectedMissionId);
       }
