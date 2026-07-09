@@ -25,6 +25,7 @@ from .certification import continuity_certification
 from .build_review import build_review
 from .checkpoint_story import checkpoint_story
 from .commit_readiness import commit_readiness
+from .cold_open import cold_open_report
 from .daily_command_center import daily_command_center
 from .growth import (
     GrowthReviewDecision,
@@ -920,6 +921,7 @@ def _status_payload(
         "latest_events": latest_events,
     }
     status_payload["start_here"] = start_here_decision(status_payload)
+    status_payload["cold_open"] = cold_open_report(ledger, manifest)
     return status_payload
 
 
@@ -1130,6 +1132,17 @@ def _live_chat_html() -> str:
     .start-step.ready { border-color: rgba(66,197,122,.42); }
     .start-step.warn { border-color: rgba(216,161,58,.42); }
     .start-step.blocked { border-color: rgba(224,100,100,.42); }
+    .cold-open-card {
+      border: 1px solid rgba(84,196,179,.22);
+      border-radius: 8px;
+      padding: 12px;
+      background: rgba(84,196,179,.07);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .cold-open-text { color: #dff3eb; line-height: 1.45; overflow-wrap: anywhere; }
     .template-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
     .template-button {
       min-height: 86px;
@@ -1339,7 +1352,7 @@ def _live_chat_html() -> str:
     .advanced-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 0 16px 16px; }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #9ee7c0; }
     ::placeholder { color: #73867d; }
-    @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px; } form { grid-template-columns: 1fr; } .home-top, .brain-mode-row, .mission-controls, .advanced-grid, .guided-workbench, .impact-grid, .output-shell, .start-hero, .start-steps, .template-grid { grid-template-columns: 1fr; } .start-actions { justify-content: flex-start; } }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px; } form { grid-template-columns: 1fr; } .home-top, .brain-mode-row, .mission-controls, .advanced-grid, .guided-workbench, .impact-grid, .output-shell, .start-hero, .start-steps, .template-grid, .cold-open-card { grid-template-columns: 1fr; } .start-actions { justify-content: flex-start; } }
   </style>
 </head>
 <body>
@@ -1376,6 +1389,16 @@ def _live_chat_html() -> str:
           <div class="label">3 / Chat</div>
           <div class="item-title" id="startStepChatTitle">Ask Lucien</div>
           <div class="item-meta" id="startStepChat">Loading brain mode.</div>
+        </div>
+      </div>
+      <div class="cold-open-card">
+        <div>
+          <div class="label">Cold Open Report</div>
+          <div id="coldOpenText" class="cold-open-text">Loading the first action report.</div>
+        </div>
+        <div class="actions">
+          <button type="button" id="coldOpenAsk" class="secondary">Ask This</button>
+          <button type="button" id="coldOpenCopy" class="secondary">Copy</button>
         </div>
       </div>
       <div>
@@ -1748,6 +1771,7 @@ def _live_chat_html() -> str:
     let outputContentById = JSON.parse(window.sessionStorage.getItem('lucien.outputContentById') || '{}');
     let currentGuidedAction = null;
     let currentStartHereAction = {kind: 'wait'};
+    let currentColdOpenPrompt = '';
     let currentStatus = null;
     let lastLucien = '';
     const missionTemplates = {
@@ -1995,6 +2019,17 @@ def _live_chat_html() -> str:
           : `Start Ollama or switch to Debug Mode. ${localRuntime.reason || ''}`,
         localReady ? 'ready' : 'warn'
       );
+      renderColdOpen(status.cold_open || {}, decision);
+    }
+
+    function renderColdOpen(report, decision) {
+      const text = document.getElementById('coldOpenText');
+      const oneSentence = report.one_sentence || decision.summary || 'Ask Lucien for the next safe step.';
+      const oneAction = report.one_action || decision.primary_label || 'Ask What To Do Next';
+      const mission = report.active_mission || {};
+      const inbox = `${report.open_steward_items || 0} open / ${report.high_priority_steward_items || 0} high / ${report.stale_steward_items || 0} stale`;
+      text.textContent = `${oneSentence} First action: ${oneAction}. Mission: ${mission.title || 'none'}. Inbox: ${inbox}.`;
+      currentColdOpenPrompt = `Lucien, here is the cold open report: ${oneSentence} First action: ${oneAction}. Help me do that one action now. Keep it simple.`;
     }
 
     function renderDailyCommandCenter(daily, workbench, selectedMission) {
@@ -3349,6 +3384,14 @@ def _live_chat_html() -> str:
       addMessage('lucien', 'I put a simple next-step question in the chat box. Press Send when you are ready.');
     }
 
+    function askColdOpenReport() {
+      const box = document.getElementById('message');
+      box.value = currentColdOpenPrompt || 'Lucien, what should I do first today? Keep it simple.';
+      box.focus();
+      box.scrollIntoView({behavior: 'smooth', block: 'center'});
+      addMessage('lucien', 'I put the cold-open question in the chat box. Press Send when you are ready.');
+    }
+
     function runStartHereAction(action) {
       const selected = action || currentStartHereAction || {};
       if (selected.kind === 'startup_fix') {
@@ -3415,6 +3458,18 @@ def _live_chat_html() -> str:
 
     document.getElementById('startHereReview').addEventListener('click', () => {
       runStartHereAction({kind: 'review_inbox', filter: (currentStatus && currentStatus.workbench && currentStatus.workbench.high_priority_inbox_count) ? 'high' : 'all'});
+    });
+
+    document.getElementById('coldOpenAsk').addEventListener('click', askColdOpenReport);
+
+    document.getElementById('coldOpenCopy').addEventListener('click', async () => {
+      const text = document.getElementById('coldOpenText').textContent || '';
+      try {
+        await navigator.clipboard.writeText(text);
+        addMessage('lucien', 'Cold-open report copied.');
+      } catch (error) {
+        addMessage('lucien', text);
+      }
     });
 
     for (const button of document.querySelectorAll('[data-mission-template]')) {

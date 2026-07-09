@@ -1139,6 +1139,12 @@ def test_live_chat_html_contains_mission_first_home():
     assert "startHerePrimary" in html
     assert "startHereStarterPack" in html
     assert "startHereReview" in html
+    assert "Cold Open Report" in html
+    assert "coldOpenText" in html
+    assert "coldOpenAsk" in html
+    assert "coldOpenCopy" in html
+    assert "renderColdOpen(status.cold_open || {}, decision)" in html
+    assert "currentColdOpenPrompt" in html
     assert "renderStartHere(status, missionView.activeMission)" in html
     assert "runStartHereAction" in html
     assert "status.start_here" in html
