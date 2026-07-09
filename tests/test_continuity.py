@@ -2609,11 +2609,28 @@ def test_start_here_decision_escalates_stale_or_high_inbox_before_mission():
             },
         }
     )
+    mixed = start_here_decision(
+        {
+            "startup_health": {
+                "stale_steward_items": 1,
+                "stale_steward_threshold_hours": 48,
+            },
+            "workbench": {
+                "active_mission": None,
+                "open_steward_inbox_count": 4,
+                "high_priority_inbox_count": 3,
+            },
+        }
+    )
 
     assert stale["kind"] == "review_inbox"
     assert stale["primary_label"] == "Review Stale Items"
     assert high["kind"] == "review_inbox"
     assert high["filter"] == "high"
+    assert mixed["kind"] == "review_inbox"
+    assert mixed["primary_label"] == "Review High Priority"
+    assert "3 high-priority" in mixed["summary"]
+    assert "1 stale" in mixed["summary"]
 
 
 def test_start_here_decision_guides_mission_onboarding_then_chat():

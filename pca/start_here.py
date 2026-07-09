@@ -29,6 +29,20 @@ def start_here_decision(status: dict[str, Any]) -> dict[str, Any]:
             "severity": "medium",
         }
 
+    if high_inbox:
+        stale_note = f" {stale_inbox} stale item(s) also need review." if stale_inbox else ""
+        return {
+            "kind": "review_inbox",
+            "title": "Review the high-priority blockers",
+            "summary": (
+                f"{high_inbox} high-priority steward item(s) are blocking clean progress."
+                f"{stale_note} Review urgent items first, then return to the mission."
+            ),
+            "primary_label": "Review High Priority",
+            "filter": "high",
+            "severity": "high",
+        }
+
     if stale_inbox:
         hours = int(health.get("stale_steward_threshold_hours") or 48)
         return {
@@ -40,20 +54,7 @@ def start_here_decision(status: dict[str, Any]) -> dict[str, Any]:
             ),
             "primary_label": "Review Stale Items",
             "filter": "all",
-            "severity": "high" if high_inbox else "medium",
-        }
-
-    if high_inbox:
-        return {
-            "kind": "review_inbox",
-            "title": "Review the high-priority blockers",
-            "summary": (
-                f"{high_inbox} high-priority steward item(s) are blocking clean progress. "
-                "Review those first, then return to the mission."
-            ),
-            "primary_label": "Review High Priority",
-            "filter": "high",
-            "severity": "high",
+            "severity": "medium",
         }
 
     if not mission:
