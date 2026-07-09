@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from pca.cold_open import cold_open_report, render_cold_open_report_text
 from pca import (
     AuditEngine,
     AuditOutcome,
@@ -303,6 +304,8 @@ def main() -> int:
     context_parser.add_argument("--prompt", action="store_true")
 
     subparsers.add_parser("status")
+    cold_open_parser = subparsers.add_parser("cold-open")
+    cold_open_parser.add_argument("--json", action="store_true")
     daily_parser = subparsers.add_parser("daily")
     daily_parser.add_argument("--json", action="store_true")
     daily_research_parser = subparsers.add_parser("daily-research-loop")
@@ -930,6 +933,14 @@ def main() -> int:
             print_json({"daily": daily})
         else:
             print(render_daily_command_center_text(daily))
+        return 0
+
+    if args.command == "cold-open":
+        report = cold_open_report(ledger, manifest)
+        if args.json:
+            print_json({"cold_open": report})
+        else:
+            print(render_cold_open_report_text(report))
         return 0
 
     if args.command == "daily-research-loop":

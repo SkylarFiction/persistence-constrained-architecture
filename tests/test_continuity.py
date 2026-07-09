@@ -2635,6 +2635,58 @@ def test_start_here_decision_guides_mission_onboarding_then_chat():
     assert clean["kind"] == "ask_next"
 
 
+def test_cold_open_report_returns_one_action_for_clean_mission(tmp_path):
+    from pca.cold_open import cold_open_report, render_cold_open_report_text
+
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Cold open mission",
+        problem_statement="Make the first action obvious.",
+    )
+
+    report = cold_open_report(ledger, manifest)
+    text = render_cold_open_report_text(report)
+
+    assert report["active_mission"]["mission_id"] == mission.mission_id
+    assert report["decision"]["kind"] == "mission_onboarding"
+    assert report["one_action"] == "Create Starter Pack"
+    assert "Lucien Cold Open" in text
+    assert "Do first: Create Starter Pack" in text
+
+
+def test_cold_open_report_surfaces_stale_review_before_new_work(tmp_path):
+    from pca.cold_open import cold_open_report
+
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    open_mission(
+        ledger,
+        manifest.system_id,
+        title="Mission with stale review",
+        problem_statement="Old review pressure should be visible first.",
+    )
+    task = ReflectionTaskRecord.create(
+        identity_id=manifest.system_id,
+        kind="review_mission",
+        severity="medium",
+        source_reflection_id="reflection_stale",
+        reason="Mission review aged out.",
+        recommended_action="Review the old mission task.",
+    )
+    payload = task.to_dict()
+    payload["created_at"] = (datetime.now(timezone.utc) - timedelta(hours=49)).isoformat()
+    ledger.append("reflection.task_opened", manifest.system_id, payload)
+
+    report = cold_open_report(ledger, manifest)
+
+    assert report["stale_steward_items"] == 1
+    assert report["decision"]["kind"] == "review_inbox"
+    assert report["one_action"] == "Review Stale Items"
+
+
 def test_daily_command_center_recommends_mission_when_none_exists(tmp_path):
     manifest = load_manifest()
     ledger = ContinuityLedger(tmp_path / "continuity.log")
