@@ -14,7 +14,7 @@ from .state import derive_current_claim, record_claim_if_changed
 from .steward_inbox import steward_inbox
 
 
-STALE_INBOX_DAYS = 7
+STALE_INBOX_HOURS = 48
 
 
 def startup_health(
@@ -30,7 +30,7 @@ def startup_health(
     items = steward_inbox(ledger)
     high_items = [item for item in items if item.severity in {"high", "critical"}]
     stale_items = [
-        item for item in items if _age_days(item.created_at) >= STALE_INBOX_DAYS
+        item for item in items if _age_hours(item.created_at) >= STALE_INBOX_HOURS
     ]
     missions = mission_briefs_from_events(ledger.events())
     open_missions = [
@@ -107,7 +107,7 @@ def startup_health(
                 "code": "stale_steward_items",
                 "severity": "medium",
                 "title": "Old steward review pressure exists",
-                "detail": f"{len(stale_items)} item(s) are at least {STALE_INBOX_DAYS} days old.",
+                "detail": f"{len(stale_items)} item(s) are at least {STALE_INBOX_HOURS} hours old.",
             }
         )
 
@@ -148,6 +148,7 @@ def startup_health(
         "open_steward_items": len(items),
         "high_priority_steward_items": len(high_items),
         "stale_steward_items": len(stale_items),
+        "stale_steward_threshold_hours": STALE_INBOX_HOURS,
         "open_missions": len(open_missions),
         "local_model": {
             "provider": model.get("local_provider"),
@@ -296,7 +297,7 @@ def _recommended_next_action(problems: list[dict[str, Any]]) -> str:
     return "Review Startup Health Doctor problems."
 
 
-def _age_days(created_at: str) -> int:
+def _age_hours(created_at: str) -> int:
     if not created_at:
         return 0
     try:
@@ -305,7 +306,7 @@ def _age_days(created_at: str) -> int:
         return 0
     if created.tzinfo is None:
         created = created.replace(tzinfo=timezone.utc)
-    return max(0, (datetime.now(timezone.utc) - created).days)
+    return max(0, int((datetime.now(timezone.utc) - created).total_seconds() // 3600))
 
 
 def _local_model_runtime_status(diagnostic: dict[str, Any]) -> dict[str, Any]:

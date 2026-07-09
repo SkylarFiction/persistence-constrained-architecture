@@ -51,6 +51,7 @@ from pca import (
     PolicyEngine,
     RecoveryRecord,
     RecoveryStatus,
+    ReflectionTaskRecord,
     SkillCandidateStatus,
     TransformRequest,
     accepted_skills_from_events,
@@ -1140,6 +1141,7 @@ def test_live_chat_html_contains_mission_first_home():
     assert "startHereReview" in html
     assert "renderStartHere(status, missionView.activeMission)" in html
     assert "runStartHereAction" in html
+    assert "status.start_here" in html
     assert "Lucien, what should I do next? Keep it simple and give me one safe action." in html
     assert "Quick Start Missions" in html
     assert "Coherence Physics Research" in html
@@ -2537,6 +2539,100 @@ def test_startup_health_safe_fixes_restore_clean_cold_open(tmp_path):
     assert "missing_active_mission" not in {
         problem["code"] for problem in health["problems"]
     }
+
+
+def test_startup_health_marks_steward_items_stale_after_48_hours(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    task = ReflectionTaskRecord.create(
+        identity_id=manifest.system_id,
+        kind="review_mission",
+        severity="medium",
+        source_reflection_id="reflection_test",
+        reason="Mission review has waited too long.",
+        recommended_action="Review mission before continuing.",
+    )
+    payload = task.to_dict()
+    payload["created_at"] = (datetime.now(timezone.utc) - timedelta(hours=49)).isoformat()
+    ledger.append("reflection.task_opened", manifest.system_id, payload)
+
+    health = startup_health(ledger, manifest)
+
+    assert health["stale_steward_threshold_hours"] == 48
+    assert health["stale_steward_items"] == 1
+    assert "stale_steward_items" in {problem["code"] for problem in health["problems"]}
+
+
+def test_start_here_decision_cascade_prefers_safe_startup_fix():
+    from pca.start_here import start_here_decision
+
+    decision = start_here_decision(
+        {
+            "startup_health": {
+                "safe_actions": [
+                    {"action": "refresh_required_evidence", "label": "Refresh required evidence"}
+                ],
+            },
+            "workbench": {"high_priority_inbox_count": 2},
+        }
+    )
+
+    assert decision["kind"] == "startup_fix"
+    assert decision["fix_action"] == "refresh_required_evidence"
+
+
+def test_start_here_decision_escalates_stale_or_high_inbox_before_mission():
+    from pca.start_here import start_here_decision
+
+    stale = start_here_decision(
+        {
+            "startup_health": {
+                "stale_steward_items": 1,
+                "stale_steward_threshold_hours": 48,
+            },
+            "workbench": {"active_mission": None, "open_steward_inbox_count": 1},
+        }
+    )
+    high = start_here_decision(
+        {
+            "startup_health": {"stale_steward_items": 0},
+            "workbench": {
+                "active_mission": None,
+                "open_steward_inbox_count": 2,
+                "high_priority_inbox_count": 2,
+            },
+        }
+    )
+
+    assert stale["kind"] == "review_inbox"
+    assert stale["primary_label"] == "Review Stale Items"
+    assert high["kind"] == "review_inbox"
+    assert high["filter"] == "high"
+
+
+def test_start_here_decision_guides_mission_onboarding_then_chat():
+    from pca.start_here import start_here_decision
+
+    mission = {"mission_id": "mission_1", "title": "Research", "phase": "intake"}
+    onboarding = start_here_decision(
+        {
+            "startup_health": {},
+            "workbench": {"active_mission": mission},
+            "mission_onboarding": {"mission_1": {"ready": True}},
+        }
+    )
+    clean = start_here_decision(
+        {
+            "startup_health": {},
+            "workbench": {"active_mission": mission},
+            "mission_onboarding": {"mission_1": {"ready": False}},
+            "model_usage": {"latest_cost_usd": 0},
+        }
+    )
+
+    assert onboarding["kind"] == "mission_onboarding"
+    assert onboarding["mission_id"] == "mission_1"
+    assert clean["kind"] == "ask_next"
 
 
 def test_daily_command_center_recommends_mission_when_none_exists(tmp_path):

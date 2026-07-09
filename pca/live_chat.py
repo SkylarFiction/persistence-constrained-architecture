@@ -91,6 +91,7 @@ from .report import build_trace_report
 from .session_replay import build_session_replay, latest_session_id
 from .self_model import derive_self_model
 from .skill_memory import accepted_skills_from_events, skill_candidates_from_events
+from .start_here import start_here_decision
 from .state import derive_current_claim
 from .steward_inbox import apply_steward_inbox_action, steward_inbox
 from .startup_health import apply_startup_health_fix, startup_health
@@ -861,7 +862,7 @@ def _status_payload(
         if session_id
         else None
     )
-    return {
+    status_payload = {
         "summary": summary,
         "daily": daily_command_center(ledger, manifest),
         "startup_health": startup_health(ledger, manifest),
@@ -918,6 +919,8 @@ def _status_payload(
         "session_replay": session_replay,
         "latest_events": latest_events,
     }
+    status_payload["start_here"] = start_here_decision(status_payload)
+    return status_payload
 
 
 def _event_detail(payload: dict[str, Any]) -> str:
@@ -1941,11 +1944,12 @@ def _live_chat_html() -> str:
       const workbench = status.workbench || {};
       const modelAdapter = status.model_adapter || {};
       const usage = status.model_usage || {};
+      const decision = status.start_here || {};
       const mission = selectedMission && selectedMission.mission_id ? selectedMission : null;
       const onboarding = mission && status.mission_onboarding ? status.mission_onboarding[mission.mission_id] : null;
-      const healthActions = health.safe_actions || [];
       const inboxOpen = workbench.open_steward_inbox_count || 0;
       const inboxHigh = workbench.high_priority_inbox_count || 0;
+      const staleInbox = health.stale_steward_items || 0;
       const localRuntime = modelAdapter.local_runtime || {};
       const localReady = localRuntime.available !== false;
       const title = document.getElementById('startHereTitle');
@@ -1953,40 +1957,15 @@ def _live_chat_html() -> str:
       const primary = document.getElementById('startHerePrimary');
       const starter = document.getElementById('startHereStarterPack');
       const review = document.getElementById('startHereReview');
-      let action = {kind: 'ask_next'};
-
-      if (healthActions.length) {
-        const fix = healthActions[0];
-        title.textContent = 'Lucien needs one setup fix';
-        summary.textContent = `${fix.label || 'Apply safe startup fix'} before normal work. This does not delete durable memory, missions, evidence, skills, or ledger history.`;
-        primary.textContent = fix.label || 'Apply Safe Fix';
-        action = {kind: 'startup_fix', fix_action: fix.action};
-      } else if (!mission) {
-        title.textContent = 'Start by choosing a mission';
-        summary.textContent = 'Lucien works best when the chat is tied to a mission. Open a mission first, then ask for the next safe step.';
-        primary.textContent = 'Start Mission';
-        action = {kind: 'start_mission'};
-      } else if (onboarding && onboarding.ready) {
-        title.textContent = 'Set up this mission first';
-        summary.textContent = 'Create a starter pack so this mission has a first hypothesis, an evidence need, and a risk review item. Nothing becomes accepted truth automatically.';
-        primary.textContent = 'Create Starter Pack';
-        action = {kind: 'mission_onboarding', mission_id: mission.mission_id};
-      } else if (inboxHigh > 0) {
-        title.textContent = 'Review the high-priority blockers';
-        summary.textContent = `${inboxHigh} high-priority steward item(s) are blocking clean progress. Review those first, then return to the mission.`;
-        primary.textContent = 'Review High Priority';
-        action = {kind: 'review_inbox', filter: 'high'};
-      } else {
-        title.textContent = 'You can talk to Lucien now';
-        summary.textContent = `Active mission: ${mission.title}. Local brain is ${localReady ? 'ready' : 'not ready'}; last cost was $${Number(usage.latest_cost_usd || 0).toFixed(6)}. Ask Lucien for the next safe step and keep it simple.`;
-        primary.textContent = 'Ask What To Do Next';
-        action = {kind: 'ask_next', mission_id: mission.mission_id};
-      }
-
-      currentStartHereAction = action;
+      title.textContent = decision.title || 'You can talk to Lucien now';
+      summary.textContent = decision.summary || 'Ask Lucien for the next safe step and keep it simple.';
+      primary.textContent = decision.primary_label || 'Ask What To Do Next';
+      currentStartHereAction = decision.kind ? decision : {kind: 'ask_next', mission_id: mission ? mission.mission_id : ''};
       starter.style.display = onboarding && onboarding.ready ? '' : 'none';
       review.style.display = inboxOpen ? '' : 'none';
-      review.textContent = inboxHigh > 0 ? `Review Inbox (${inboxHigh} high)` : `Review Inbox (${inboxOpen})`;
+      review.textContent = staleInbox > 0
+        ? `Review Inbox (${staleInbox} stale)`
+        : (inboxHigh > 0 ? `Review Inbox (${inboxHigh} high)` : `Review Inbox (${inboxOpen})`);
 
       setStartStep(
         'startStepMissionCard',
@@ -2003,8 +1982,8 @@ def _live_chat_html() -> str:
         onboarding && onboarding.ready ? 'Starter pack needed' : (inboxOpen ? 'Review pressure visible' : 'Setup is clear'),
         onboarding && onboarding.ready
           ? 'Click Create Starter Pack. It creates proposed mission structure, not accepted truth.'
-          : (inboxOpen ? `${inboxOpen} steward item(s), ${inboxHigh} high priority. Clear only what is actually reviewed.` : 'No setup blocker is stopping this mission right now.'),
-        onboarding && onboarding.ready ? 'warn' : (inboxHigh ? 'blocked' : 'ready')
+          : (inboxOpen ? `${inboxOpen} steward item(s), ${inboxHigh} high priority, ${staleInbox} stale. Clear only what is actually reviewed.` : 'No setup blocker is stopping this mission right now.'),
+        onboarding && onboarding.ready ? 'warn' : ((inboxHigh || staleInbox) ? 'blocked' : 'ready')
       );
       setStartStep(
         'startStepChatCard',
