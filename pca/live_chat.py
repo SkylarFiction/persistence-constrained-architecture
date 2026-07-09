@@ -1127,6 +1127,18 @@ def _live_chat_html() -> str:
     .start-step.ready { border-color: rgba(66,197,122,.42); }
     .start-step.warn { border-color: rgba(216,161,58,.42); }
     .start-step.blocked { border-color: rgba(224,100,100,.42); }
+    .template-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .template-button {
+      min-height: 86px;
+      display: block;
+      text-align: left;
+      border-color: rgba(255,255,255,.14);
+      background: rgba(255,255,255,.055);
+      box-shadow: none;
+      color: #edf4f0;
+    }
+    .template-button strong { display: block; margin-bottom: 5px; font-size: 14px; }
+    .template-button span { display: block; color: var(--muted); font-size: 12px; line-height: 1.35; font-weight: 700; }
     .home { grid-column: 1 / -1; display: grid; gap: 14px; }
     .home-top { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: 12px; }
     .home-title { font-size: 25px; font-weight: 900; margin: 0 0 4px; }
@@ -1324,7 +1336,7 @@ def _live_chat_html() -> str:
     .advanced-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 0 16px 16px; }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #9ee7c0; }
     ::placeholder { color: #73867d; }
-    @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px; } form { grid-template-columns: 1fr; } .home-top, .brain-mode-row, .mission-controls, .advanced-grid, .guided-workbench, .impact-grid, .output-shell, .start-hero, .start-steps { grid-template-columns: 1fr; } .start-actions { justify-content: flex-start; } }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px; } form { grid-template-columns: 1fr; } .home-top, .brain-mode-row, .mission-controls, .advanced-grid, .guided-workbench, .impact-grid, .output-shell, .start-hero, .start-steps, .template-grid { grid-template-columns: 1fr; } .start-actions { justify-content: flex-start; } }
   </style>
 </head>
 <body>
@@ -1361,6 +1373,23 @@ def _live_chat_html() -> str:
           <div class="label">3 / Chat</div>
           <div class="item-title" id="startStepChatTitle">Ask Lucien</div>
           <div class="item-meta" id="startStepChat">Loading brain mode.</div>
+        </div>
+      </div>
+      <div>
+        <div class="label">Quick Start Missions</div>
+        <div class="template-grid" id="missionTemplates">
+          <button type="button" class="template-button" data-mission-template="coherence_research">
+            <strong>Coherence Physics Research</strong>
+            <span>Grow the theory, map claims, gather evidence, and draft clear material.</span>
+          </button>
+          <button type="button" class="template-button" data-mission-template="build_lucien">
+            <strong>Build Lucien</strong>
+            <span>Improve the local governed AI workbench and make it easier to use.</span>
+          </button>
+          <button type="button" class="template-button" data-mission-template="public_writing">
+            <strong>Public Writing</strong>
+            <span>Turn PCA and Coherence Physics into readable posts, docs, and demos.</span>
+          </button>
         </div>
       </div>
     </section>
@@ -1718,6 +1747,23 @@ def _live_chat_html() -> str:
     let currentStartHereAction = {kind: 'wait'};
     let currentStatus = null;
     let lastLucien = '';
+    const missionTemplates = {
+      coherence_research: {
+        title: 'Coherence Physics Research Program',
+        problem: 'Continue developing Coherence Physics into clear, testable, evidence-backed research material while keeping claims separated from evidence and speculation.',
+        values: ['truth before comfort', 'evidence first', 'clarity', 'recoverability', 'public usefulness']
+      },
+      build_lucien: {
+        title: 'Build Lucien Daily Workbench',
+        problem: 'Make Lucien easier to use as a local governed AI workbench that can help with missions, research, evidence, writing, and safe tool use.',
+        values: ['simple daily use', 'local first', 'low cost', 'governed autonomy', 'clear next actions']
+      },
+      public_writing: {
+        title: 'Public Writing and Demo Material',
+        problem: 'Turn PCA, Lucien, and Coherence Physics into understandable public explanations, demos, screenshots, posts, and release notes without overclaiming.',
+        values: ['plain language', 'honesty', 'no AGI hype', 'strong examples', 'reviewable artifacts']
+      }
+    };
 
     function addMessage(kind, text) {
       const node = document.createElement('div');
@@ -3358,6 +3404,27 @@ def _live_chat_html() -> str:
       askLucienNextStep();
     }
 
+    function openMissionTemplate(templateId) {
+      const template = missionTemplates[templateId];
+      if (!template) return;
+      const existing = ((currentStatus && currentStatus.missions) || [])
+        .map(item => item.mission || {})
+        .find(mission => mission.title === template.title && mission.status === 'open');
+      if (existing && existing.mission_id) {
+        setActiveMission(existing.mission_id);
+        addMessage('lucien', `I selected the existing mission: ${template.title}. Click Create Starter Pack if it appears, then ask me for the next safe step.`);
+        return;
+      }
+      steward({
+        action: 'open_mission',
+        title: template.title,
+        problem: template.problem,
+        values: template.values,
+        reason: `opened from quick start template: ${templateId}`
+      });
+      addMessage('lucien', `Opening mission template: ${template.title}. When it appears, use Create Starter Pack to seed the first hypothesis, evidence need, and risk review.`);
+    }
+
     document.getElementById('startHerePrimary').addEventListener('click', () => {
       runStartHereAction(currentStartHereAction);
     });
@@ -3370,6 +3437,10 @@ def _live_chat_html() -> str:
     document.getElementById('startHereReview').addEventListener('click', () => {
       runStartHereAction({kind: 'review_inbox', filter: (currentStatus && currentStatus.workbench && currentStatus.workbench.high_priority_inbox_count) ? 'high' : 'all'});
     });
+
+    for (const button of document.querySelectorAll('[data-mission-template]')) {
+      button.addEventListener('click', () => openMissionTemplate(button.dataset.missionTemplate));
+    }
 
     for (const control of document.querySelectorAll('[data-work-mode]')) {
       control.addEventListener('click', () => {

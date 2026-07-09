@@ -1141,6 +1141,12 @@ def test_live_chat_html_contains_mission_first_home():
     assert "renderStartHere(status, missionView.activeMission)" in html
     assert "runStartHereAction" in html
     assert "Lucien, what should I do next? Keep it simple and give me one safe action." in html
+    assert "Quick Start Missions" in html
+    assert "Coherence Physics Research" in html
+    assert "Build Lucien" in html
+    assert "Public Writing" in html
+    assert "data-mission-template=\"coherence_research\"" in html
+    assert "openMissionTemplate" in html
     assert "Daily Command Center" in html
     assert "What do you want Coherence AI to help with today?" in html
     assert "Research" in html
