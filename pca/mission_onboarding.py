@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .evidence_locker import add_evidence, link_evidence
 from .ledger import ContinuityLedger
 from .mission_flow import MissionPhase, mission_flow
 from .missions import MissionItemKind, add_mission_item, require_mission
@@ -81,6 +82,8 @@ def create_mission_onboarding_pack(
     if not state.ready:
         return {"created": [], "onboarding": state.to_dict()}
     created = []
+    evidence_records = []
+    evidence_links = []
     if MissionItemKind.HYPOTHESIS.value in state.needed:
         created.append(
             add_mission_item(
@@ -99,20 +102,41 @@ def create_mission_onboarding_pack(
             )
         )
     if MissionItemKind.EVIDENCE.value in state.needed:
+        evidence_summary = (
+            f"Evidence request for {state.title}: find one source, note, "
+            "experiment, prior claim, or observation that can support or weaken "
+            "the starter hypothesis before treating it as accepted."
+        )
         created.append(
             add_mission_item(
                 ledger,
                 identity_id,
                 mission_id=mission_id,
                 kind=MissionItemKind.EVIDENCE,
-                summary=(
-                    f"Evidence needed for {state.title}: identify one source, note, "
-                    "experiment, or prior claim that can be linked before treating the "
-                    "hypothesis as supported."
-                ),
+                summary=evidence_summary,
                 status="needed",
                 confidence="unknown",
                 reason=reason or "created by mission onboarding wizard",
+            )
+        )
+        evidence = add_evidence(
+            ledger,
+            identity_id,
+            source_type="mission_observation",
+            summary=evidence_summary,
+            source=f"mission:{mission_id}:onboarding:evidence_request",
+            confidence="unknown",
+            reason=reason or "created by mission onboarding wizard",
+        )
+        evidence_records.append(evidence)
+        evidence_links.append(
+            link_evidence(
+                ledger,
+                identity_id,
+                evidence.evidence_id,
+                "mission",
+                mission_id,
+                reason="mission onboarding evidence request",
             )
         )
     if MissionItemKind.RISK.value in state.needed:
@@ -133,5 +157,7 @@ def create_mission_onboarding_pack(
         )
     return {
         "created": [item.to_dict() for item in created],
+        "evidence": [record.to_dict() for record in evidence_records],
+        "evidence_links": [record.to_dict() for record in evidence_links],
         "onboarding": mission_onboarding_state(ledger, mission_id).to_dict(),
     }

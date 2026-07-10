@@ -2450,11 +2450,20 @@ def test_create_mission_onboarding_pack_adds_proposed_starter_items(tmp_path):
     )
     brief = mission_briefs_from_events(ledger.events())[0]
     counts = brief.to_dict()["counts"]
+    evidence = evidence_records_from_events(ledger.events())
+    linked = evidence_for_target(ledger.events(), "mission", mission.mission_id)
 
     assert len(result["created"]) == 3
+    assert len(result["evidence"]) == 1
+    assert len(result["evidence_links"]) == 1
     assert counts["hypothesis"] == 1
     assert counts["evidence"] == 1
     assert counts["risk"] == 1
+    assert len(evidence) == 1
+    assert evidence[0].source_type.value == "mission_observation"
+    assert evidence[0].review_status.value == "raw"
+    assert len(linked) == 1
+    assert linked[0]["evidence"]["evidence_id"] == evidence[0].evidence_id
     assert result["onboarding"]["ready"] is False
 
 
