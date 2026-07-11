@@ -65,6 +65,7 @@ from pca import (
     execute_approved_autonomy_actions,
     execute_autonomy_action,
     export_latest_anchor,
+    export_research_pdf,
     find_followup,
     find_recovery,
     followups_from_events,
@@ -330,6 +331,10 @@ def main() -> int:
     research_outputs_parser = subparsers.add_parser("research-outputs")
     research_outputs_parser.add_argument("--mission")
     research_outputs_parser.add_argument("--json", action="store_true")
+    research_pdf_parser = subparsers.add_parser("research-pdf")
+    research_pdf_parser.add_argument("mission_id")
+    research_pdf_parser.add_argument("--output", default="reports/lucien_research_packet.pdf")
+    research_pdf_parser.add_argument("--json", action="store_true")
     certification_parser = subparsers.add_parser("continuity-certification")
     certification_parser.add_argument("--json", action="store_true")
     daily_plan_parser = subparsers.add_parser("daily-plan")
@@ -1032,6 +1037,14 @@ def main() -> int:
             print_json({"research_outputs": [output.to_dict() for output in outputs]})
         else:
             print(render_research_outputs_text(outputs))
+        return 0
+
+    if args.command == "research-pdf":
+        result = export_research_pdf(ledger, manifest, args.mission_id, args.output)
+        if args.json:
+            print_json({"research_pdf": result})
+        else:
+            print(f"Research PDF written: {result['path']}")
         return 0
 
     if args.command == "continuity-certification":

@@ -86,6 +86,7 @@ from .research_sandbox import (
     research_sandbox_status,
 )
 from .research_autopilot import run_research_autopilot
+from .research_pdf import export_research_pdf
 from .reflection_queue import (
     open_tasks_from_reflection,
     resolve_matching_reflection_tasks,
@@ -160,6 +161,9 @@ def run_live_chat_server(
                     self,
                     {"replay": build_session_replay(ledger, manifest, session_id).to_dict()},
                 )
+                return
+            if parsed.path.startswith("/reports/"):
+                _send_report_file(self, parsed.path)
                 return
             self.send_error(404)
 
@@ -718,6 +722,19 @@ def _apply_steward_action(
             )
         }
 
+    if action == "export_research_pdf":
+        mission_id = str(payload.get("mission_id", "")).strip()
+        if not mission_id:
+            raise ValueError("mission_id is required")
+        return {
+            "research_pdf": export_research_pdf(
+                ledger,
+                manifest,
+                mission_id,
+                payload.get("output_path") or "reports/lucien_research_packet.pdf",
+            )
+        }
+
     if action == "autonomy_review":
         item_id = str(payload.get("item_id", "")).strip()
         decision = str(payload.get("decision", "")).strip()
@@ -1108,6 +1125,27 @@ def _send_html(handler: BaseHTTPRequestHandler, html: str) -> None:
     body = html.encode("utf-8")
     handler.send_response(200)
     handler.send_header("Content-Type", "text/html; charset=utf-8")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+def _send_report_file(handler: BaseHTTPRequestHandler, request_path: str) -> None:
+    relative = request_path.lstrip("/")
+    path = Path(relative)
+    if path.parts[:1] != ("reports",) or ".." in path.parts or not path.exists():
+        handler.send_error(404)
+        return
+    content_type = "application/octet-stream"
+    if path.suffix == ".pdf":
+        content_type = "application/pdf"
+    elif path.suffix == ".html":
+        content_type = "text/html; charset=utf-8"
+    elif path.suffix in {".md", ".txt"}:
+        content_type = "text/plain; charset=utf-8"
+    body = path.read_bytes()
+    handler.send_response(200)
+    handler.send_header("Content-Type", content_type)
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
@@ -1552,6 +1590,7 @@ def _live_chat_html() -> str:
           <button type="button" id="workspaceEvidence" class="secondary">Accept as Evidence</button>
           <button type="button" id="workspaceKeepDraft" class="secondary">Keep as Draft</button>
           <button type="button" id="workspaceExport" class="secondary">Export Markdown</button>
+          <button type="button" id="workspaceExportPdf" class="secondary">Save Research PDF</button>
         </div>
       </div>
       <div class="output-shell">
@@ -3809,6 +3848,25 @@ def _live_chat_html() -> str:
       link.download = `${plainOutputKind(output.kind).toLowerCase().replaceAll(' ', '-')}-${output.output_id.slice(-8)}.md`;
       link.click();
       URL.revokeObjectURL(link.href);
+    });
+
+    document.getElementById('workspaceExportPdf').addEventListener('click', async () => {
+      if (!selectedMissionId) {
+        addMessage('lucien', 'Select an active mission before exporting a research PDF.');
+        return;
+      }
+      const data = await steward({
+        action: 'export_research_pdf',
+        mission_id: selectedMissionId,
+        reason: 'exported mission research packet from live workspace'
+      });
+      const pdf = data && data.result && data.result.research_pdf ? data.result.research_pdf : null;
+      if (!pdf || !pdf.path) {
+        addMessage('lucien', 'PDF export did not return a file path.');
+        return;
+      }
+      addMessage('lucien', `Research PDF saved at ${pdf.path}. Opening it now.`);
+      window.open('/' + pdf.path, '_blank');
     });
 
     async function createResearch(kind) {

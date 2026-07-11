@@ -254,6 +254,15 @@ def render_research_outputs_text(outputs: list[ResearchSandboxOutputRecord]) -> 
     return "\n".join(lines)
 
 
+def render_research_output_content(
+    events: list[ContinuityEvent],
+    output: ResearchSandboxOutputRecord,
+) -> str:
+    brief = _mission_brief(events, output.mission_id)
+    content, _ = _draft_content(brief, output.kind)
+    return content
+
+
 def _proposed_evidence_for_output(
     ledger: ContinuityLedger,
     manifest: IdentityManifest,

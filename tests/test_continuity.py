@@ -98,6 +98,7 @@ from pca import (
     estimate_model_usage,
     evidence_for_target,
     evidence_locker_snapshot,
+    export_research_pdf,
     execute_approved_autonomy_actions,
     execute_autonomy_action,
     evidence_records_from_events,
@@ -3179,6 +3180,40 @@ def test_research_autopilot_prepares_reviewable_research_run(tmp_path):
     )
     assert any(brief.mission.status == MissionStatus.OPEN for brief in briefs)
     assert steward_inbox(ledger) != []
+
+
+def test_export_research_pdf_writes_mission_packet(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="PDF research mission",
+        problem_statement="Export proposed research into a reviewable packet.",
+    )
+    create_mission_onboarding_pack(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        reason="pdf test starter pack",
+    )
+    create_research_output(
+        ledger,
+        manifest,
+        mission.mission_id,
+        "research_brief",
+        reason="pdf test research brief",
+    )
+    output_path = tmp_path / "research_packet.pdf"
+
+    result = export_research_pdf(ledger, manifest, mission.mission_id, output_path)
+
+    assert result["path"] == str(output_path)
+    assert result["mission_title"] == "PDF research mission"
+    assert result["output_count"] == 1
+    assert result["evidence_count"] >= 2
+    assert output_path.read_bytes().startswith(b"%PDF-1.4")
+    assert b"Lucien Research Packet" in output_path.read_bytes()
 
 
 def test_daily_plan_includes_active_goal_and_safe_next_action(tmp_path):

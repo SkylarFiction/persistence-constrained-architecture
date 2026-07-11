@@ -325,6 +325,7 @@ from .research_sandbox import (
     research_outputs_from_events,
     research_sandbox_status,
 )
+from .research_pdf import export_research_pdf
 from .research_autopilot import (
     render_research_autopilot_text,
     research_autopilot_records_from_events,
@@ -608,6 +609,7 @@ __all__ = [
     "evidence_locker_snapshot",
     "evidence_records_from_events",
     "evidence_review_records_from_events",
+    "export_research_pdf",
     "fail_mission_step",
     "find_followup",
     "find_growth_conflict",
