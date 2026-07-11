@@ -41,6 +41,7 @@ from pca import (
     apply_steward_inbox_action,
     accepted_skills_from_events,
     run_auto_daily_research_loop,
+    run_coherence_paper_pipeline,
     run_research_autopilot,
     authorization_policy_from_packs,
     autonomy_queue_items_from_events,
@@ -98,6 +99,7 @@ from pca import (
     create_mission_onboarding_pack,
     create_goal_record,
     create_research_output,
+    index_coherence_corpus,
     open_mission,
     open_tasks_from_reflection,
     propose_growth,
@@ -136,6 +138,8 @@ from pca import (
     render_auto_daily_research_loop_text,
     render_checkpoint_history_text,
     render_checkpoint_story_markdown,
+    render_coherence_corpus_index_text,
+    render_coherence_paper_pipeline_text,
     render_coherence_seed_text,
     render_commit_readiness_text,
     render_daily_command_center_text,
@@ -319,6 +323,22 @@ def main() -> int:
     research_autopilot_parser = subparsers.add_parser("research-autopilot")
     research_autopilot_parser.add_argument("--json", action="store_true")
     research_autopilot_parser.add_argument("--force", action="store_true")
+    research_autopilot_parser.add_argument("--mission")
+    coherence_corpus_parser = subparsers.add_parser("coherence-corpus-index")
+    coherence_corpus_parser.add_argument("--json", action="store_true")
+    coherence_corpus_parser.add_argument("--mission")
+    coherence_corpus_parser.add_argument("--root", action="append", default=[])
+    coherence_corpus_parser.add_argument("--limit", type=int, default=12)
+    coherence_paper_parser = subparsers.add_parser("coherence-paper-pipeline")
+    coherence_paper_parser.add_argument("--json", action="store_true")
+    coherence_paper_parser.add_argument("--mission")
+    coherence_paper_parser.add_argument("--root", action="append", default=[])
+    coherence_paper_parser.add_argument("--limit", type=int, default=8)
+    coherence_paper_parser.add_argument("--force", action="store_true")
+    coherence_paper_parser.add_argument(
+        "--output",
+        default="reports/coherence_physics_research_packet.pdf",
+    )
     research_sandbox_parser = subparsers.add_parser("research-sandbox")
     research_sandbox_parser.add_argument("--json", action="store_true")
     research_brief_parser = subparsers.add_parser("research-brief")
@@ -963,6 +983,7 @@ def main() -> int:
             ledger,
             manifest,
             project_root=Path.cwd(),
+            mission_id=args.mission,
             force=args.force,
             reason="manual CLI daily research loop",
         )
@@ -984,6 +1005,40 @@ def main() -> int:
             print_json({"research_autopilot": result})
         else:
             print(render_research_autopilot_text(result))
+        return 0
+
+    if args.command == "coherence-corpus-index":
+        result = index_coherence_corpus(
+            ledger,
+            manifest,
+            project_root=Path.cwd(),
+            mission_id=args.mission,
+            roots=args.root or None,
+            limit=args.limit,
+            reason="manual CLI Coherence Physics corpus index",
+        )
+        if args.json:
+            print_json({"coherence_corpus": result})
+        else:
+            print(render_coherence_corpus_index_text(result))
+        return 0
+
+    if args.command == "coherence-paper-pipeline":
+        result = run_coherence_paper_pipeline(
+            ledger,
+            manifest,
+            project_root=Path.cwd(),
+            mission_id=args.mission,
+            corpus_roots=args.root or None,
+            corpus_limit=args.limit,
+            force=args.force,
+            output_path=args.output,
+            reason="manual CLI Coherence Physics paper pipeline",
+        )
+        if args.json:
+            print_json({"coherence_paper_pipeline": result})
+        else:
+            print(render_coherence_paper_pipeline_text(result))
         return 0
 
     if args.command == "research-sandbox":

@@ -24,6 +24,7 @@ def run_research_autopilot(
     ledger: ContinuityLedger,
     manifest: IdentityManifest,
     project_root: str | Path = ".",
+    mission_id: str | None = None,
     run_date: str | None = None,
     force: bool = False,
     reason: str = "",
@@ -107,7 +108,7 @@ def run_research_autopilot(
     )
 
     daily = daily_command_center(ledger, manifest)
-    mission = _select_focus_mission(ledger, daily, preferred_mission_id)
+    mission = _select_focus_mission(ledger, daily, mission_id or preferred_mission_id)
     if not mission:
         return _record_autopilot_run(
             ledger,

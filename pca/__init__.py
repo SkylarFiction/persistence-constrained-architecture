@@ -331,6 +331,17 @@ from .research_review import (
     research_review_desk,
     research_review_desks,
 )
+from .coherence_corpus import (
+    coherence_corpus_index_records_from_events,
+    discover_coherence_sources,
+    index_coherence_corpus,
+    render_coherence_corpus_index_text,
+)
+from .coherence_paper_pipeline import (
+    coherence_paper_pipeline_records_from_events,
+    render_coherence_paper_pipeline_text,
+    run_coherence_paper_pipeline,
+)
 from .research_autopilot import (
     render_research_autopilot_text,
     research_autopilot_records_from_events,
@@ -592,6 +603,8 @@ __all__ = [
     "chat_turns_from_events",
     "classify_research_action",
     "close_chat_session",
+    "coherence_corpus_index_records_from_events",
+    "coherence_paper_pipeline_records_from_events",
     "compile_self_model",
     "complete_mission_step",
     "continuity_claim_from_followups",
@@ -605,6 +618,7 @@ __all__ = [
     "default_claim_for_identity_state",
     "derive_current_claim",
     "derive_self_model",
+    "discover_coherence_sources",
     "export_latest_anchor",
     "execute_approved_autonomy_actions",
     "execute_autonomy_action",
@@ -628,6 +642,7 @@ __all__ = [
     "growth_review_records_from_events",
     "growth_conflict_records_from_events",
     "growth_conflict_resolution_records_from_events",
+    "index_coherence_corpus",
     "lineage_records",
     "link_checkpoint_to_mission",
     "link_evidence",
@@ -668,6 +683,8 @@ __all__ = [
     "render_auto_daily_research_loop_text",
     "render_checkpoint_history_text",
     "render_checkpoint_story_markdown",
+    "render_coherence_corpus_index_text",
+    "render_coherence_paper_pipeline_text",
     "render_coherence_seed_text",
     "render_commit_readiness_text",
     "render_daily_plan_text",
@@ -715,6 +732,7 @@ __all__ = [
     "report_scenario",
     "run_all_scenarios",
     "run_auto_daily_research_loop",
+    "run_coherence_paper_pipeline",
     "run_research_autopilot",
     "run_scenario",
     "safe_load_policy_directory",

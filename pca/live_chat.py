@@ -86,6 +86,8 @@ from .research_sandbox import (
     research_sandbox_status,
 )
 from .research_autopilot import run_research_autopilot
+from .coherence_corpus import index_coherence_corpus
+from .coherence_paper_pipeline import run_coherence_paper_pipeline
 from .research_pdf import export_research_pdf
 from .research_review import research_review_desks
 from .reflection_queue import (
@@ -713,13 +715,47 @@ def _apply_steward_action(
 
     if action == "run_research_autopilot":
         force = bool(payload.get("force"))
+        mission_id = str(payload.get("mission_id", "")).strip() or None
         return {
             "research_autopilot": run_research_autopilot(
                 ledger,
                 manifest,
                 project_root=Path.cwd(),
+                mission_id=mission_id,
                 force=force,
                 reason=reason or "live research autopilot",
+            )
+        }
+
+    if action == "index_coherence_corpus":
+        mission_id = str(payload.get("mission_id", "")).strip() or None
+        limit = int(payload.get("limit") or 12)
+        return {
+            "coherence_corpus": index_coherence_corpus(
+                ledger,
+                manifest,
+                project_root=Path.cwd(),
+                mission_id=mission_id,
+                limit=limit,
+                reason=reason or "live Coherence Physics corpus index",
+            )
+        }
+
+    if action == "run_coherence_paper_pipeline":
+        mission_id = str(payload.get("mission_id", "")).strip() or None
+        limit = int(payload.get("limit") or 8)
+        force = bool(payload.get("force"))
+        return {
+            "coherence_paper_pipeline": run_coherence_paper_pipeline(
+                ledger,
+                manifest,
+                project_root=Path.cwd(),
+                mission_id=mission_id,
+                corpus_limit=limit,
+                force=force,
+                output_path=payload.get("output_path")
+                or "reports/coherence_physics_research_packet.pdf",
+                reason=reason or "live Coherence Physics paper pipeline",
             )
         }
 
@@ -1629,7 +1665,9 @@ def _live_chat_html() -> str:
           <div class="item-meta">Review what Lucien prepared, then decide whether to review evidence, export a PDF, or draft next.</div>
         </div>
         <div class="actions">
+          <button type="button" id="reviewDeskIndexCorpus" class="secondary">Index Corpus</button>
           <button type="button" id="reviewDeskRun" class="secondary">Run Research</button>
+          <button type="button" id="reviewDeskPaperPipeline" class="primary">Make Paper Packet</button>
           <button type="button" id="reviewDeskEvidence" class="secondary">Review Evidence</button>
           <button type="button" id="reviewDeskPdf" class="secondary">Save PDF</button>
         </div>
@@ -2509,7 +2547,9 @@ def _live_chat_html() -> str:
       actions.innerHTML = '<div class="item-title">One-click review path</div><div class="item-meta">These actions keep claims proposed until steward review.</div>';
       const buttonRow = document.createElement('div');
       buttonRow.className = 'actions';
-      buttonRow.appendChild(localButton('Run Research', () => steward({action: 'run_research_autopilot', reason: 'run from research review desk'})));
+      buttonRow.appendChild(localButton('Index Corpus', () => indexCorpusForSelectedMission()));
+      buttonRow.appendChild(localButton('Run Research', () => steward({action: 'run_research_autopilot', mission_id: selectedMission.mission_id, reason: 'run from research review desk'})));
+      buttonRow.appendChild(localButton('Make Paper Packet', () => runPaperPipelineForSelectedMission()));
       if ((review.raw_evidence_ids || []).length) {
         buttonRow.appendChild(localButton('Accept First Raw Evidence', () => {
           const evidenceId = review.raw_evidence_ids[0];
@@ -3955,11 +3995,51 @@ def _live_chat_html() -> str:
       window.open('/' + pdf.path, '_blank');
     }
 
+    async function indexCorpusForSelectedMission() {
+      const data = await steward({
+        action: 'index_coherence_corpus',
+        mission_id: selectedMissionId,
+        limit: 12,
+        reason: 'indexed Coherence Physics corpus from research review desk'
+      });
+      const corpus = data && data.result && data.result.coherence_corpus ? data.result.coherence_corpus : null;
+      if (!corpus) {
+        addMessage('lucien', 'Corpus index did not return a result.');
+        return;
+      }
+      addMessage(
+        'lucien',
+        `Indexed Coherence corpus: ${corpus.indexed_count || 0} new source(s), ${corpus.reused_count || 0} reused, ${corpus.linked_count || 0} linked to the mission. Evidence remains raw until reviewed.`
+      );
+    }
+
+    async function runPaperPipelineForSelectedMission() {
+      const data = await steward({
+        action: 'run_coherence_paper_pipeline',
+        mission_id: selectedMissionId,
+        limit: 8,
+        output_path: 'reports/coherence_physics_research_packet.pdf',
+        reason: 'ran Coherence Physics paper pipeline from research review desk'
+      });
+      const pipeline = data && data.result && data.result.coherence_paper_pipeline ? data.result.coherence_paper_pipeline : null;
+      const pdf = pipeline && pipeline.pdf ? pipeline.pdf : null;
+      if (!pdf || !pdf.path) {
+        addMessage('lucien', 'Paper pipeline ran, but no PDF path was returned.');
+        return;
+      }
+      addMessage('lucien', `Paper packet saved at ${pdf.path}. Opening it now. Treat it as a governed draft until evidence review is complete.`);
+      window.open('/' + pdf.path, '_blank');
+    }
+
     document.getElementById('workspaceExportPdf').addEventListener('click', exportResearchPdfForSelectedMission);
 
+    document.getElementById('reviewDeskIndexCorpus').addEventListener('click', indexCorpusForSelectedMission);
+
     document.getElementById('reviewDeskRun').addEventListener('click', () => {
-      steward({action: 'run_research_autopilot', reason: 'run from research review desk header'});
+      steward({action: 'run_research_autopilot', mission_id: selectedMissionId, reason: 'run from research review desk header'});
     });
+
+    document.getElementById('reviewDeskPaperPipeline').addEventListener('click', runPaperPipelineForSelectedMission);
 
     document.getElementById('reviewDeskEvidence').addEventListener('click', () => {
       missionEvidence.scrollIntoView({behavior: 'smooth', block: 'center'});

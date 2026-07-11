@@ -99,7 +99,9 @@ from pca import (
     evidence_for_target,
     evidence_locker_snapshot,
     export_research_pdf,
+    index_coherence_corpus,
     research_review_desk,
+    run_coherence_paper_pipeline,
     execute_approved_autonomy_actions,
     execute_autonomy_action,
     evidence_records_from_events,
@@ -1243,12 +1245,16 @@ def test_live_chat_html_contains_mission_first_home():
     assert "missionClaimMapSummary" in html
     assert "Research Review Desk" in html
     assert "researchReviewSummary" in html
+    assert "Index Corpus" in html
+    assert "Make Paper Packet" in html
     assert "Save Research PDF" in html
     assert "renderMissionClaimMap(status.mission_claim_maps || {}, missionView.activeMission)" in html
     assert "renderMissionEvidence(status.mission_evidence || {}, missionView.activeMission)" in html
     assert "renderResearchReviewDesk(status.research_review_desks || {}, missionView.activeMission)" in html
     assert "add_mission_evidence" in html
     assert "review_evidence_direct" in html
+    assert "index_coherence_corpus" in html
+    assert "run_coherence_paper_pipeline" in html
     assert "captured latest Lucien reply from mission evidence panel" in html
     assert "Accept Evidence" in html
     assert "Generate Research Brief" in html
@@ -3260,6 +3266,88 @@ def test_export_research_pdf_writes_mission_packet(tmp_path):
     assert result["evidence_count"] >= 2
     assert output_path.read_bytes().startswith(b"%PDF-1.4")
     assert b"Lucien Research Packet" in output_path.read_bytes()
+
+
+def test_coherence_corpus_index_links_sources_to_mission(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "The_Seven_Axioms_of_Coherence_Physics.md").write_text(
+        "Seven axioms draft for persistence and recoverability.",
+        encoding="utf-8",
+    )
+    (corpus / "The Coherence Stability Monitor.pdf").write_bytes(
+        b"%PDF-1.4\nCSM draft fixture\n%%EOF\n"
+    )
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Coherence corpus mission",
+        problem_statement="Index source files as governed evidence.",
+    )
+
+    first = index_coherence_corpus(
+        ledger,
+        manifest,
+        project_root=project_root,
+        mission_id=mission.mission_id,
+        roots=["corpus"],
+        limit=4,
+    )
+    second = index_coherence_corpus(
+        ledger,
+        manifest,
+        project_root=project_root,
+        mission_id=mission.mission_id,
+        roots=["corpus"],
+        limit=4,
+    )
+    linked = evidence_for_target(ledger.events(), "mission", mission.mission_id)
+
+    assert first["indexed_count"] == 2
+    assert first["linked_count"] == 2
+    assert second["indexed_count"] == 0
+    assert second["reused_count"] == 2
+    assert len(linked) == 2
+    assert {item["evidence"]["review_status"] for item in linked} == {"raw"}
+
+
+def test_coherence_paper_pipeline_finishes_with_pdf_packet(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "Coherence_Physics_Source.md").write_text(
+        "A fixture source about coherence, identity, persistence, and recovery.",
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "coherence_packet.pdf"
+
+    result = run_coherence_paper_pipeline(
+        ledger,
+        manifest,
+        project_root=project_root,
+        corpus_roots=["corpus"],
+        corpus_limit=2,
+        force=True,
+        output_path=output_path,
+    )
+    mission_id = result["record"]["mission_id"]
+    outputs = research_outputs_from_events(ledger.events(), mission_id)
+    review = research_review_desk(ledger, mission_id)
+
+    assert result["record"]["status"] == "paper_packet_ready"
+    assert result["record"]["final_requirement"].startswith("every research cycle")
+    assert result["autopilot"]["record"]["mission_id"] == mission_id
+    assert result["corpus"]["indexed_count"] == 1
+    assert any(output.kind.value == "paper_draft" for output in outputs)
+    assert review["pdf_ready"] is True
+    assert output_path.read_bytes().startswith(b"%PDF-1.4")
 
 
 def test_research_review_desk_summarizes_autopilot_outputs(tmp_path):
