@@ -10,7 +10,7 @@ from .coherence_seed import seed_coherence_physics_goals
 from .ledger import ContinuityLedger
 from .manifest import IdentityManifest
 from .mission_claim_map import mission_claim_map
-from .missions import MissionStatus, mission_briefs_from_events
+from .missions import MissionStatus, mission_briefs_from_events, open_mission
 from .research_autopilot import run_research_autopilot
 from .research_pdf import export_research_pdf
 from .research_review import research_review_desk
@@ -25,7 +25,7 @@ def run_coherence_paper_pipeline(
     corpus_roots: list[str] | None = None,
     corpus_limit: int = 8,
     force: bool = False,
-    output_path: str | Path = "reports/coherence_physics_research_packet.pdf",
+    output_path: str | Path = "reports/research_papers/coherence_physics_research_packet.pdf",
     reason: str = "",
 ) -> dict[str, Any]:
     project_path = Path(project_root).resolve()
@@ -33,7 +33,11 @@ def run_coherence_paper_pipeline(
     seeded = seed_coherence_physics_goals(ledger, manifest)
     actions.append({"action": "seed_coherence_goals", "tracks": len(seeded)})
 
-    selected_mission = _select_mission(ledger, mission_id)
+    selected_mission = (
+        _ensure_simple_research_mission(ledger, manifest, actions, reason)
+        if not mission_id
+        else _select_mission(ledger, mission_id)
+    )
     if not selected_mission:
         record = _record_pipeline(
             ledger,
@@ -232,6 +236,40 @@ def _select_mission(ledger: ContinuityLedger, mission_id: str | None) -> dict[st
         if brief.mission.status == MissionStatus.OPEN and "coherence" in brief.mission.title.lower():
             return {"mission_id": brief.mission.mission_id, "title": brief.mission.title}
     return None
+
+
+def _ensure_simple_research_mission(
+    ledger: ContinuityLedger,
+    manifest: IdentityManifest,
+    actions: list[dict[str, Any]],
+    reason: str,
+) -> dict[str, str]:
+    for brief in mission_briefs_from_events(ledger.events()):
+        if (
+            brief.mission.title == "Coherence Physics Research Program"
+            and brief.mission.status == MissionStatus.OPEN
+        ):
+            return {"mission_id": brief.mission.mission_id, "title": brief.mission.title}
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Coherence Physics Research Program",
+        problem_statement=(
+            "Research Coherence Physics, gather source evidence, map claims, "
+            "form provisional conclusions, identify inventions or ideas, and "
+            "finish each run with a reviewable paper PDF."
+        ),
+        values=[
+            "truth before comfort",
+            "evidence first",
+            "clarity",
+            "recoverable reasoning",
+            "finish with a paper",
+        ],
+        reason=reason or "coherence paper pipeline opened simple research mission",
+    )
+    actions.append({"action": "open_simple_research_mission", "mission_id": mission.mission_id})
+    return {"mission_id": mission.mission_id, "title": mission.title}
 
 
 def _has_paper_draft(ledger: ContinuityLedger, mission_id: str) -> bool:

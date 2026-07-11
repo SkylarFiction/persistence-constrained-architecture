@@ -1273,6 +1273,17 @@ def _live_chat_html() -> str:
     .start-summary { color: #dce8e2; line-height: 1.45; max-width: 860px; }
     .start-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
     .start-primary { min-width: 180px; min-height: 46px; font-size: 14px; }
+    .one-click-research {
+      border: 1px solid rgba(84,196,179,.30);
+      border-radius: 8px;
+      padding: 18px;
+      background: linear-gradient(180deg, rgba(38,118,93,.28), rgba(0,0,0,.16));
+      box-shadow: var(--shadow);
+    }
+    .one-click-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; }
+    .one-click-title { font-size: 24px; line-height: 1.1; font-weight: 950; margin: 3px 0 7px; }
+    .one-click-button { min-height: 56px; font-size: 16px; padding: 0 22px; }
+    .one-click-status { color: var(--muted); font-size: 13px; margin-top: 8px; overflow-wrap: anywhere; }
     .start-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
     .start-step {
       border: 1px solid rgba(255,255,255,.08);
@@ -1503,7 +1514,7 @@ def _live_chat_html() -> str:
     .advanced-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 0 16px 16px; }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #9ee7c0; }
     ::placeholder { color: #73867d; }
-    @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px; } form { grid-template-columns: 1fr; } .home-top, .brain-mode-row, .mission-controls, .advanced-grid, .guided-workbench, .impact-grid, .output-shell, .start-hero, .start-steps, .template-grid, .cold-open-card { grid-template-columns: 1fr; } .start-actions { justify-content: flex-start; } }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px; } form { grid-template-columns: 1fr; } .home-top, .brain-mode-row, .mission-controls, .advanced-grid, .guided-workbench, .impact-grid, .output-shell, .start-hero, .start-steps, .template-grid, .cold-open-card, .one-click-grid { grid-template-columns: 1fr; } .start-actions { justify-content: flex-start; } }
   </style>
 </head>
 <body>
@@ -1550,6 +1561,17 @@ def _live_chat_html() -> str:
         <div class="actions">
           <button type="button" id="coldOpenAsk" class="secondary">Ask This</button>
           <button type="button" id="coldOpenCopy" class="secondary">Copy</button>
+        </div>
+      </div>
+      <div class="one-click-research">
+        <div class="one-click-grid">
+          <div>
+            <div class="label">Simple Mode</div>
+            <div class="one-click-title">Research Coherence Physics and Save a PDF</div>
+            <div class="start-summary">Lucien will open or reuse a Coherence research mission, index source files, run one governed research pass, draft a paper packet, and save the PDF in <code>reports/research_papers/</code>.</div>
+            <div id="oneClickResearchStatus" class="one-click-status">Ready. Evidence remains reviewable; nothing is published.</div>
+          </div>
+          <button type="button" id="oneClickResearchPdf" class="one-click-button">Do Research + Save PDF</button>
         </div>
       </div>
       <div>
@@ -1941,6 +1963,7 @@ def _live_chat_html() -> str:
     const timeline = document.getElementById('timeline');
     const selfModel = document.getElementById('selfModel');
     const governedContext = document.getElementById('governedContext');
+    const oneClickResearchStatus = document.getElementById('oneClickResearchStatus');
     const memoryInbox = document.getElementById('memoryInbox');
     const recall = document.getElementById('recall');
     const missions = document.getElementById('missions');
@@ -4018,7 +4041,7 @@ def _live_chat_html() -> str:
         action: 'run_coherence_paper_pipeline',
         mission_id: selectedMissionId,
         limit: 8,
-        output_path: 'reports/coherence_physics_research_packet.pdf',
+        output_path: 'reports/research_papers/coherence_physics_research_packet.pdf',
         reason: 'ran Coherence Physics paper pipeline from research review desk'
       });
       const pipeline = data && data.result && data.result.coherence_paper_pipeline ? data.result.coherence_paper_pipeline : null;
@@ -4031,7 +4054,36 @@ def _live_chat_html() -> str:
       window.open('/' + pdf.path, '_blank');
     }
 
+    async function runOneClickCoherenceResearch() {
+      const button = document.getElementById('oneClickResearchPdf');
+      button.disabled = true;
+      oneClickResearchStatus.textContent = 'Working: indexing Coherence sources, running research, drafting, and saving PDF...';
+      try {
+        const data = await steward({
+          action: 'run_coherence_paper_pipeline',
+          limit: 12,
+          output_path: 'reports/research_papers/coherence_physics_research_packet.pdf',
+          reason: 'one-click Coherence research PDF'
+        });
+        const pipeline = data && data.result && data.result.coherence_paper_pipeline ? data.result.coherence_paper_pipeline : null;
+        const record = pipeline && pipeline.record ? pipeline.record : {};
+        const pdf = pipeline && pipeline.pdf ? pipeline.pdf : null;
+        if (!pdf || !pdf.path) {
+          oneClickResearchStatus.textContent = 'Research ran, but no PDF path came back. Check Advanced Diagnostics.';
+          addMessage('lucien', 'The one-click research run did not return a PDF path.');
+          return;
+        }
+        oneClickResearchStatus.textContent = `Saved PDF: ${pdf.path}. Mission: ${record.mission_title || 'Coherence Physics Research Program'}. Next: review raw evidence when ready.`;
+        addMessage('lucien', `Done. I saved the Coherence Physics research packet at ${pdf.path}. It is a governed draft, not a final publication.`);
+        window.open('/' + pdf.path, '_blank');
+      } finally {
+        button.disabled = false;
+      }
+    }
+
     document.getElementById('workspaceExportPdf').addEventListener('click', exportResearchPdfForSelectedMission);
+
+    document.getElementById('oneClickResearchPdf').addEventListener('click', runOneClickCoherenceResearch);
 
     document.getElementById('reviewDeskIndexCorpus').addEventListener('click', indexCorpusForSelectedMission);
 

@@ -337,7 +337,7 @@ def main() -> int:
     coherence_paper_parser.add_argument("--force", action="store_true")
     coherence_paper_parser.add_argument(
         "--output",
-        default="reports/coherence_physics_research_packet.pdf",
+        default="reports/research_papers/coherence_physics_research_packet.pdf",
     )
     research_sandbox_parser = subparsers.add_parser("research-sandbox")
     research_sandbox_parser.add_argument("--json", action="store_true")

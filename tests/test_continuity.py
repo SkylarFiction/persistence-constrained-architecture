@@ -1245,6 +1245,9 @@ def test_live_chat_html_contains_mission_first_home():
     assert "missionClaimMapSummary" in html
     assert "Research Review Desk" in html
     assert "researchReviewSummary" in html
+    assert "Research Coherence Physics and Save a PDF" in html
+    assert "oneClickResearchPdf" in html
+    assert "runOneClickCoherenceResearch" in html
     assert "Index Corpus" in html
     assert "Make Paper Packet" in html
     assert "Save Research PDF" in html
@@ -3348,6 +3351,49 @@ def test_coherence_paper_pipeline_finishes_with_pdf_packet(tmp_path):
     assert any(output.kind.value == "paper_draft" for output in outputs)
     assert review["pdf_ready"] is True
     assert output_path.read_bytes().startswith(b"%PDF-1.4")
+
+
+def test_coherence_paper_pipeline_opens_simple_mission_when_existing_is_completed(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "Coherence_Physics_Source.md").write_text(
+        "A fixture source about coherence research.",
+        encoding="utf-8",
+    )
+    completed = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Map Coherence Physics Claims",
+        problem_statement="A completed old mission should not block simple mode.",
+    )
+    update_mission_status(
+        ledger,
+        manifest.system_id,
+        completed.mission_id,
+        "completed",
+        reason="test completed old mission",
+    )
+
+    result = run_coherence_paper_pipeline(
+        ledger,
+        manifest,
+        project_root=project_root,
+        corpus_roots=["corpus"],
+        corpus_limit=1,
+        output_path=tmp_path / "simple_packet.pdf",
+    )
+
+    assert result["record"]["status"] == "paper_packet_ready"
+    assert result["record"]["mission_title"] == "Coherence Physics Research Program"
+    assert any(
+        action["action"] == "open_simple_research_mission"
+        for action in result["record"]["actions"]
+    )
+    assert Path(result["pdf"]["path"]).exists()
 
 
 def test_research_review_desk_summarizes_autopilot_outputs(tmp_path):
