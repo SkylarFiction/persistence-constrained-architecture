@@ -143,6 +143,7 @@ from pca import (
     render_next_governed_build_text,
     render_project_build_brief_text,
     render_research_autopilot_text,
+    render_research_review_text,
     render_research_outputs_text,
     render_startup_health_text,
     run_tool_for_step,
@@ -171,6 +172,7 @@ from pca import (
     propose_autonomy_action,
     review_autonomy_action,
     research_outputs_from_events,
+    research_review_desk,
     research_sandbox_status,
 )
 from pca.live_chat import chat_once, run_live_chat_server
@@ -335,6 +337,9 @@ def main() -> int:
     research_pdf_parser.add_argument("mission_id")
     research_pdf_parser.add_argument("--output", default="reports/lucien_research_packet.pdf")
     research_pdf_parser.add_argument("--json", action="store_true")
+    research_review_parser = subparsers.add_parser("research-review")
+    research_review_parser.add_argument("--mission")
+    research_review_parser.add_argument("--json", action="store_true")
     certification_parser = subparsers.add_parser("continuity-certification")
     certification_parser.add_argument("--json", action="store_true")
     daily_plan_parser = subparsers.add_parser("daily-plan")
@@ -1045,6 +1050,14 @@ def main() -> int:
             print_json({"research_pdf": result})
         else:
             print(f"Research PDF written: {result['path']}")
+        return 0
+
+    if args.command == "research-review":
+        result = research_review_desk(ledger, args.mission)
+        if args.json:
+            print_json({"research_review": result})
+        else:
+            print(render_research_review_text(result))
         return 0
 
     if args.command == "continuity-certification":

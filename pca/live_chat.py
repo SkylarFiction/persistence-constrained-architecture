@@ -27,7 +27,7 @@ from .checkpoint_story import checkpoint_story
 from .commit_readiness import commit_readiness
 from .cold_open import cold_open_report
 from .daily_command_center import daily_command_center
-from .evidence_locker import add_evidence, evidence_for_target, link_evidence
+from .evidence_locker import add_evidence, evidence_for_target, link_evidence, review_evidence
 from .growth import (
     GrowthReviewDecision,
     GrowthStatus,
@@ -87,6 +87,7 @@ from .research_sandbox import (
 )
 from .research_autopilot import run_research_autopilot
 from .research_pdf import export_research_pdf
+from .research_review import research_review_desks
 from .reflection_queue import (
     open_tasks_from_reflection,
     resolve_matching_reflection_tasks,
@@ -465,6 +466,23 @@ def _apply_steward_action(
             reason="live mission evidence panel",
         )
         return {"evidence": evidence.to_dict(), "link": link.to_dict()}
+
+    if action == "review_evidence_direct":
+        evidence_id = str(payload.get("evidence_id", "")).strip()
+        status = str(payload.get("status", "reviewed")).strip()
+        if not evidence_id:
+            raise ValueError("evidence_id is required")
+        if status not in {"reviewed", "rejected", "stale", "disputed"}:
+            raise ValueError("evidence status must be reviewed, rejected, stale, or disputed")
+        evidence = review_evidence(
+            ledger,
+            manifest.system_id,
+            evidence_id,
+            status,
+            reviewer=str(payload.get("reviewer", "steward")),
+            reason=reason,
+        )
+        return {"evidence": evidence.to_dict()}
 
     if action == "mission_onboard":
         mission_id = str(payload.get("mission_id", "")).strip()
@@ -880,6 +898,7 @@ def _status_payload(
         for brief in missions
     }
     mission_claim_map_data = mission_claim_maps(ledger)
+    research_review_data = research_review_desks(ledger)
     mission_steps = [
         step.to_dict() for step in mission_step_records_from_events(ledger.events())
     ]
@@ -970,6 +989,7 @@ def _status_payload(
         "missions": missions,
         "mission_evidence": mission_evidence,
         "mission_claim_maps": mission_claim_map_data,
+        "research_review_desks": research_review_data,
         "mission_flows": mission_flows,
         "mission_onboarding": mission_onboarding,
         "mission_autonomy": mission_autonomy,
@@ -1605,6 +1625,22 @@ def _live_chat_html() -> str:
     <section class="mission-dashboard">
       <div class="mission-controls">
         <div>
+          <h2>Research Review Desk</h2>
+          <div class="item-meta">Review what Lucien prepared, then decide whether to review evidence, export a PDF, or draft next.</div>
+        </div>
+        <div class="actions">
+          <button type="button" id="reviewDeskRun" class="secondary">Run Research</button>
+          <button type="button" id="reviewDeskEvidence" class="secondary">Review Evidence</button>
+          <button type="button" id="reviewDeskPdf" class="secondary">Save PDF</button>
+        </div>
+      </div>
+      <div id="researchReviewSummary" class="item"></div>
+      <div id="researchReviewCards" class="mission-card-grid"></div>
+      <div id="researchReviewActions" class="queue"></div>
+    </section>
+    <section class="mission-dashboard">
+      <div class="mission-controls">
+        <div>
           <h2>Project Build Brief</h2>
           <div class="item-meta">Local repo state and the safest next engineering move.</div>
         </div>
@@ -1884,6 +1920,9 @@ def _live_chat_html() -> str:
     const workspaceMeta = document.getElementById('workspaceMeta');
     const workspaceBody = document.getElementById('workspaceBody');
     const workspaceDetails = document.getElementById('workspaceDetails');
+    const researchReviewSummary = document.getElementById('researchReviewSummary');
+    const researchReviewCards = document.getElementById('researchReviewCards');
+    const researchReviewActions = document.getElementById('researchReviewActions');
     const missionSteps = document.getElementById('missionSteps');
     const skillMemory = document.getElementById('skillMemory');
     const autonomyQueue = document.getElementById('autonomyQueue');
@@ -1976,6 +2015,7 @@ def _live_chat_html() -> str:
       renderMissions(status.missions || [], status.mission_flows || {}, status.mission_autonomy || []);
       renderMissionEvidence(status.mission_evidence || {}, missionView.activeMission);
       renderMissionClaimMap(status.mission_claim_maps || {}, missionView.activeMission);
+      renderResearchReviewDesk(status.research_review_desks || {}, missionView.activeMission);
       renderResearchSandbox(status.research_sandbox || {}, status.research_outputs || [], missionView.activeMission);
       renderMissionSteps(status.mission_steps || [], status.tools || {}, status.tool_executions || [], status.tool_previews || []);
       renderSkillMemory(status.skill_candidates || [], status.accepted_skills || []);
@@ -2397,9 +2437,9 @@ def _live_chat_html() -> str:
         const actions = document.createElement('div');
         actions.className = 'actions';
         if (['raw', 'disputed', 'stale'].includes(evidence.review_status || 'raw')) {
-          actions.appendChild(button('Accept Evidence', {action: 'steward_inbox_action', inbox_id: `evidence_review:${evidence.evidence_id}`, inbox_action: 'accept', reason: 'accepted from mission evidence panel'}));
-          actions.appendChild(button('Reject', {action: 'steward_inbox_action', inbox_id: `evidence_review:${evidence.evidence_id}`, inbox_action: 'reject', reason: 'rejected from mission evidence panel'}));
-          actions.appendChild(button('Mark Stale', {action: 'steward_inbox_action', inbox_id: `evidence_review:${evidence.evidence_id}`, inbox_action: 'mark_stale', reason: 'marked stale from mission evidence panel'}));
+          actions.appendChild(button('Accept Evidence', {action: 'review_evidence_direct', evidence_id: evidence.evidence_id, status: 'reviewed', reason: 'accepted from mission evidence panel'}));
+          actions.appendChild(button('Reject', {action: 'review_evidence_direct', evidence_id: evidence.evidence_id, status: 'rejected', reason: 'rejected from mission evidence panel'}));
+          actions.appendChild(button('Mark Stale', {action: 'review_evidence_direct', evidence_id: evidence.evidence_id, status: 'stale', reason: 'marked stale from mission evidence panel'}));
         }
         row.append(title, meta, linkMeta, actions);
         missionEvidence.appendChild(row);
@@ -2443,6 +2483,52 @@ def _live_chat_html() -> str:
           <div class="item-meta">evidence ${entry.evidence_count || 0} / reviewed ${entry.reviewed_evidence_count || 0} / disputed ${entry.disputed_evidence_count || 0} / stale ${entry.stale_evidence_count || 0}</div>`;
         missionClaimMap.appendChild(row);
       }
+    }
+
+    function renderResearchReviewDesk(reviewDesks, selectedMission) {
+      researchReviewSummary.innerHTML = '';
+      researchReviewCards.innerHTML = '';
+      researchReviewActions.innerHTML = '';
+      if (!selectedMission || !selectedMission.mission_id) {
+        researchReviewSummary.innerHTML = '<div class="item-title">No active mission</div><div class="item-meta">Start or select a mission, then run research.</div>';
+        return;
+      }
+      const review = reviewDesks[selectedMission.mission_id] || {};
+      researchReviewSummary.innerHTML = `<div class="item-title">${escapeHtml(review.next_action || 'Review research')}</div>
+        <div class="item-meta">${escapeHtml(review.summary || 'No review summary yet.')}</div>`;
+      const cards = review.cards || {};
+      for (const key of ['outputs', 'claims', 'raw_evidence', 'reviewed_evidence', 'review_items']) {
+        const card = cards[key] || {title: key.replaceAll('_', ' '), value: 0};
+        const node = document.createElement('div');
+        node.className = 'mission-card';
+        node.innerHTML = `<div class="label">${escapeHtml(card.title || key)}</div><div class="value">${card.value || 0}</div>`;
+        researchReviewCards.appendChild(node);
+      }
+      const actions = document.createElement('div');
+      actions.className = 'item';
+      actions.innerHTML = '<div class="item-title">One-click review path</div><div class="item-meta">These actions keep claims proposed until steward review.</div>';
+      const buttonRow = document.createElement('div');
+      buttonRow.className = 'actions';
+      buttonRow.appendChild(localButton('Run Research', () => steward({action: 'run_research_autopilot', reason: 'run from research review desk'})));
+      if ((review.raw_evidence_ids || []).length) {
+        buttonRow.appendChild(localButton('Accept First Raw Evidence', () => {
+          const evidenceId = review.raw_evidence_ids[0];
+          steward({action: 'review_evidence_direct', evidence_id: evidenceId, status: 'reviewed', reason: 'accepted first raw evidence from research review desk'});
+        }));
+        buttonRow.appendChild(localButton('Mark First Raw Stale', () => {
+          const evidenceId = review.raw_evidence_ids[0];
+          steward({action: 'review_evidence_direct', evidence_id: evidenceId, status: 'stale', reason: 'marked first raw evidence stale from research review desk'});
+        }));
+      }
+      buttonRow.appendChild(localButton('Save PDF', () => exportResearchPdfForSelectedMission()));
+      buttonRow.appendChild(localButton('Draft Paper', () => createResearch('paper_draft')));
+      actions.appendChild(buttonRow);
+      researchReviewActions.appendChild(actions);
+      const detail = document.createElement('div');
+      detail.className = 'item';
+      detail.innerHTML = `<div class="item-title">Governance boundary</div>
+        <div class="item-meta">${escapeHtml((review.will_not || []).join(' / ') || 'Will not publish or accept claims automatically.')}</div>`;
+      researchReviewActions.appendChild(detail);
     }
 
     function renderResearchSandbox(sandbox, outputs, selectedMission) {
@@ -3850,7 +3936,7 @@ def _live_chat_html() -> str:
       URL.revokeObjectURL(link.href);
     });
 
-    document.getElementById('workspaceExportPdf').addEventListener('click', async () => {
+    async function exportResearchPdfForSelectedMission() {
       if (!selectedMissionId) {
         addMessage('lucien', 'Select an active mission before exporting a research PDF.');
         return;
@@ -3867,7 +3953,20 @@ def _live_chat_html() -> str:
       }
       addMessage('lucien', `Research PDF saved at ${pdf.path}. Opening it now.`);
       window.open('/' + pdf.path, '_blank');
+    }
+
+    document.getElementById('workspaceExportPdf').addEventListener('click', exportResearchPdfForSelectedMission);
+
+    document.getElementById('reviewDeskRun').addEventListener('click', () => {
+      steward({action: 'run_research_autopilot', reason: 'run from research review desk header'});
     });
+
+    document.getElementById('reviewDeskEvidence').addEventListener('click', () => {
+      missionEvidence.scrollIntoView({behavior: 'smooth', block: 'center'});
+      addMessage('lucien', 'Review raw mission evidence here. Accepting evidence marks it reviewed, but does not make claims automatically true.');
+    });
+
+    document.getElementById('reviewDeskPdf').addEventListener('click', exportResearchPdfForSelectedMission);
 
     async function createResearch(kind) {
       const selected = (currentStatus && (currentStatus.missions || []).find(item => item.mission && item.mission.mission_id === selectedMissionId) || null);

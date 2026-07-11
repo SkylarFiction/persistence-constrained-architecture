@@ -326,6 +326,11 @@ from .research_sandbox import (
     research_sandbox_status,
 )
 from .research_pdf import export_research_pdf
+from .research_review import (
+    render_research_review_text,
+    research_review_desk,
+    research_review_desks,
+)
 from .research_autopilot import (
     render_research_autopilot_text,
     research_autopilot_records_from_events,
@@ -678,6 +683,8 @@ __all__ = [
     "route_mission_pressure",
     "recovery_records_from_events",
     "research_autopilot_records_from_events",
+    "research_review_desk",
+    "research_review_desks",
     "research_outputs_from_events",
     "research_sandbox_status",
     "reflection_records_from_events",
@@ -701,6 +708,7 @@ __all__ = [
     "render_next_governed_build_text",
     "render_project_build_brief_text",
     "render_research_autopilot_text",
+    "render_research_review_text",
     "render_research_outputs_text",
     "render_startup_health_text",
     "render_session_replay_html",

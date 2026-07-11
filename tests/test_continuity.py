@@ -99,6 +99,7 @@ from pca import (
     evidence_for_target,
     evidence_locker_snapshot,
     export_research_pdf,
+    research_review_desk,
     execute_approved_autonomy_actions,
     execute_autonomy_action,
     evidence_records_from_events,
@@ -1240,9 +1241,14 @@ def test_live_chat_html_contains_mission_first_home():
     assert "Mission Claim Map" in html
     assert "missionClaimMap" in html
     assert "missionClaimMapSummary" in html
+    assert "Research Review Desk" in html
+    assert "researchReviewSummary" in html
+    assert "Save Research PDF" in html
     assert "renderMissionClaimMap(status.mission_claim_maps || {}, missionView.activeMission)" in html
     assert "renderMissionEvidence(status.mission_evidence || {}, missionView.activeMission)" in html
+    assert "renderResearchReviewDesk(status.research_review_desks || {}, missionView.activeMission)" in html
     assert "add_mission_evidence" in html
+    assert "review_evidence_direct" in html
     assert "captured latest Lucien reply from mission evidence panel" in html
     assert "Accept Evidence" in html
     assert "Generate Research Brief" in html
@@ -1274,6 +1280,8 @@ def test_live_status_includes_tool_router_state(tmp_path):
 
     assert status["mission_claim_maps"][mission.mission_id]["claim_count"] == 1
     assert status["mission_claim_maps"][mission.mission_id]["evidence_count"] == 1
+    assert status["research_review_desks"][mission.mission_id]["ready"] is True
+    assert status["research_review_desks"][mission.mission_id]["cards"]["claims"]["value"] == 1
     assert status["tools"]["read_file"]["risk"] == "low"
     assert status["tools"]["read_file"]["safety_profile"]["read_only"] is True
     assert status["tools"]["run_check_all"]["requires_approval"] is True
@@ -1900,6 +1908,44 @@ def test_live_steward_action_adds_and_links_mission_evidence(tmp_path):
     assert len(evidence) == 1
     assert len(linked) == 1
     assert linked[0]["evidence"]["evidence_id"] == evidence[0].evidence_id
+
+
+def test_live_steward_action_reviews_mission_evidence_directly(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Direct evidence review mission",
+        problem_statement="Sandbox evidence should be reviewable without global inbox noise.",
+    )
+    created = _apply_steward_action(
+        ledger,
+        manifest,
+        {
+            "action": "add_mission_evidence",
+            "mission_id": mission.mission_id,
+            "summary": "A raw research note needs local mission review.",
+            "source": "review desk test",
+            "source_type": "mission_observation",
+            "reason": "created for direct evidence review",
+        },
+    )
+
+    reviewed = _apply_steward_action(
+        ledger,
+        manifest,
+        {
+            "action": "review_evidence_direct",
+            "evidence_id": created["evidence"]["evidence_id"],
+            "status": "reviewed",
+            "reason": "reviewed from research review desk",
+        },
+    )
+    linked = evidence_for_target(ledger.events(), "mission", mission.mission_id)
+
+    assert reviewed["evidence"]["review_status"] == "reviewed"
+    assert linked[0]["evidence"]["review_status"] == "reviewed"
 
 
 def test_live_steward_action_runs_governed_tool(tmp_path):
@@ -3214,6 +3260,26 @@ def test_export_research_pdf_writes_mission_packet(tmp_path):
     assert result["evidence_count"] >= 2
     assert output_path.read_bytes().startswith(b"%PDF-1.4")
     assert b"Lucien Research Packet" in output_path.read_bytes()
+
+
+def test_research_review_desk_summarizes_autopilot_outputs(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    result = run_research_autopilot(
+        ledger,
+        manifest,
+        project_root=tmp_path,
+        run_date="2026-07-11",
+    )
+
+    review = research_review_desk(ledger, result["record"]["mission_id"])
+
+    assert review["ready"] is True
+    assert review["cards"]["outputs"]["value"] == 3
+    assert review["cards"]["raw_evidence"]["value"] >= 1
+    assert review["pdf_ready"] is True
+    assert review["raw_evidence_ids"]
+    assert "Review raw evidence" in review["next_action"]
 
 
 def test_daily_plan_includes_active_goal_and_safe_next_action(tmp_path):
