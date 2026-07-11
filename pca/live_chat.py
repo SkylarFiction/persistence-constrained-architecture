@@ -434,6 +434,7 @@ def _apply_steward_action(
         mission_id = str(payload.get("mission_id", "")).strip()
         summary = str(payload.get("summary", "")).strip()
         source = str(payload.get("source", "")).strip()
+        source_type = str(payload.get("source_type", "manual_note")).strip() or "manual_note"
         confidence = str(payload.get("confidence", "unknown")).strip() or "unknown"
         if not mission_id:
             raise ValueError("mission_id is required")
@@ -443,7 +444,7 @@ def _apply_steward_action(
         evidence = add_evidence(
             ledger,
             manifest.system_id,
-            source_type="manual_note",
+            source_type=source_type,
             summary=summary,
             source=source or summary,
             confidence=confidence,
@@ -1581,6 +1582,7 @@ def _live_chat_html() -> str:
         </div>
         <div class="actions">
           <button type="button" id="missionEvidenceAdd" class="secondary">Add Source</button>
+          <button type="button" id="missionEvidenceCaptureChat" class="secondary">Capture Last Reply</button>
           <button type="button" id="missionEvidenceReview" class="secondary">Review Evidence</button>
         </div>
       </div>
@@ -3497,6 +3499,26 @@ def _live_chat_html() -> str:
         source: (source || '').trim(),
         confidence: 'unknown',
         reason: 'added from mission evidence panel'
+      });
+    });
+
+    document.getElementById('missionEvidenceCaptureChat').addEventListener('click', () => {
+      if (!selectedMissionId) {
+        addMessage('lucien', 'Select or open a mission before capturing chat evidence.');
+        return;
+      }
+      if (!lastLucien) {
+        addMessage('lucien', 'There is no Lucien reply to capture yet.');
+        return;
+      }
+      steward({
+        action: 'add_mission_evidence',
+        mission_id: selectedMissionId,
+        summary: lastLucien,
+        source: 'latest_lucien_response',
+        source_type: 'chat_turn',
+        confidence: 'unknown',
+        reason: 'captured latest Lucien reply from mission evidence panel'
       });
     });
 

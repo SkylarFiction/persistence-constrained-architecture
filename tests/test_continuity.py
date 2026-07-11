@@ -1232,9 +1232,11 @@ def test_live_chat_html_contains_mission_first_home():
     assert "Mission Evidence" in html
     assert "missionEvidence" in html
     assert "missionEvidenceAdd" in html
+    assert "missionEvidenceCaptureChat" in html
     assert "missionEvidenceReview" in html
     assert "renderMissionEvidence(status.mission_evidence || {}, missionView.activeMission)" in html
     assert "add_mission_evidence" in html
+    assert "captured latest Lucien reply from mission evidence panel" in html
     assert "Accept Evidence" in html
     assert "Generate Research Brief" in html
     assert "Create Claim Map" in html
@@ -1864,6 +1866,7 @@ def test_live_steward_action_adds_and_links_mission_evidence(tmp_path):
             "mission_id": mission.mission_id,
             "summary": "A source should be reviewed before supporting this mission.",
             "source": "manual note",
+            "source_type": "chat_turn",
             "reason": "added from test mission evidence panel",
         },
     )
@@ -1871,6 +1874,7 @@ def test_live_steward_action_adds_and_links_mission_evidence(tmp_path):
     linked = evidence_for_target(ledger.events(), "mission", mission.mission_id)
 
     assert result["evidence"]["review_status"] == "raw"
+    assert result["evidence"]["source_type"] == "chat_turn"
     assert result["link"]["target_id"] == mission.mission_id
     assert len(evidence) == 1
     assert len(linked) == 1
