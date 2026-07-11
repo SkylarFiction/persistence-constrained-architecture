@@ -56,6 +56,7 @@ from .learning_review import (
 from .manifest import IdentityManifest
 from .memory_cards import memory_cards_from_events
 from .memory_signals import record_memory_signal
+from .mission_claim_map import mission_claim_maps
 from .mission_flow import mission_flows_from_events
 from .mission_autonomy import (
     mission_autonomy_recommendations_from_events,
@@ -848,6 +849,7 @@ def _status_payload(
         )
         for brief in missions
     }
+    mission_claim_map_data = mission_claim_maps(ledger)
     mission_steps = [
         step.to_dict() for step in mission_step_records_from_events(ledger.events())
     ]
@@ -937,6 +939,7 @@ def _status_payload(
         "growth_conflicts": unresolved_conflicts,
         "missions": missions,
         "mission_evidence": mission_evidence,
+        "mission_claim_maps": mission_claim_map_data,
         "mission_flows": mission_flows,
         "mission_onboarding": mission_onboarding,
         "mission_autonomy": mission_autonomy,
@@ -1592,6 +1595,17 @@ def _live_chat_html() -> str:
     <section class="mission-dashboard">
       <div class="mission-controls">
         <div>
+          <h2>Mission Claim Map</h2>
+          <div class="item-meta">Shows whether mission hypotheses have raw, reviewed, disputed, stale, or missing evidence.</div>
+        </div>
+        <button type="button" id="missionClaimMapRefresh" class="secondary">Refresh Claim Map</button>
+      </div>
+      <div id="missionClaimMapSummary" class="metrics"></div>
+      <div id="missionClaimMap" class="queue"></div>
+    </section>
+    <section class="mission-dashboard">
+      <div class="mission-controls">
+        <div>
           <h2>Research Sandbox</h2>
           <div class="item-meta">Draft freely. Nothing becomes accepted memory, evidence, or truth until steward review.</div>
         </div>
@@ -1808,6 +1822,8 @@ def _live_chat_html() -> str:
     const activeMissionSelect = document.getElementById('activeMissionSelect');
     const missionEvidenceSummary = document.getElementById('missionEvidenceSummary');
     const missionEvidence = document.getElementById('missionEvidence');
+    const missionClaimMapSummary = document.getElementById('missionClaimMapSummary');
+    const missionClaimMap = document.getElementById('missionClaimMap');
     const goals = document.getElementById('goals');
     const dailyPlan = document.getElementById('dailyPlan');
     const researchSandboxStatus = document.getElementById('researchSandboxStatus');
@@ -1907,6 +1923,7 @@ def _live_chat_html() -> str:
       renderDailyPlan(status.daily_plan || {});
       renderMissions(status.missions || [], status.mission_flows || {}, status.mission_autonomy || []);
       renderMissionEvidence(status.mission_evidence || {}, missionView.activeMission);
+      renderMissionClaimMap(status.mission_claim_maps || {}, missionView.activeMission);
       renderResearchSandbox(status.research_sandbox || {}, status.research_outputs || [], missionView.activeMission);
       renderMissionSteps(status.mission_steps || [], status.tools || {}, status.tool_executions || [], status.tool_previews || []);
       renderSkillMemory(status.skill_candidates || [], status.accepted_skills || []);
@@ -2334,6 +2351,45 @@ def _live_chat_html() -> str:
         }
         row.append(title, meta, linkMeta, actions);
         missionEvidence.appendChild(row);
+      }
+    }
+
+    function renderMissionClaimMap(claimMaps, selectedMission) {
+      missionClaimMapSummary.innerHTML = '';
+      missionClaimMap.innerHTML = '';
+      if (!selectedMission || !selectedMission.mission_id) {
+        empty(missionClaimMap, 'Select or open a mission before viewing the claim map.');
+        return;
+      }
+      const map = claimMaps[selectedMission.mission_id] || null;
+      if (!map) {
+        empty(missionClaimMap, 'No claim map is available for this mission yet.');
+        return;
+      }
+      const cards = {
+        claims: map.claim_count || 0,
+        evidence: map.evidence_count || 0,
+        reviewed: map.reviewed_evidence_count || 0,
+        unsupported: map.unsupported_claim_count || 0
+      };
+      for (const [label, value] of Object.entries(cards)) {
+        const card = document.createElement('div');
+        card.className = 'metric';
+        card.innerHTML = `<div class="label">${escapeHtml(label)}</div><div class="value">${value}</div>`;
+        missionClaimMapSummary.appendChild(card);
+      }
+      const entries = map.entries || [];
+      if (!entries.length) {
+        empty(missionClaimMap, 'No hypothesis claim exists yet. Create the mission starter pack first.');
+        return;
+      }
+      for (const entry of entries) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = `<div class="item-title">${escapeHtml(entry.support_status || 'unknown')} / ${escapeHtml(entry.confidence || 'unknown')} / ${escapeHtml(entry.claim_status || 'unknown')}</div>
+          <div class="item-meta">${escapeHtml(entry.claim_item_id || 'unknown')} / hash ${escapeHtml(String(entry.claim_hash || '').slice(0, 16))}</div>
+          <div class="item-meta">evidence ${entry.evidence_count || 0} / reviewed ${entry.reviewed_evidence_count || 0} / disputed ${entry.disputed_evidence_count || 0} / stale ${entry.stale_evidence_count || 0}</div>`;
+        missionClaimMap.appendChild(row);
       }
     }
 
@@ -3526,6 +3582,11 @@ def _live_chat_html() -> str:
       activeInboxFilter = 'evidence';
       renderStewardInbox((currentStatus || {}).steward_inbox || []);
       stewardInbox.scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
+
+    document.getElementById('missionClaimMapRefresh').addEventListener('click', () => {
+      if (currentStatus) renderStatus(currentStatus);
+      missionClaimMap.scrollIntoView({behavior: 'smooth', block: 'center'});
     });
 
     function askLucienNextStep() {

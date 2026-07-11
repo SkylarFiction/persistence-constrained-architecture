@@ -1234,6 +1234,10 @@ def test_live_chat_html_contains_mission_first_home():
     assert "missionEvidenceAdd" in html
     assert "missionEvidenceCaptureChat" in html
     assert "missionEvidenceReview" in html
+    assert "Mission Claim Map" in html
+    assert "missionClaimMap" in html
+    assert "missionClaimMapSummary" in html
+    assert "renderMissionClaimMap(status.mission_claim_maps || {}, missionView.activeMission)" in html
     assert "renderMissionEvidence(status.mission_evidence || {}, missionView.activeMission)" in html
     assert "add_mission_evidence" in html
     assert "captured latest Lucien reply from mission evidence panel" in html
@@ -1250,9 +1254,23 @@ def test_live_status_includes_tool_router_state(tmp_path):
 
     manifest = load_manifest()
     ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Status mission",
+        problem_statement="Expose mission claim map in live status.",
+    )
+    create_mission_onboarding_pack(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        reason="status claim map setup",
+    )
 
     status = _status_payload(ledger, manifest)
 
+    assert status["mission_claim_maps"][mission.mission_id]["claim_count"] == 1
+    assert status["mission_claim_maps"][mission.mission_id]["evidence_count"] == 1
     assert status["tools"]["read_file"]["risk"] == "low"
     assert status["tools"]["read_file"]["safety_profile"]["read_only"] is True
     assert status["tools"]["run_check_all"]["requires_approval"] is True
@@ -2507,6 +2525,46 @@ def test_create_mission_onboarding_pack_adds_proposed_starter_items(tmp_path):
     assert len(linked) == 1
     assert linked[0]["evidence"]["evidence_id"] == evidence[0].evidence_id
     assert result["onboarding"]["ready"] is False
+
+
+def test_mission_claim_map_tracks_hypothesis_support_status(tmp_path):
+    from pca.mission_claim_map import mission_claim_map
+
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Claim map mission",
+        problem_statement="Track whether a mission hypothesis is evidence-backed.",
+    )
+    create_mission_onboarding_pack(
+        ledger,
+        manifest.system_id,
+        mission.mission_id,
+        reason="claim map test onboarding",
+    )
+
+    raw_map = mission_claim_map(ledger, mission.mission_id)
+    evidence_id = raw_map["entries"][0]["claim_item_id"]
+    linked_evidence = evidence_for_target(ledger.events(), "mission", mission.mission_id)
+    reviewed = review_evidence(
+        ledger,
+        manifest.system_id,
+        linked_evidence[0]["evidence"]["evidence_id"],
+        "reviewed",
+        confidence="medium",
+        reason="reviewed claim map evidence",
+    )
+    reviewed_map = mission_claim_map(ledger, mission.mission_id)
+
+    assert evidence_id
+    assert raw_map["claim_count"] == 1
+    assert raw_map["evidence_count"] == 1
+    assert raw_map["entries"][0]["support_status"] == "raw_support"
+    assert reviewed.review_status.value == "reviewed"
+    assert reviewed_map["reviewed_evidence_count"] == 1
+    assert reviewed_map["entries"][0]["support_status"] == "reviewed_support"
 
 
 def test_workbench_status_counts_blocked_mission_and_inbox(tmp_path):
