@@ -3267,8 +3267,9 @@ def test_export_research_pdf_writes_mission_packet(tmp_path):
     assert result["mission_title"] == "PDF research mission"
     assert result["output_count"] == 1
     assert result["evidence_count"] >= 2
+    assert result["source_count"] == 0
     assert output_path.read_bytes().startswith(b"%PDF-1.4")
-    assert b"Lucien Research Packet" in output_path.read_bytes()
+    assert b"Coherence Physics: A Governed Research Draft" in output_path.read_bytes()
 
 
 def test_coherence_corpus_index_links_sources_to_mission(tmp_path):
