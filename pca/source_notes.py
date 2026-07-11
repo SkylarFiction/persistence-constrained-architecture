@@ -345,6 +345,9 @@ def _read_epub_text(path: Path) -> str:
 
 
 def _read_pdf_text_fallback(path: Path) -> str:
+    text = _read_pdf_text_pypdf(path)
+    if text:
+        return text
     data = path.read_bytes()[:2_000_000]
     raw = data.decode("latin-1", errors="ignore")
     strings = re.findall(r"\(([^()]{20,500})\)", raw)
@@ -361,6 +364,22 @@ def _read_pdf_text_fallback(path: Path) -> str:
         if _readable_ratio(item) >= 0.9 and _looks_like_language(item)
     ]
     return " ".join(raw_lines[:20])
+
+
+def _read_pdf_text_pypdf(path: Path, max_pages: int = 40, max_chars: int = 200_000) -> str:
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        return ""
+    try:
+        reader = PdfReader(str(path))
+        pages = []
+        for page in reader.pages[:max_pages]:
+            pages.append(page.extract_text() or "")
+    except Exception:
+        return ""
+    text = _clean_text(" ".join(pages))
+    return text[:max_chars]
 
 
 def _strip_xml(text: str) -> str:

@@ -100,6 +100,7 @@ from pca import (
     evidence_locker_snapshot,
     export_research_pdf,
     extract_source_notes_for_mission,
+    discover_coherence_sources,
     index_coherence_corpus,
     research_review_desk,
     source_note_records_from_events,
@@ -3340,6 +3341,38 @@ def test_coherence_corpus_index_links_sources_to_mission(tmp_path):
     assert second["reused_count"] == 2
     assert len(linked) == 2
     assert {item["evidence"]["review_status"] for item in linked} == {"raw"}
+
+
+def test_coherence_corpus_discovery_filters_noncanonical_noise(tmp_path):
+    finished = tmp_path / "finished books "
+    finished.mkdir(parents=True)
+    (finished / "101 Ways to Die Without Dying.pdf").write_bytes(b"%PDF-1.4 fiction")
+    (finished / "Christian Pantheist Quantum Living.epub").write_text(
+        "theology fixture",
+        encoding="utf-8",
+    )
+    (finished / "The_Unified_Coherence_Field_Theory.pdf").write_bytes(
+        b"%PDF-1.4 coherence field"
+    )
+    (finished / "The_Unified_Coherence_Field_Theory copy.docx").write_bytes(
+        b"duplicate format"
+    )
+    (finished / "PCA Identity Continuity Notes.md").write_text(
+        "Persistence-Constrained Architecture notes.",
+        encoding="utf-8",
+    )
+
+    sources = discover_coherence_sources(
+        tmp_path,
+        roots=["finished books "],
+        limit=10,
+    )
+
+    paths = [source.relative_path for source in sources]
+    assert paths == [
+        "finished books /PCA Identity Continuity Notes.md",
+        "finished books /The_Unified_Coherence_Field_Theory.pdf",
+    ]
 
 
 def test_source_notes_extract_citation_cards_from_indexed_sources(tmp_path):

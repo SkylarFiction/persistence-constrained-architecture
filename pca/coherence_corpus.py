@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 import hashlib
+import re
 
 from .evidence_locker import (
     add_evidence,
@@ -38,6 +39,33 @@ THEME_PATTERNS = {
     "math_spine": ("theorem", "proof", "regularity", ".tex", "navier", "smooth"),
     "public_narrative": ("primer", "public", "architecture", "essay", "narrative"),
 }
+
+NON_CANONICAL_INCLUDE_PATTERNS = (
+    "coherence physics",
+    "coherence codex",
+    "persistence constrained architecture",
+    "pca",
+    "csm",
+    "coherence stability monitor",
+    "recovery threshold",
+    "collapse framework",
+    "identity persistence",
+    "identity continuity",
+    "ucft",
+    "unified coherence field",
+)
+
+NON_CANONICAL_EXCLUDE_PATTERNS = (
+    "fiction",
+    "novel",
+    "diary",
+    "101 ways",
+    "christian pantheist",
+    "pantheist theology",
+    "quantum living",
+    "breath of cosmos",
+    "breath of life",
+)
 
 
 @dataclass(frozen=True)
@@ -153,6 +181,14 @@ def index_coherence_corpus(
     return record
 
 
+# Roots whose entire tree is already scoped to Coherence Physics material by curation,
+# so every file in them is admitted regardless of filename. Any other root (e.g. "finished
+# books ", which mixes in unrelated personal projects) must pass the relevance gate below.
+CANONICAL_COHERENCE_ROOTS = {
+    root for root in DEFAULT_CORPUS_ROOTS if root != "finished books "
+}
+
+
 def discover_coherence_sources(
     workspace_root: str | Path,
     roots: list[str] | None = None,
@@ -161,16 +197,34 @@ def discover_coherence_sources(
     workspace = Path(workspace_root).resolve()
     root_names = roots or DEFAULT_CORPUS_ROOTS
     candidates: list[CorpusCandidate] = []
+    seen_titles: set[str] = set()
     for root_name in root_names:
         root = (workspace / root_name).resolve()
         if not root.exists():
             continue
-        for path in sorted(root.rglob("*")):
+        root_is_canonical = root_name in CANONICAL_COHERENCE_ROOTS or (
+            roots is not None and root_name != "finished books "
+        )
+        for path in sorted(
+            root.rglob("*"),
+            key=lambda candidate: (
+                _normalized_title(candidate),
+                _suffix_priority(candidate),
+                _copy_priority(candidate),
+                str(candidate),
+            ),
+        ):
             if len(candidates) >= limit:
                 break
             if not path.is_file() or path.suffix.lower() not in SUPPORTED_SUFFIXES:
                 continue
             relative_path = _relative_to_workspace(path, workspace)
+            if not root_is_canonical and not _matches_noncanonical_relevance(relative_path):
+                continue
+            title_key = _normalized_title(path)
+            if title_key in seen_titles:
+                continue
+            seen_titles.add(title_key)
             candidates.append(
                 CorpusCandidate(
                     path=path,
@@ -183,6 +237,46 @@ def discover_coherence_sources(
         if len(candidates) >= limit:
             break
     return candidates
+
+
+def _matches_theme_pattern(path_text: str) -> bool:
+    haystack = path_text.lower().replace("-", " ").replace("_", " ")
+    return any(
+        pattern in haystack for patterns in THEME_PATTERNS.values() for pattern in patterns
+    )
+
+
+def _matches_noncanonical_relevance(path_text: str) -> bool:
+    haystack = path_text.lower().replace("-", " ").replace("_", " ")
+    if any(pattern in haystack for pattern in NON_CANONICAL_EXCLUDE_PATTERNS):
+        return False
+    return any(pattern in haystack for pattern in NON_CANONICAL_INCLUDE_PATTERNS)
+
+
+def _normalized_title(path: Path) -> str:
+    stem = path.stem.lower()
+    stem = re.sub(r"\(\d+\)", " ", stem)
+    stem = re.sub(r"\b(copy|final|draft|v\d+)\b", " ", stem)
+    stem = re.sub(r"[^a-z0-9]+", " ", stem)
+    return stem.strip()
+
+
+def _suffix_priority(path: Path) -> int:
+    priorities = {
+        ".pdf": 0,
+        ".md": 1,
+        ".txt": 1,
+        ".tex": 1,
+        ".docx": 2,
+        ".epub": 3,
+        ".html": 4,
+        ".csv": 5,
+    }
+    return priorities.get(path.suffix.lower(), 9)
+
+
+def _copy_priority(path: Path) -> int:
+    return 1 if re.search(r"\bcopy\b", path.stem.lower()) else 0
 
 
 def coherence_corpus_index_records_from_events(
