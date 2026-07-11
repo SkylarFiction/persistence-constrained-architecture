@@ -149,6 +149,9 @@ def run_live_chat_server(
         def do_GET(self) -> None:
             parsed = urlparse(self.path)
             if parsed.path in {"/", "/index.html"}:
+                _send_html(self, _tv_chat_html())
+                return
+            if parsed.path in {"/workbench", "/workbench.html"}:
                 _send_html(self, _live_chat_html())
                 return
             if parsed.path == "/api/status":
@@ -1205,6 +1208,457 @@ def _send_report_file(handler: BaseHTTPRequestHandler, request_path: str) -> Non
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
+
+
+def _tv_chat_html() -> str:
+    return """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lucien TV Mode</title>
+  <style>
+    :root {
+      --ink: #eef7f1;
+      --muted: #a9bab2;
+      --line: rgba(255,255,255,.13);
+      --glass: rgba(15,24,20,.72);
+      --glass-2: rgba(24,38,32,.78);
+      --green: #55d18d;
+      --teal: #5dd8c7;
+      --amber: #e3b34a;
+      --red: #ee7777;
+      --shadow: 0 30px 90px rgba(0,0,0,.45);
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        linear-gradient(180deg, rgba(7,12,10,.55), rgba(3,6,5,.94)),
+        radial-gradient(circle at 22% 10%, rgba(93,216,199,.16), transparent 35rem),
+        radial-gradient(circle at 80% 20%, rgba(85,209,141,.10), transparent 28rem),
+        #060908;
+      letter-spacing: 0;
+      overflow-x: hidden;
+    }
+    .screen {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      padding: clamp(18px, 3vw, 42px);
+      gap: clamp(14px, 2vw, 24px);
+    }
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+    }
+    .brand {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      min-width: 0;
+    }
+    .orb {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--teal), #256953 62%, #0b1511);
+      box-shadow: 0 0 34px rgba(93,216,199,.28);
+      flex: 0 0 auto;
+    }
+    h1 { margin: 0; font-size: clamp(24px, 3vw, 42px); line-height: 1.05; }
+    .subtitle { color: var(--muted); margin-top: 4px; font-size: 14px; }
+    .status-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 12px;
+      background: rgba(255,255,255,.055);
+      color: #dce8e2;
+      font-size: 13px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .pill.ready { border-color: rgba(85,209,141,.48); color: #b9ffd1; }
+    .pill.warn { border-color: rgba(227,179,74,.58); color: #ffe2a6; }
+    .stage {
+      display: grid;
+      align-items: stretch;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+      gap: clamp(14px, 2vw, 24px);
+      min-height: 0;
+    }
+    .display {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background:
+        linear-gradient(180deg, rgba(19,34,28,.86), rgba(7,12,10,.88)),
+        var(--glass);
+      box-shadow: var(--shadow);
+      min-height: 520px;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      overflow: hidden;
+    }
+    .display-header {
+      padding: 18px clamp(18px, 3vw, 32px);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .conversation {
+      padding: clamp(22px, 4vw, 54px);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .welcome {
+      margin: auto 0;
+      max-width: 980px;
+    }
+    .welcome-title {
+      font-size: clamp(34px, 5.2vw, 78px);
+      line-height: 1;
+      margin: 0 0 14px;
+      font-weight: 950;
+    }
+    .welcome-copy {
+      color: #dce8e2;
+      font-size: clamp(16px, 1.7vw, 22px);
+      line-height: 1.45;
+      max-width: 760px;
+    }
+    .msg {
+      max-width: 900px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px 18px;
+      background: rgba(255,255,255,.06);
+      color: #edf6f0;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+    .msg.user {
+      margin-left: auto;
+      border-color: rgba(227,179,74,.45);
+      background: rgba(227,179,74,.10);
+    }
+    .msg.lucien {
+      border-color: rgba(85,209,141,.42);
+      background: rgba(85,209,141,.08);
+    }
+    .side-panel {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(180deg, var(--glass-2), rgba(10,16,13,.86));
+      box-shadow: var(--shadow);
+      padding: 18px;
+      display: grid;
+      align-content: start;
+      gap: 14px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      background: rgba(255,255,255,.045);
+    }
+    .label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .value {
+      font-size: 18px;
+      font-weight: 900;
+      overflow-wrap: anywhere;
+    }
+    .hint { color: var(--muted); font-size: 13px; line-height: 1.4; margin-top: 6px; }
+    .quick-actions { display: grid; gap: 10px; }
+    button, select, textarea {
+      font: inherit;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.07);
+      color: var(--ink);
+      outline: none;
+    }
+    button {
+      min-height: 44px;
+      padding: 0 16px;
+      cursor: pointer;
+      font-weight: 900;
+    }
+    button.primary {
+      background: linear-gradient(180deg, #2b8a69, #1f614f);
+      border-color: rgba(93,216,199,.45);
+      box-shadow: 0 14px 36px rgba(0,0,0,.28);
+    }
+    button.secondary { background: rgba(255,255,255,.055); color: #dce8e2; }
+    button:disabled { opacity: .58; cursor: wait; }
+    .composer {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(8,13,11,.82);
+      box-shadow: var(--shadow);
+      padding: 12px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 10px;
+      align-items: end;
+    }
+    textarea {
+      min-height: 58px;
+      max-height: 160px;
+      resize: vertical;
+      padding: 16px;
+      background: rgba(255,255,255,.045);
+      font-size: 17px;
+      line-height: 1.35;
+    }
+    textarea:focus, select:focus { border-color: rgba(93,216,199,.72); box-shadow: 0 0 0 3px rgba(93,216,199,.14); }
+    select { min-height: 44px; padding: 0 12px; background: rgba(255,255,255,.065); }
+    .footerline {
+      color: var(--muted);
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    a { color: #9debdc; text-decoration: none; font-weight: 900; }
+    @media (max-width: 980px) {
+      .stage { grid-template-columns: 1fr; }
+      .composer { grid-template-columns: 1fr; }
+      .topbar { grid-template-columns: 1fr; }
+      .status-row { justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <main class="screen">
+    <div class="topbar">
+      <div class="brand">
+        <div class="orb" aria-hidden="true"></div>
+        <div>
+          <h1>Lucien</h1>
+          <div class="subtitle">Simple local research screen. PCA still governs underneath.</div>
+        </div>
+      </div>
+      <div class="status-row">
+        <div id="brainPill" class="pill">Brain: loading</div>
+        <div id="costPill" class="pill ready">Cost: $0.000000</div>
+        <div id="continuityPill" class="pill">Continuity: loading</div>
+      </div>
+    </div>
+
+    <section class="stage">
+      <div class="display">
+        <div class="display-header">
+          <span>Coherence Research Display</span>
+          <span id="missionLine">Mission: loading</span>
+        </div>
+        <div id="tvMessages" class="conversation">
+          <div class="welcome">
+            <div class="welcome-title">What should we work on?</div>
+            <div class="welcome-copy">
+              Ask Lucien in the bar below, or press the research button to gather Coherence Physics sources and save a governed PDF draft.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="side-panel">
+        <div class="card">
+          <div class="label">Next Safe Action</div>
+          <div id="nextAction" class="value">Loading</div>
+          <div id="nextHint" class="hint">Lucien is checking mission state.</div>
+        </div>
+        <div class="card">
+          <div class="label">Research PDF</div>
+          <div id="pdfStatus" class="value">Ready</div>
+          <div class="hint">Saved to <code>reports/research_papers/</code>.</div>
+        </div>
+        <div class="quick-actions">
+          <button id="tvResearch" class="primary" type="button">Do Research + Save PDF</button>
+          <button id="tvAskNext" class="secondary" type="button">Ask What To Do Next</button>
+          <button id="tvRefresh" class="secondary" type="button">Refresh Status</button>
+          <button id="tvWorkbench" class="secondary" type="button">Open Full Workbench</button>
+        </div>
+      </aside>
+    </section>
+
+    <form id="tvForm" class="composer">
+      <textarea id="tvInput" placeholder="Ask Lucien simply..."></textarea>
+      <select id="tvBrainMode" aria-label="Brain mode">
+        <option value="local_ollama" selected>Local Mode</option>
+        <option value="serious_only">Cloud Assist</option>
+        <option value="echo">Debug</option>
+      </select>
+      <button id="tvSend" class="primary" type="submit">Send</button>
+    </form>
+
+    <div class="footerline">
+      <span>OpenAI runs only in Cloud Assist when explicitly requested by the app controls.</span>
+      <span><a href="/workbench">Full Workbench</a></span>
+    </div>
+  </main>
+
+  <script>
+    const tvMessages = document.getElementById('tvMessages');
+    const tvInput = document.getElementById('tvInput');
+    const tvSend = document.getElementById('tvSend');
+    const tvResearch = document.getElementById('tvResearch');
+    const pdfStatus = document.getElementById('pdfStatus');
+    let activeMissionId = '';
+
+    function addTvMessage(kind, text) {
+      const welcome = tvMessages.querySelector('.welcome');
+      if (welcome) welcome.remove();
+      const node = document.createElement('div');
+      node.className = 'msg ' + kind;
+      node.textContent = (kind === 'user' ? 'You: ' : 'Lucien: ') + text;
+      tvMessages.appendChild(node);
+      tvMessages.scrollTop = tvMessages.scrollHeight;
+    }
+
+    function plainContinuity(value) {
+      const labels = {
+        certified_continuity: 'Certified',
+        review_required: 'Under Review',
+        uncertified_continuity: 'Uncertified',
+        continuity_break: 'Break',
+        declared_fork: 'Forked'
+      };
+      return labels[value] || value || 'unknown';
+    }
+
+    function money(value) {
+      return `$${Number(value || 0).toFixed(6)}`;
+    }
+
+    async function refreshTvStatus() {
+      const response = await fetch('/api/status');
+      const status = await response.json();
+      const summary = status.summary || {};
+      const usage = status.model_usage || {};
+      const model = status.model_adapter || {};
+      const workbench = status.workbench || {};
+      const missions = status.missions || [];
+      const active = (workbench.active_mission || (missions[0] || {}).mission || {});
+      activeMissionId = active.mission_id || '';
+
+      document.getElementById('brainPill').textContent =
+        `Brain: ${usage.latest_provider || model.local_provider || 'local'} / ${usage.latest_model || model.local_model || 'loading'}`;
+      document.getElementById('costPill').textContent = `Cost: ${money(usage.latest_cost_usd)}`;
+      document.getElementById('continuityPill').textContent =
+        `Continuity: ${plainContinuity(summary.current_continuity_claim)}`;
+      document.getElementById('missionLine').textContent =
+        `Mission: ${active.title || 'Coherence Physics Research Program'}`;
+      document.getElementById('nextAction').textContent =
+        workbench.recommended_next_action || 'Ask Lucien what to do next';
+      document.getElementById('nextHint').textContent =
+        `${workbench.open_steward_inbox_count || 0} steward item(s), ${workbench.blocked_mission_count || 0} blocked mission(s).`;
+    }
+
+    async function sendTvMessage(text) {
+      const message = text.trim();
+      if (!message) return;
+      addTvMessage('user', message);
+      tvInput.value = '';
+      tvSend.disabled = true;
+      try {
+        const brainMode = document.getElementById('tvBrainMode').value;
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            message,
+            model_mode: brainMode,
+            use_openai: brainMode === 'serious_only',
+            mission_id: activeMissionId
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'chat failed');
+        addTvMessage('lucien', ((data.result || {}).response) || 'No response returned.');
+        await refreshTvStatus();
+      } catch (error) {
+        addTvMessage('lucien', `I could not complete that: ${error.message}`);
+      } finally {
+        tvSend.disabled = false;
+        tvInput.focus();
+      }
+    }
+
+    async function runTvResearch() {
+      tvResearch.disabled = true;
+      pdfStatus.textContent = 'Working';
+      addTvMessage('lucien', 'Starting one-click Coherence research. I will save a governed PDF draft when it finishes.');
+      try {
+        const response = await fetch('/api/steward', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            action: 'run_coherence_paper_pipeline',
+            limit: 12,
+            output_path: 'reports/research_papers/coherence_physics_research_packet.pdf',
+            reason: 'TV mode one-click Coherence research PDF'
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'research failed');
+        const pipeline = data && data.result && data.result.coherence_paper_pipeline ? data.result.coherence_paper_pipeline : null;
+        const pdf = pipeline && pipeline.pdf ? pipeline.pdf : null;
+        if (!pdf || !pdf.path) throw new Error('No PDF path returned.');
+        pdfStatus.textContent = 'Saved';
+        addTvMessage('lucien', `Done. I saved the research PDF at ${pdf.path}. It is a governed draft, ready for review.`);
+        window.open('/' + pdf.path, '_blank');
+        await refreshTvStatus();
+      } catch (error) {
+        pdfStatus.textContent = 'Needs attention';
+        addTvMessage('lucien', `Research did not finish cleanly: ${error.message}`);
+      } finally {
+        tvResearch.disabled = false;
+      }
+    }
+
+    document.getElementById('tvForm').addEventListener('submit', event => {
+      event.preventDefault();
+      sendTvMessage(tvInput.value);
+    });
+    document.getElementById('tvAskNext').addEventListener('click', () => {
+      sendTvMessage('Lucien, tell me the one next thing to do for Coherence Physics research. Keep it simple.');
+    });
+    document.getElementById('tvRefresh').addEventListener('click', refreshTvStatus);
+    document.getElementById('tvWorkbench').addEventListener('click', () => {
+      window.location.href = '/workbench';
+    });
+    tvResearch.addEventListener('click', runTvResearch);
+    refreshTvStatus();
+  </script>
+</body>
+</html>"""
 
 
 def _live_chat_html() -> str:

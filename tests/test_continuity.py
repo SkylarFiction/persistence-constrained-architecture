@@ -1269,6 +1269,26 @@ def test_live_chat_html_contains_mission_first_home():
     assert "renderDailyCommandCenter(status.daily || {}, status.workbench || {}, status, missionView.activeMission)" not in html
 
 
+def test_tv_chat_html_is_simple_default_screen():
+    from pca.live_chat import _tv_chat_html
+
+    html = _tv_chat_html()
+
+    assert "Lucien TV Mode" in html
+    assert "Coherence Research Display" in html
+    assert "Do Research + Save PDF" in html
+    assert "tvResearch" in html
+    assert "tvInput" in html
+    assert "tvForm" in html
+    assert "Local Mode" in html
+    assert "Cloud Assist" in html
+    assert "Open Full Workbench" in html
+    assert "/workbench" in html
+    assert "run_coherence_paper_pipeline" in html
+    assert "reports/research_papers/coherence_physics_research_packet.pdf" in html
+    assert "Advanced Diagnostics" not in html
+
+
 def test_live_status_includes_tool_router_state(tmp_path):
     from pca.live_chat import _status_payload
 
