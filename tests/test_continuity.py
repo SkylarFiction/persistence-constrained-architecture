@@ -1229,6 +1229,13 @@ def test_live_chat_html_contains_mission_first_home():
     assert "local_first" in html
     assert "localStatus" in html
     assert "Research Sandbox" in html
+    assert "Mission Evidence" in html
+    assert "missionEvidence" in html
+    assert "missionEvidenceAdd" in html
+    assert "missionEvidenceReview" in html
+    assert "renderMissionEvidence(status.mission_evidence || {}, missionView.activeMission)" in html
+    assert "add_mission_evidence" in html
+    assert "Accept Evidence" in html
     assert "Generate Research Brief" in html
     assert "Create Claim Map" in html
     assert "Draft Paper" in html
@@ -1837,6 +1844,37 @@ def test_live_steward_action_opens_mission_and_adds_item(tmp_path):
     assert opened["mission"]["status"] == "open"
     assert added["mission_item"]["kind"] == "evidence"
     assert counts["evidence"] == 1
+
+
+def test_live_steward_action_adds_and_links_mission_evidence(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Evidence mission",
+        problem_statement="Mission evidence should be addable from the live panel.",
+    )
+
+    result = _apply_steward_action(
+        ledger,
+        manifest,
+        {
+            "action": "add_mission_evidence",
+            "mission_id": mission.mission_id,
+            "summary": "A source should be reviewed before supporting this mission.",
+            "source": "manual note",
+            "reason": "added from test mission evidence panel",
+        },
+    )
+    evidence = evidence_records_from_events(ledger.events())
+    linked = evidence_for_target(ledger.events(), "mission", mission.mission_id)
+
+    assert result["evidence"]["review_status"] == "raw"
+    assert result["link"]["target_id"] == mission.mission_id
+    assert len(evidence) == 1
+    assert len(linked) == 1
+    assert linked[0]["evidence"]["evidence_id"] == evidence[0].evidence_id
 
 
 def test_live_steward_action_runs_governed_tool(tmp_path):

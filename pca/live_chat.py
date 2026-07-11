@@ -27,6 +27,7 @@ from .checkpoint_story import checkpoint_story
 from .commit_readiness import commit_readiness
 from .cold_open import cold_open_report
 from .daily_command_center import daily_command_center
+from .evidence_locker import add_evidence, evidence_for_target, link_evidence
 from .growth import (
     GrowthReviewDecision,
     GrowthStatus,
@@ -71,6 +72,7 @@ from .missions import (
     add_mission_item,
     mission_briefs_from_events,
     open_mission,
+    require_mission,
     update_mission_status,
 )
 from .model_adapter import model_environment_diagnostic, normalize_model_mode
@@ -427,6 +429,35 @@ def _apply_steward_action(
             reason=reason,
         )
         return {"mission_item": item.to_dict()}
+
+    if action == "add_mission_evidence":
+        mission_id = str(payload.get("mission_id", "")).strip()
+        summary = str(payload.get("summary", "")).strip()
+        source = str(payload.get("source", "")).strip()
+        confidence = str(payload.get("confidence", "unknown")).strip() or "unknown"
+        if not mission_id:
+            raise ValueError("mission_id is required")
+        if not summary:
+            raise ValueError("summary is required")
+        require_mission(ledger.events(), mission_id)
+        evidence = add_evidence(
+            ledger,
+            manifest.system_id,
+            source_type="manual_note",
+            summary=summary,
+            source=source or summary,
+            confidence=confidence,
+            reason=reason,
+        )
+        link = link_evidence(
+            ledger,
+            manifest.system_id,
+            evidence.evidence_id,
+            "mission",
+            mission_id,
+            reason="live mission evidence panel",
+        )
+        return {"evidence": evidence.to_dict(), "link": link.to_dict()}
 
     if action == "mission_onboard":
         mission_id = str(payload.get("mission_id", "")).strip()
@@ -808,6 +839,14 @@ def _status_payload(
         brief.to_dict()
         for brief in mission_briefs_from_events(ledger.events())
     ]
+    mission_evidence = {
+        brief["mission"]["mission_id"]: evidence_for_target(
+            ledger.events(),
+            "mission",
+            brief["mission"]["mission_id"],
+        )
+        for brief in missions
+    }
     mission_steps = [
         step.to_dict() for step in mission_step_records_from_events(ledger.events())
     ]
@@ -896,6 +935,7 @@ def _status_payload(
         "memory_inbox": memory_inbox,
         "growth_conflicts": unresolved_conflicts,
         "missions": missions,
+        "mission_evidence": mission_evidence,
         "mission_flows": mission_flows,
         "mission_onboarding": mission_onboarding,
         "mission_autonomy": mission_autonomy,
@@ -1536,6 +1576,20 @@ def _live_chat_html() -> str:
     <section class="mission-dashboard">
       <div class="mission-controls">
         <div>
+          <h2>Mission Evidence</h2>
+          <div class="item-meta">Ground the active mission with raw, reviewed, disputed, or stale evidence.</div>
+        </div>
+        <div class="actions">
+          <button type="button" id="missionEvidenceAdd" class="secondary">Add Source</button>
+          <button type="button" id="missionEvidenceReview" class="secondary">Review Evidence</button>
+        </div>
+      </div>
+      <div id="missionEvidenceSummary" class="metrics"></div>
+      <div id="missionEvidence" class="queue"></div>
+    </section>
+    <section class="mission-dashboard">
+      <div class="mission-controls">
+        <div>
           <h2>Research Sandbox</h2>
           <div class="item-meta">Draft freely. Nothing becomes accepted memory, evidence, or truth until steward review.</div>
         </div>
@@ -1750,6 +1804,8 @@ def _live_chat_html() -> str:
     const missions = document.getElementById('missions');
     const missionCards = document.getElementById('missionCards');
     const activeMissionSelect = document.getElementById('activeMissionSelect');
+    const missionEvidenceSummary = document.getElementById('missionEvidenceSummary');
+    const missionEvidence = document.getElementById('missionEvidence');
     const goals = document.getElementById('goals');
     const dailyPlan = document.getElementById('dailyPlan');
     const researchSandboxStatus = document.getElementById('researchSandboxStatus');
@@ -1848,6 +1904,7 @@ def _live_chat_html() -> str:
       renderGoals(status.goals || [], status.missions || []);
       renderDailyPlan(status.daily_plan || {});
       renderMissions(status.missions || [], status.mission_flows || {}, status.mission_autonomy || []);
+      renderMissionEvidence(status.mission_evidence || {}, missionView.activeMission);
       renderResearchSandbox(status.research_sandbox || {}, status.research_outputs || [], missionView.activeMission);
       renderMissionSteps(status.mission_steps || [], status.tools || {}, status.tool_executions || [], status.tool_previews || []);
       renderSkillMemory(status.skill_candidates || [], status.accepted_skills || []);
@@ -2227,6 +2284,55 @@ def _live_chat_html() -> str:
       notYet.innerHTML = `<div class="item-title">What not to do yet</div>
         <div class="item-meta">${escapeHtml((plan.what_not_to_do_yet || []).join(' / ') || 'none')}</div>`;
       dailyPlan.appendChild(notYet);
+    }
+
+    function renderMissionEvidence(evidenceByMission, selectedMission) {
+      missionEvidenceSummary.innerHTML = '';
+      missionEvidence.innerHTML = '';
+      if (!selectedMission || !selectedMission.mission_id) {
+        empty(missionEvidence, 'Select or open a mission before adding evidence.');
+        return;
+      }
+      const linked = evidenceByMission[selectedMission.mission_id] || [];
+      const counts = {raw: 0, reviewed: 0, disputed: 0, stale: 0, rejected: 0};
+      for (const item of linked) {
+        const status = ((item.evidence || {}).review_status || 'raw');
+        counts[status] = (counts[status] || 0) + 1;
+      }
+      for (const [label, value] of Object.entries(counts)) {
+        const card = document.createElement('div');
+        card.className = 'metric';
+        card.innerHTML = `<div class="label">${escapeHtml(label)}</div><div class="value">${value}</div>`;
+        missionEvidenceSummary.appendChild(card);
+      }
+      if (!linked.length) {
+        empty(missionEvidence, 'No evidence linked to this mission yet. Add a source or create the mission starter pack.');
+        return;
+      }
+      for (const item of linked.slice().reverse()) {
+        const evidence = item.evidence || {};
+        const link = item.link || {};
+        const row = document.createElement('div');
+        row.className = 'item';
+        const title = document.createElement('div');
+        title.className = 'item-title';
+        title.textContent = `${evidence.review_status || 'raw'} / ${evidence.source_type || 'unknown'} / ${evidence.confidence || 'unknown'}`;
+        const meta = document.createElement('div');
+        meta.className = 'item-meta';
+        meta.textContent = `${evidence.evidence_id || 'unknown'} / summary length ${evidence.summary_length || 0} / ${evidence.reason || 'no reason recorded'}`;
+        const linkMeta = document.createElement('div');
+        linkMeta.className = 'item-meta';
+        linkMeta.textContent = `linked to ${link.target_type || 'mission'} / ${link.target_id || selectedMission.mission_id}`;
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        if (['raw', 'disputed', 'stale'].includes(evidence.review_status || 'raw')) {
+          actions.appendChild(button('Accept Evidence', {action: 'steward_inbox_action', inbox_id: `evidence_review:${evidence.evidence_id}`, inbox_action: 'accept', reason: 'accepted from mission evidence panel'}));
+          actions.appendChild(button('Reject', {action: 'steward_inbox_action', inbox_id: `evidence_review:${evidence.evidence_id}`, inbox_action: 'reject', reason: 'rejected from mission evidence panel'}));
+          actions.appendChild(button('Mark Stale', {action: 'steward_inbox_action', inbox_id: `evidence_review:${evidence.evidence_id}`, inbox_action: 'mark_stale', reason: 'marked stale from mission evidence panel'}));
+        }
+        row.append(title, meta, linkMeta, actions);
+        missionEvidence.appendChild(row);
+      }
     }
 
     function renderResearchSandbox(sandbox, outputs, selectedMission) {
@@ -3373,6 +3479,30 @@ def _live_chat_html() -> str:
     });
 
     document.getElementById('homeReviewInbox').addEventListener('click', () => {
+      stewardInbox.scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
+
+    document.getElementById('missionEvidenceAdd').addEventListener('click', () => {
+      if (!selectedMissionId) {
+        addMessage('lucien', 'Select or open a mission before adding evidence.');
+        return;
+      }
+      const summary = window.prompt('Evidence summary for the active mission');
+      if (!summary || !summary.trim()) return;
+      const source = window.prompt('Source, note, file path, URL, or observation', '');
+      steward({
+        action: 'add_mission_evidence',
+        mission_id: selectedMissionId,
+        summary: summary.trim(),
+        source: (source || '').trim(),
+        confidence: 'unknown',
+        reason: 'added from mission evidence panel'
+      });
+    });
+
+    document.getElementById('missionEvidenceReview').addEventListener('click', () => {
+      activeInboxFilter = 'evidence';
+      renderStewardInbox((currentStatus || {}).steward_inbox || []);
       stewardInbox.scrollIntoView({behavior: 'smooth', block: 'center'});
     });
 
