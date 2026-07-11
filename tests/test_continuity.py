@@ -99,8 +99,10 @@ from pca import (
     evidence_for_target,
     evidence_locker_snapshot,
     export_research_pdf,
+    extract_source_notes_for_mission,
     index_coherence_corpus,
     research_review_desk,
+    source_note_records_from_events,
     run_coherence_paper_pipeline,
     execute_approved_autonomy_actions,
     execute_autonomy_action,
@@ -3268,8 +3270,9 @@ def test_export_research_pdf_writes_mission_packet(tmp_path):
     assert result["output_count"] == 1
     assert result["evidence_count"] >= 2
     assert result["source_count"] == 0
+    assert result["source_note_count"] == 0
     assert output_path.read_bytes().startswith(b"%PDF-1.4")
-    assert b"Coherence Physics: A Governed Research Draft" in output_path.read_bytes()
+    assert b"Smooth Output Is Not Continuity" in output_path.read_bytes()
 
 
 def test_coherence_corpus_index_links_sources_to_mission(tmp_path):
@@ -3319,6 +3322,52 @@ def test_coherence_corpus_index_links_sources_to_mission(tmp_path):
     assert {item["evidence"]["review_status"] for item in linked} == {"raw"}
 
 
+def test_source_notes_extract_citation_cards_from_indexed_sources(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "Coherence_Source.md").write_text(
+        (
+            "# Recoverable Persistence\n\n"
+            "Coherence is recoverable persistence through disturbance. "
+            "Identity continuity requires memory, boundary, and recovery evidence "
+            "before a system should claim it stayed the same."
+        ),
+        encoding="utf-8",
+    )
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Coherence source notes mission",
+        problem_statement="Extract citation cards from source evidence.",
+    )
+    index_coherence_corpus(
+        ledger,
+        manifest,
+        project_root=project_root,
+        mission_id=mission.mission_id,
+        roots=["corpus"],
+        limit=1,
+    )
+
+    result = extract_source_notes_for_mission(
+        ledger,
+        manifest,
+        project_root=project_root,
+        mission_id=mission.mission_id,
+        limit_sources=1,
+    )
+    records = source_note_records_from_events(ledger.events(), mission.mission_id)
+
+    assert result["status"] == "notes_ready"
+    assert result["created_count"] >= 2
+    assert records
+    assert any("recoverable persistence" in record.summary.lower() for record in records)
+
+
 def test_coherence_paper_pipeline_finishes_with_pdf_packet(tmp_path):
     manifest = load_manifest()
     ledger = ContinuityLedger(tmp_path / "continuity.log")
@@ -3327,7 +3376,11 @@ def test_coherence_paper_pipeline_finishes_with_pdf_packet(tmp_path):
     corpus = tmp_path / "corpus"
     corpus.mkdir()
     (corpus / "Coherence_Physics_Source.md").write_text(
-        "A fixture source about coherence, identity, persistence, and recovery.",
+        (
+            "Coherence is recoverable persistence. Identity continuity requires "
+            "memory, boundary evidence, and recovery checks before a system claims "
+            "stable selfhood through change."
+        ),
         encoding="utf-8",
     )
     output_path = tmp_path / "coherence_packet.pdf"
@@ -3349,9 +3402,12 @@ def test_coherence_paper_pipeline_finishes_with_pdf_packet(tmp_path):
     assert result["record"]["final_requirement"].startswith("every research cycle")
     assert result["autopilot"]["record"]["mission_id"] == mission_id
     assert result["corpus"]["indexed_count"] == 1
+    assert result["source_notes"]["created_count"] >= 1
+    assert result["pdf"]["source_note_count"] >= 1
     assert any(output.kind.value == "paper_draft" for output in outputs)
     assert review["pdf_ready"] is True
     assert output_path.read_bytes().startswith(b"%PDF-1.4")
+    assert b"Source-Derived Notes" in output_path.read_bytes()
 
 
 def test_coherence_paper_pipeline_opens_simple_mission_when_existing_is_completed(tmp_path):

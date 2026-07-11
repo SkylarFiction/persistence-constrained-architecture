@@ -15,6 +15,7 @@ from .research_autopilot import run_research_autopilot
 from .research_pdf import export_research_pdf
 from .research_review import research_review_desk
 from .research_sandbox import create_research_output, research_outputs_from_events
+from .source_notes import extract_source_notes_for_mission
 
 
 def run_coherence_paper_pipeline(
@@ -47,6 +48,7 @@ def run_coherence_paper_pipeline(
             mission_title=None,
             actions=actions + [{"action": "blocked_no_mission"}],
             corpus=None,
+            source_notes=None,
             autopilot=None,
             paper_draft=None,
             pdf=None,
@@ -70,6 +72,23 @@ def run_coherence_paper_pipeline(
             "indexed": corpus.get("indexed_count", 0),
             "reused": corpus.get("reused_count", 0),
             "linked": corpus.get("linked_count", 0),
+        }
+    )
+    source_notes = extract_source_notes_for_mission(
+        ledger,
+        manifest,
+        project_root=project_path,
+        mission_id=selected_mission["mission_id"],
+        limit_sources=corpus_limit,
+        notes_per_source=3,
+        reason=reason or "coherence paper pipeline extracted source notes",
+    )
+    actions.append(
+        {
+            "action": "extract_source_notes",
+            "created": source_notes.get("created_count", 0),
+            "reused": source_notes.get("reused_count", 0),
+            "sources": source_notes.get("source_count", 0),
         }
     )
 
@@ -125,6 +144,7 @@ def run_coherence_paper_pipeline(
         mission_title=selected_mission["title"],
         actions=actions,
         corpus=corpus,
+        source_notes=source_notes,
         autopilot=autopilot,
         paper_draft=paper_draft,
         pdf=pdf,
@@ -135,6 +155,7 @@ def run_coherence_paper_pipeline(
     return {
         "record": record,
         "corpus": corpus,
+        "source_notes": source_notes,
         "autopilot": autopilot,
         "paper_draft": paper_draft,
         "pdf": pdf,
@@ -179,6 +200,7 @@ def _record_pipeline(
     mission_title: str | None,
     actions: list[dict[str, Any]],
     corpus: dict[str, Any] | None,
+    source_notes: dict[str, Any] | None,
     autopilot: dict[str, Any] | None,
     paper_draft: dict[str, Any] | None,
     pdf: dict[str, Any] | None,
@@ -195,6 +217,7 @@ def _record_pipeline(
         "created_at": datetime.now(timezone.utc).isoformat(),
         "actions": actions,
         "corpus_summary": _corpus_summary(corpus),
+        "source_note_summary": _source_note_summary(source_notes),
         "autopilot_status": (autopilot.get("record") or {}).get("status") if autopilot else None,
         "paper_draft_output_id": ((paper_draft or {}).get("output") or {}).get("output_id"),
         "pdf": pdf,
@@ -286,6 +309,16 @@ def _corpus_summary(corpus: dict[str, Any] | None) -> str:
         f"{corpus.get('candidate_count', 0)} source(s), "
         f"{corpus.get('indexed_count', 0)} indexed, "
         f"{corpus.get('linked_count', 0)} linked"
+    )
+
+
+def _source_note_summary(source_notes: dict[str, Any] | None) -> str:
+    if not source_notes:
+        return ""
+    return (
+        f"{source_notes.get('created_count', 0)} new note(s), "
+        f"{source_notes.get('reused_count', 0)} reused, "
+        f"{source_notes.get('source_count', 0)} source(s)"
     )
 
 

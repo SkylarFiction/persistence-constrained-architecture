@@ -337,6 +337,12 @@ from .coherence_corpus import (
     index_coherence_corpus,
     render_coherence_corpus_index_text,
 )
+from .source_notes import (
+    extract_source_notes_for_mission,
+    render_source_notes_text,
+    source_note_records_from_events,
+    source_notes_for_mission,
+)
 from .coherence_paper_pipeline import (
     coherence_paper_pipeline_records_from_events,
     render_coherence_paper_pipeline_text,
@@ -629,6 +635,7 @@ __all__ = [
     "evidence_records_from_events",
     "evidence_review_records_from_events",
     "export_research_pdf",
+    "extract_source_notes_for_mission",
     "fail_mission_step",
     "find_followup",
     "find_growth_conflict",
@@ -727,6 +734,7 @@ __all__ = [
     "render_research_autopilot_text",
     "render_research_review_text",
     "render_research_outputs_text",
+    "render_source_notes_text",
     "render_startup_health_text",
     "render_session_replay_html",
     "report_scenario",
@@ -742,6 +750,8 @@ __all__ = [
     "seed_coherence_physics_goals",
     "skill_candidates_from_events",
     "skill_suggestions_for_mission",
+    "source_note_records_from_events",
+    "source_notes_for_mission",
     "start_chat_session",
     "start_mission_step",
     "steward_inbox",

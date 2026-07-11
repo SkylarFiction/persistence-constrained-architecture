@@ -15,6 +15,7 @@ from .research_sandbox import (
     render_research_output_content,
     research_outputs_from_events,
 )
+from .source_notes import source_notes_for_mission
 
 
 def export_research_pdf(
@@ -33,6 +34,7 @@ def export_research_pdf(
     claim_map = mission_claim_map(ledger, mission_id)
     linked_evidence = evidence_for_target(ledger.events(), "mission", mission_id)
     corpus_sources = _corpus_sources_for_mission(ledger.events(), mission_id)
+    source_notes = source_notes_for_mission(ledger.events(), mission_id)
     lines = _research_packet_lines(
         manifest=manifest,
         mission_title=mission.title,
@@ -52,6 +54,7 @@ def export_research_pdf(
         claim_map=claim_map,
         linked_evidence=linked_evidence,
         corpus_sources=corpus_sources,
+        source_notes=source_notes,
     )
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -63,6 +66,7 @@ def export_research_pdf(
         "output_count": len(outputs),
         "evidence_count": len(linked_evidence),
         "source_count": len(corpus_sources),
+        "source_note_count": len(source_notes),
         "claim_count": claim_map.get("claim_count", 0),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "governance": "export only; does not accept claims, evidence, memory, or mission outcomes",
@@ -82,6 +86,7 @@ def _research_packet_lines(
     claim_map: dict[str, Any],
     linked_evidence: list[dict[str, Any]],
     corpus_sources: list[dict[str, Any]],
+    source_notes: list[dict[str, Any]],
 ) -> list[str]:
     claim_count = int(claim_map.get("claim_count", 0) or 0)
     raw_evidence = int(claim_map.get("raw_evidence_count", 0) or 0)
@@ -138,8 +143,9 @@ def _research_packet_lines(
         "",
         "5. Materials and Current Evidence Base",
         f"This run contains {len(corpus_sources)} indexed source file(s), "
-        f"{len(linked_evidence)} linked evidence record(s), {raw_evidence} raw evidence "
-        f"record(s), and {reviewed_evidence} reviewed evidence record(s).",
+        f"{len(source_notes)} extracted source note(s), {len(linked_evidence)} linked "
+        f"evidence record(s), {raw_evidence} raw evidence record(s), and "
+        f"{reviewed_evidence} reviewed evidence record(s).",
     ]
     if corpus_sources:
         lines.append("Key source files currently registered:")
@@ -157,7 +163,31 @@ def _research_packet_lines(
     lines.extend(
         [
             "",
-            "6. Current Claim Map",
+            "6. Source-Derived Notes",
+        ]
+    )
+    if source_notes:
+        lines.append(
+            "The following citation cards were extracted from indexed local sources. "
+            "They are raw notes, not accepted conclusions."
+        )
+        for note in source_notes[:10]:
+            lines.append(
+                "- "
+                f"{note.get('note_kind', 'note')} / "
+                f"{note.get('theme', 'general_coherence')} / "
+                f"{note.get('title', 'untitled')}: "
+                f"{note.get('summary', '')}"
+            )
+    else:
+        lines.append(
+            "No source notes were available in this export. The next improvement is "
+            "to extract citation cards from the indexed corpus before writing the paper."
+        )
+    lines.extend(
+        [
+            "",
+            "7. Current Claim Map",
             f"This draft contains {claim_count} mapped claim(s). Claims with raw support "
             "should be read as promising but unverified. Claims with reviewed support "
             "may be candidates for stronger public wording.",
@@ -173,7 +203,7 @@ def _research_packet_lines(
     lines.extend(
         [
             "",
-            "7. Findings",
+            "8. Findings",
             "Finding 1: Coherence Physics currently has a clear organizing problem: "
             "how to distinguish real persistence from surface-level continuity.",
             "Finding 2: PCA gives the theory an executable spine by forcing identity "
@@ -186,33 +216,34 @@ def _research_packet_lines(
             "conscious or alive. The defensible bridge is that any system claiming "
             "continuity through change should be able to show what changed, what was "
             "preserved, what evidence supports the claim, and what remains unresolved.",
+            *_source_note_findings(source_notes),
             "",
-            "8. Discussion",
+            "9. Discussion",
             "The useful conclusion is cautious: Coherence Physics should be advanced "
             "as a research framework and engineering program before it is presented "
             "as a completed physical theory. Its current strength is the repeatable "
             "discipline of making persistence claims auditable.",
             "",
-            "9. Proposed Paper Direction",
+            "10. Proposed Paper Direction",
             "A strong first paper should focus on the narrow, defensible claim: smooth "
             "output is not proof of continuity. From there, PCA can be shown as a "
             "working architecture that records what changed, what evidence exists, "
             "what remains under review, and what claims the system is allowed to make.",
             "",
-            "10. Limitations",
+            "11. Limitations",
             "- This draft is generated from local governed research outputs.",
             "- Raw evidence has not been accepted as reviewed evidence unless marked so.",
             "- The document does not claim proof of consciousness, AGI, personhood, or final physics.",
             "- Source registration is not the same as source interpretation.",
             "",
-            "11. Conclusion",
+            "12. Conclusion",
             "The next best version of Coherence Physics is a paper series built from "
             "reviewed source evidence, explicit claim maps, and falsifiable or "
             "inspectable examples. Lucien can help generate these drafts, but the "
             "system should keep the same rule at every stage: no claim becomes final "
             "without evidence review.",
             "",
-            "12. Research Agenda",
+            "13. Research Agenda",
             "- Review indexed source files and mark useful evidence as reviewed.",
             "- Choose one paper track: PCA/identity continuity, CSM, cognitive physics, or cosmology.",
             "- Replace provisional findings with source-backed claims.",
@@ -305,8 +336,21 @@ def _research_packet_lines(
             "- Mark weak or disputed claims before drafting final arguments.",
             "- Generate a paper draft only after reviewing claim strength.",
             "- Keep Local Mode for routine work; use Cloud Assist only when explicitly enabled.",
+            "",
+            "Appendix D: Source Notes",
         ]
     )
+    if source_notes:
+        for note in source_notes[:30]:
+            lines.append(
+                "- "
+                f"{note.get('review_status', 'raw')} / "
+                f"{note.get('locator', 'source')} / "
+                f"{note.get('source_path', 'unknown')}: "
+                f"{note.get('summary', '')}"
+            )
+    else:
+        lines.append("- none extracted")
     return lines
 
 
@@ -332,6 +376,28 @@ def _paper_content(content: str) -> str:
     for prefix in ["# Research Brief:", "# Claim Map Draft:", "# Paper Draft Skeleton:"]:
         content = content.replace(prefix, "")
     return content.strip()
+
+
+def _source_note_findings(source_notes: list[dict[str, Any]]) -> list[str]:
+    if not source_notes:
+        return [
+            "Finding 5: This run still needs source-note extraction before the paper "
+            "can move beyond a structured draft into source-backed argument."
+        ]
+    claim_notes = [
+        note for note in source_notes if note.get("note_kind") == "claim_candidate"
+    ]
+    selected = claim_notes[:2] or source_notes[:2]
+    findings: list[str] = [
+        "Finding 5: The current source notes give the draft a concrete evidence trail, "
+        "but the notes remain raw until reviewed."
+    ]
+    for index, note in enumerate(selected, start=6):
+        findings.append(
+            f"Finding {index}: Source note from {note.get('title', 'an indexed source')} "
+            f"suggests: {note.get('summary', '')}"
+        )
+    return findings
 
 
 def _write_text_pdf(path: Path, lines: list[str], title: str) -> None:

@@ -67,6 +67,7 @@ from pca import (
     execute_autonomy_action,
     export_latest_anchor,
     export_research_pdf,
+    extract_source_notes_for_mission,
     find_followup,
     find_recovery,
     followups_from_events,
@@ -149,6 +150,7 @@ from pca import (
     render_research_autopilot_text,
     render_research_review_text,
     render_research_outputs_text,
+    render_source_notes_text,
     render_startup_health_text,
     run_tool_for_step,
     tool_execution_records_from_events,
@@ -329,6 +331,10 @@ def main() -> int:
     coherence_corpus_parser.add_argument("--mission")
     coherence_corpus_parser.add_argument("--root", action="append", default=[])
     coherence_corpus_parser.add_argument("--limit", type=int, default=12)
+    source_notes_parser = subparsers.add_parser("coherence-source-notes")
+    source_notes_parser.add_argument("--json", action="store_true")
+    source_notes_parser.add_argument("--mission")
+    source_notes_parser.add_argument("--limit", type=int, default=6)
     coherence_paper_parser = subparsers.add_parser("coherence-paper-pipeline")
     coherence_paper_parser.add_argument("--json", action="store_true")
     coherence_paper_parser.add_argument("--mission")
@@ -1021,6 +1027,21 @@ def main() -> int:
             print_json({"coherence_corpus": result})
         else:
             print(render_coherence_corpus_index_text(result))
+        return 0
+
+    if args.command == "coherence-source-notes":
+        result = extract_source_notes_for_mission(
+            ledger,
+            manifest,
+            project_root=Path.cwd(),
+            mission_id=args.mission,
+            limit_sources=args.limit,
+            reason="manual CLI Coherence Physics source notes",
+        )
+        if args.json:
+            print_json({"coherence_source_notes": result})
+        else:
+            print(render_source_notes_text(result))
         return 0
 
     if args.command == "coherence-paper-pipeline":
