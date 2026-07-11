@@ -41,6 +41,7 @@ from pca import (
     apply_steward_inbox_action,
     accepted_skills_from_events,
     run_auto_daily_research_loop,
+    run_research_autopilot,
     authorization_policy_from_packs,
     autonomy_queue_items_from_events,
     auto_propose_skill_candidates,
@@ -140,6 +141,7 @@ from pca import (
     render_daily_plan_text,
     render_next_governed_build_text,
     render_project_build_brief_text,
+    render_research_autopilot_text,
     render_research_outputs_text,
     render_startup_health_text,
     run_tool_for_step,
@@ -311,6 +313,9 @@ def main() -> int:
     daily_research_parser = subparsers.add_parser("daily-research-loop")
     daily_research_parser.add_argument("--json", action="store_true")
     daily_research_parser.add_argument("--force", action="store_true")
+    research_autopilot_parser = subparsers.add_parser("research-autopilot")
+    research_autopilot_parser.add_argument("--json", action="store_true")
+    research_autopilot_parser.add_argument("--force", action="store_true")
     research_sandbox_parser = subparsers.add_parser("research-sandbox")
     research_sandbox_parser.add_argument("--json", action="store_true")
     research_brief_parser = subparsers.add_parser("research-brief")
@@ -955,6 +960,20 @@ def main() -> int:
             print_json({"daily_research_loop": result})
         else:
             print(render_auto_daily_research_loop_text(result))
+        return 0
+
+    if args.command == "research-autopilot":
+        result = run_research_autopilot(
+            ledger,
+            manifest,
+            project_root=Path.cwd(),
+            force=args.force,
+            reason="manual CLI research autopilot",
+        )
+        if args.json:
+            print_json({"research_autopilot": result})
+        else:
+            print(render_research_autopilot_text(result))
         return 0
 
     if args.command == "research-sandbox":

@@ -85,6 +85,7 @@ from .research_sandbox import (
     research_outputs_from_events,
     research_sandbox_status,
 )
+from .research_autopilot import run_research_autopilot
 from .reflection_queue import (
     open_tasks_from_reflection,
     resolve_matching_reflection_tasks,
@@ -685,6 +686,18 @@ def _apply_steward_action(
                 project_root=Path.cwd(),
                 force=force,
                 reason=reason or "live daily research loop",
+            )
+        }
+
+    if action == "run_research_autopilot":
+        force = bool(payload.get("force"))
+        return {
+            "research_autopilot": run_research_autopilot(
+                ledger,
+                manifest,
+                project_root=Path.cwd(),
+                force=force,
+                reason=reason or "live research autopilot",
             )
         }
 
@@ -3710,6 +3723,10 @@ def _live_chat_html() -> str:
       }
       if (action.target_kind === 'research_brief') {
         createResearch('research_brief');
+        return;
+      }
+      if (action.target_kind === 'research_autopilot') {
+        steward({action: 'run_research_autopilot', reason: 'started from guided research workbench'});
         return;
       }
       if (action.target_kind === 'mission_onboarding') {

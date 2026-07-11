@@ -7,7 +7,7 @@ from typing import Any
 import hashlib
 import uuid
 
-from .evidence_locker import EvidenceRecord, add_evidence
+from .evidence_locker import EvidenceRecord, add_evidence, link_evidence
 from .ledger import ContinuityEvent, ContinuityLedger
 from .manifest import IdentityManifest
 from .missions import MissionBrief, mission_briefs_from_events, require_mission
@@ -192,6 +192,14 @@ def create_research_output(
         kind_value,
         content,
     )
+    evidence_link = link_evidence(
+        ledger,
+        manifest.system_id,
+        evidence.evidence_id,
+        "mission",
+        mission_id,
+        reason="research sandbox linked proposed evidence to mission",
+    )
     record = ResearchSandboxOutputRecord.create(
         identity_id=manifest.system_id,
         mission_id=mission_id,
@@ -207,6 +215,7 @@ def create_research_output(
     return {
         "output": record.to_dict(),
         "evidence": evidence.to_dict(),
+        "evidence_link": evidence_link.to_dict(),
         "content": content,
     }
 

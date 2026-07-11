@@ -325,6 +325,11 @@ from .research_sandbox import (
     research_outputs_from_events,
     research_sandbox_status,
 )
+from .research_autopilot import (
+    render_research_autopilot_text,
+    research_autopilot_records_from_events,
+    run_research_autopilot,
+)
 from .reflection_queue import (
     ReflectionTaskKind,
     ReflectionTaskRecord,
@@ -670,6 +675,7 @@ __all__ = [
     "require_skill_candidate",
     "route_mission_pressure",
     "recovery_records_from_events",
+    "research_autopilot_records_from_events",
     "research_outputs_from_events",
     "research_sandbox_status",
     "reflection_records_from_events",
@@ -692,12 +698,14 @@ __all__ = [
     "render_lucien_cockpit_html",
     "render_next_governed_build_text",
     "render_project_build_brief_text",
+    "render_research_autopilot_text",
     "render_research_outputs_text",
     "render_startup_health_text",
     "render_session_replay_html",
     "report_scenario",
     "run_all_scenarios",
     "run_auto_daily_research_loop",
+    "run_research_autopilot",
     "run_scenario",
     "safe_load_policy_directory",
     "safe_load_policy_pack",

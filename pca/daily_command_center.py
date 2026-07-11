@@ -407,17 +407,18 @@ def _guided_actions(
     return {
         "research": _guided_action(
             work_mode="research",
-            action_id="generate_research_brief",
-            title="Generate a Research Brief",
-            primary_label="Start Research Brief",
+            action_id="run_research_autopilot",
+            title="Start Today's Research",
+            primary_label="Start Research Run",
             status=(
-                "Ready to gather proposed research notes."
+                "Ready to prepare mission structure, proposed research notes, and next steps."
                 if allowed
                 else "Review is needed first for high-impact work; sandbox drafting remains constrained."
             ),
-            target_kind="research_brief",
+            target_kind="research_autopilot",
             what_it_does=[
-                "Creates a sandbox research brief linked to the active mission.",
+                "Runs one bounded research pass for the active mission.",
+                "Creates starter structure if the mission is missing it.",
                 "Uses the local model path when available.",
                 "Creates proposed evidence for later review.",
                 review_note,

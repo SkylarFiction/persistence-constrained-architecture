@@ -60,6 +60,7 @@ from pca import (
     append_ledger_anchor,
     active_followups,
     auto_daily_research_loop_records_from_events,
+    research_autopilot_records_from_events,
     autonomy_queue_items_from_events,
     auto_propose_checkpoint_skill_candidates,
     authorization_policy_from_packs,
@@ -131,6 +132,7 @@ from pca import (
     run_latest_session_learning_review,
     learning_review_records_from_events,
     run_auto_daily_research_loop,
+    run_research_autopilot,
     mission_flow,
     mission_flows_from_events,
     mission_onboarding_state,
@@ -2882,7 +2884,8 @@ def test_daily_command_center_shows_active_mission_phase_and_next_action(tmp_pat
     assert "Daily mission" in daily["briefing"]
     assert daily["plain_status"] == "Ready to shape the mission."
     assert set(daily["guided_actions"]) == {"research", "write", "build"}
-    assert daily["guided_actions"]["research"]["target_kind"] == "research_brief"
+    assert daily["guided_actions"]["research"]["target_kind"] == "research_autopilot"
+    assert daily["guided_actions"]["research"]["action_id"] == "run_research_autopilot"
     assert "Will not publish anything." in daily["guided_actions"]["research"]["what_it_will_not_do"]
     assert daily["review_needed"]["blocks_today"] is False
 
@@ -3063,6 +3066,7 @@ def test_research_sandbox_brief_creates_proposed_output_without_high_priority_bl
     rendered = render_research_outputs_text(outputs)
     tasks = reflection_task_records_from_events(ledger.events())
     evidence = evidence_records_from_events(ledger.events())
+    linked = evidence_for_target(ledger.events(), "mission", mission.mission_id)
     sandbox = research_sandbox_status(ledger, manifest)
 
     assert result["output"]["status"] == "proposed"
@@ -3070,6 +3074,8 @@ def test_research_sandbox_brief_creates_proposed_output_without_high_priority_bl
     assert outputs[0].confidence == "low"
     assert "Research Outputs" in rendered
     assert evidence[-1].review_status.value == "raw"
+    assert result["evidence_link"]["evidence_id"] == evidence[-1].evidence_id
+    assert linked[-1]["evidence"]["evidence_id"] == evidence[-1].evidence_id
     assert sandbox["proposed_output_count"] == 1
     assert not [task for task in tasks if task.severity in {"high", "critical"}]
     assert steward_inbox(ledger) == []
@@ -3137,6 +3143,42 @@ def test_auto_daily_research_loop_force_can_prepare_again_without_duplicate_acti
     assert forced["already_prepared"] is False
     assert forced["proposed_items"] == []
     assert len(queue) == len(first["proposed_items"])
+
+
+def test_research_autopilot_prepares_reviewable_research_run(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    result = run_research_autopilot(
+        ledger,
+        manifest,
+        project_root=tmp_path,
+        run_date="2026-07-11",
+    )
+    records = research_autopilot_records_from_events(ledger.events())
+    briefs = mission_briefs_from_events(ledger.events())
+    outputs = research_outputs_from_events(ledger.events(), result["record"]["mission_id"])
+    linked = evidence_for_target(ledger.events(), "mission", result["record"]["mission_id"])
+
+    assert result["record"]["status"] == "prepared"
+    assert result["record"]["stopped_for_review"] is True
+    assert result["record"]["mission_id"]
+    assert records[-1]["run_id"] == result["record"]["run_id"]
+    assert result["onboarding"] is not None
+    assert len(result["onboarding"]["created"]) == 3
+    assert len(outputs) == 3
+    assert len(linked) >= 4
+    assert result["claim_map"]["claim_count"] == 1
+    assert result["claim_map"]["raw_evidence_count"] >= 1
+    assert result["next_step"]["mission_step"] is None
+    assert result["next_step"]["recommendation"]["can_propose"] is False
+    assert "blockers" in result["next_step"]["recommendation"]
+    assert any(
+        action["action"] == "refresh_required_evidence"
+        for action in result["record"]["actions"]
+    )
+    assert any(brief.mission.status == MissionStatus.OPEN for brief in briefs)
+    assert steward_inbox(ledger) != []
 
 
 def test_daily_plan_includes_active_goal_and_safe_next_action(tmp_path):
