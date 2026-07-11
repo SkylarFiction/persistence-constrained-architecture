@@ -6,7 +6,7 @@ from typing import Any
 from .evidence_locker import add_evidence, link_evidence
 from .ledger import ContinuityLedger
 from .mission_flow import MissionPhase, mission_flow
-from .missions import MissionItemKind, add_mission_item, require_mission
+from .missions import MissionItemKind, MissionStatus, add_mission_item, require_mission
 
 
 @dataclass(frozen=True)
@@ -47,12 +47,11 @@ def mission_onboarding_state(
         ]
         if not counts.get(kind, 0)
     ]
-    ready = bool(needed) and flow.phase in {
-        MissionPhase.INTAKE,
-        MissionPhase.HYPOTHESIS_BUILDING,
-        MissionPhase.EVIDENCE_REVIEW,
-        MissionPhase.PLANNING,
-    }
+    ready = (
+        bool(needed)
+        and mission.status == MissionStatus.OPEN
+        and flow.phase not in {MissionPhase.BLOCKED, MissionPhase.COMPLETED}
+    )
     return MissionOnboardingState(
         mission_id=mission_id,
         title=mission.title,
@@ -62,7 +61,11 @@ def mission_onboarding_state(
         recommended_action=(
             "Create a starter hypothesis, evidence need, and risk review."
             if ready
-            else "Mission already has the starter structure."
+            else (
+                "Mission already has the starter structure."
+                if not needed
+                else "Resolve mission blockers before creating starter structure."
+            )
         ),
         questions=[
             "What claim could be tested or clarified first?",

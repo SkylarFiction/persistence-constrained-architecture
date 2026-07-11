@@ -2492,6 +2492,35 @@ def test_mission_onboarding_state_identifies_starter_needs(tmp_path):
     assert "starter hypothesis" in onboarding.recommended_action
 
 
+def test_mission_onboarding_ready_when_open_mission_has_step_but_no_starter(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Autonomous research mission",
+        problem_statement="Research a Coherence Physics claim without skipping evidence.",
+    )
+    propose_mission_step(
+        ledger,
+        manifest.system_id,
+        mission_id=mission.mission_id,
+        description="Draft a first research note for steward review.",
+        risk_level="low",
+        required_tool="none",
+        expected_outcome="A proposed research note exists.",
+        reason="test ready step before starter pack",
+    )
+
+    flow = mission_flow(ledger, mission.mission_id)
+    onboarding = mission_onboarding_state(ledger, mission.mission_id)
+
+    assert flow.phase == MissionPhase.INTERVENTION_READY
+    assert onboarding.ready is True
+    assert onboarding.needed == ["hypothesis", "evidence", "risk"]
+    assert "starter hypothesis" in onboarding.recommended_action
+
+
 def test_create_mission_onboarding_pack_adds_proposed_starter_items(tmp_path):
     manifest = load_manifest()
     ledger = ContinuityLedger(tmp_path / "continuity.log")
