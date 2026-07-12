@@ -37,8 +37,23 @@ def export_research_pdf(
     outputs = research_outputs_from_events(ledger.events(), mission_id)
     claim_map = mission_claim_map(ledger, mission_id)
     linked_evidence = evidence_for_target(ledger.events(), "mission", mission_id)
-    corpus_sources = _corpus_sources_for_mission(ledger.events(), mission_id)
-    source_notes = source_notes_for_mission(ledger.events(), mission_id)
+    # Corpus indexing and source-note extraction are append-only ledger history:
+    # a source indexed before the relevance gate existed (or before it was
+    # tightened) stays reused indefinitely by source_hash and never gets
+    # re-filtered. Re-checking relevance here, at the point the PDF actually
+    # renders these lists, means an irrelevant source can never resurface in
+    # Materials, References, Source-Derived Notes, or Appendix D regardless of
+    # how old the mission or how the evidence was originally registered.
+    corpus_sources = [
+        source
+        for source in _corpus_sources_for_mission(ledger.events(), mission_id)
+        if is_relevant_source_path(str(source.get("path") or ""))
+    ]
+    source_notes = [
+        note
+        for note in source_notes_for_mission(ledger.events(), mission_id)
+        if is_relevant_source_path(str(note.get("source_path") or ""))
+    ]
     lines = _research_packet_lines(
         manifest=manifest,
         mission_title=mission.title,

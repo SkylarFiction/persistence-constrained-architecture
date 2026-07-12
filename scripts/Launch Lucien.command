@@ -37,7 +37,7 @@ python3 pca_cli.py --ledger data/lucien_chat.log cockpit --html reports/lucien_c
 (sleep 1.5 && open "$URL") &
 
 set +e
-python3 pca_cli.py live-chat --port "$PORT"
+python3 pca_cli.py --ledger data/lucien_chat.log live-chat --port "$PORT"
 EXIT_CODE=$?
 set -e
 

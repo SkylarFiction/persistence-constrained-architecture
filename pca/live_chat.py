@@ -118,7 +118,7 @@ def run_live_chat_server(
     host: str = "127.0.0.1",
     port: int = 8787,
     manifest_path: str | Path = "examples/minimal_identity.json",
-    ledger_path: str | Path = "data/lucien_live_chat.log",
+    ledger_path: str | Path = "data/lucien_chat.log",
 ) -> None:
     manifest = IdentityManifest.from_dict(
         json.loads(Path(manifest_path).read_text(encoding="utf-8"))
@@ -829,7 +829,7 @@ def main() -> int:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8787)
     parser.add_argument("--manifest", default="examples/minimal_identity.json")
-    parser.add_argument("--ledger", default="data/lucien_live_chat.log")
+    parser.add_argument("--ledger", default="data/lucien_chat.log")
     args = parser.parse_args()
     run_live_chat_server(
         host=args.host,
@@ -843,7 +843,7 @@ def main() -> int:
 def chat_once(
     message: str,
     manifest_path: str | Path = "examples/minimal_identity.json",
-    ledger_path: str | Path = "data/lucien_live_chat.log",
+    ledger_path: str | Path = "data/lucien_chat.log",
     model_mode: str | None = None,
     use_openai: bool = False,
 ) -> dict[str, Any]:

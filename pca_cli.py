@@ -259,7 +259,7 @@ def create_followups_for_override(
 
 def _chat_ledger_path(ledger_path: str) -> str:
     if ledger_path == "data/continuity.log":
-        return "data/lucien_live_chat.log"
+        return "data/lucien_chat.log"
     return ledger_path
 
 
