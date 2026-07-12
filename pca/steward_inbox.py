@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import hashlib
 from typing import Any
 
 from .evidence_locker import EvidenceReviewStatus, evidence_records_from_events
@@ -194,6 +195,34 @@ def apply_steward_inbox_action(
             reason=reason,
         )
         return {"item": item.to_dict(), "evidence": evidence.to_dict()}
+    if item.source_type == "evidence_packet_review":
+        status_by_action = {
+            "accept": EvidenceReviewStatus.REVIEWED.value,
+            "resolve": EvidenceReviewStatus.REVIEWED.value,
+            "reject": EvidenceReviewStatus.REJECTED.value,
+            "mark_stale": EvidenceReviewStatus.STALE.value,
+        }
+        if normalized_action not in status_by_action:
+            raise ValueError("evidence packet action must be accept, resolve, reject, or mark_stale")
+        reviewed = []
+        for record in _packet_eligible_evidence(ledger.events()):
+            if _evidence_packet_id(record.reason) != item.source_id:
+                continue
+            reviewed.append(
+                review_evidence(
+                    ledger,
+                    manifest.system_id,
+                    record.evidence_id,
+                    status_by_action[normalized_action],
+                    reviewer=reviewer,
+                    reason=reason,
+                )
+            )
+        return {
+            "item": item.to_dict(),
+            "evidence": [record.to_dict() for record in reviewed],
+            "reviewed_count": len(reviewed),
+        }
     if item.source_type == "conflict_resolution":
         if normalized_action not in {"accept_new", "keep_existing", "fork"}:
             raise ValueError("conflict action must be accept_new, keep_existing, or fork")
@@ -322,7 +351,21 @@ def _skill_items(events) -> list[StewardInboxItem]:
 
 def _evidence_items(events) -> list[StewardInboxItem]:
     items = []
+    packet_records = _packet_eligible_evidence(events)
+    packet_items = _evidence_packet_items(packet_records)
+    packet_reason_ids = {
+        item.source_id for item in packet_items
+    }
+    packet_ids = {
+        record.evidence_id
+        for record in packet_records
+        if _evidence_packet_id(record.reason) in packet_reason_ids
+    }
+    for item in packet_items:
+        items.append(item)
     for record in evidence_records_from_events(events):
+        if record.evidence_id in packet_ids:
+            continue
         if (
             record.review_status == EvidenceReviewStatus.RAW
             and record.reason.startswith("research sandbox proposed evidence")
@@ -353,6 +396,54 @@ def _evidence_items(events) -> list[StewardInboxItem]:
             )
         )
     return items
+
+
+def _packet_eligible_evidence(events) -> list:
+    return [
+        record
+        for record in evidence_records_from_events(events)
+        if record.review_status == EvidenceReviewStatus.RAW
+        and (
+            record.reason.startswith("manual CLI Coherence Physics paper pipeline")
+            or record.reason.startswith("manual CLI Coherence Physics corpus index")
+        )
+    ]
+
+
+def _evidence_packet_items(records) -> list[StewardInboxItem]:
+    by_reason: dict[str, list[Any]] = {}
+    for record in records:
+        by_reason.setdefault(record.reason, []).append(record)
+    items: list[StewardInboxItem] = []
+    for reason, grouped in by_reason.items():
+        if len(grouped) < 2:
+            continue
+        first_created = min(record.created_at for record in grouped)
+        packet_id = _evidence_packet_id(reason)
+        items.append(
+            StewardInboxItem(
+                inbox_id=f"evidence_packet_review:{packet_id}",
+                source_type="evidence_packet_review",
+                source_id=packet_id,
+                severity="medium",
+                title=f"Research source packet: {len(grouped)} raw sources",
+                reason=(
+                    f"{len(grouped)} raw source evidence records from one research run "
+                    "await steward review."
+                ),
+                linked_target_type="evidence_packet",
+                linked_target_id=packet_id,
+                recommended_actions=["accept", "reject", "mark_stale"],
+                created_at=first_created,
+                status="raw",
+            )
+        )
+    return items
+
+
+def _evidence_packet_id(reason: str) -> str:
+    digest = hashlib.sha256(reason.encode("utf-8")).hexdigest()[:12]
+    return f"packet_{digest}"
 
 
 def _conflict_items(events) -> list[StewardInboxItem]:
@@ -455,7 +546,7 @@ def _filter_matches(item: StewardInboxItem, normalized: str) -> bool:
         "memory": {"memory_review"},
         "skills": {"skill_candidate"},
         "skill": {"skill_candidate"},
-        "evidence": {"evidence_review"},
+        "evidence": {"evidence_review", "evidence_packet_review"},
         "missions": {"mission_review"},
         "mission": {"mission_review"},
         "conflicts": {"conflict_resolution"},

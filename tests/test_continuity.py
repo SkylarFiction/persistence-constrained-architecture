@@ -1114,6 +1114,67 @@ def test_steward_inbox_action_updates_underlying_growth_record(tmp_path):
     ]
 
 
+def test_steward_inbox_groups_research_evidence_packets(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    reason = "manual CLI Coherence Physics paper pipeline"
+    first = add_evidence(
+        ledger,
+        manifest.system_id,
+        source_type="file",
+        summary="First Coherence source note.",
+        confidence="medium",
+        reason=reason,
+    )
+    second = add_evidence(
+        ledger,
+        manifest.system_id,
+        source_type="file",
+        summary="Second Coherence source note.",
+        confidence="medium",
+        reason=reason,
+    )
+
+    items = steward_inbox(ledger)
+    packet_items = [
+        item for item in items if item.source_type == "evidence_packet_review"
+    ]
+
+    assert len(packet_items) == 1
+    assert "2 raw sources" in packet_items[0].title
+    assert not [
+        item
+        for item in items
+        if item.inbox_id
+        in {
+            f"evidence_review:{first.evidence_id}",
+            f"evidence_review:{second.evidence_id}",
+        }
+    ]
+    assert steward_inbox(ledger, source_type="evidence")
+
+    result = apply_steward_inbox_action(
+        ledger,
+        manifest,
+        packet_items[0].inbox_id,
+        "accept",
+        reason="reviewed research source packet",
+    )
+    records = {
+        record.evidence_id: record
+        for record in evidence_records_from_events(ledger.events())
+    }
+
+    assert result["reviewed_count"] == 2
+    assert records[first.evidence_id].review_status.value == "reviewed"
+    assert records[second.evidence_id].review_status.value == "reviewed"
+    assert not [
+        item
+        for item in steward_inbox(ledger)
+        if item.source_type == "evidence_packet_review"
+    ]
+
+
 def test_live_steward_action_can_route_unified_inbox_action(tmp_path):
     manifest = load_manifest()
     ledger = ContinuityLedger(tmp_path / "continuity.log")
@@ -1285,7 +1346,9 @@ def test_tv_chat_html_is_simple_default_screen():
     assert "Lucien TV Mode" in html
     assert "Coherence Research Display" in html
     assert "Do Research + Save PDF" in html
+    assert "Review Main Blocker" in html
     assert "tvResearch" in html
+    assert "tvResolveBlocker" in html
     assert "tvInput" in html
     assert "tvForm" in html
     assert "Local Mode" in html
@@ -1293,6 +1356,10 @@ def test_tv_chat_html_is_simple_default_screen():
     assert "Open Full Workbench" in html
     assert "/workbench" in html
     assert "run_coherence_paper_pipeline" in html
+    assert "response_text" in html
+    assert "suppress_auto_reflect: true" in html
+    assert "steward_inbox_action" in html
+    assert "data.result || {}).response)" not in html
     assert "reports/research_papers/coherence_physics_research_packet.pdf" in html
     assert "Advanced Diagnostics" not in html
 
@@ -7392,12 +7459,20 @@ def test_resolving_growth_conflict_closes_matching_reflection_task(tmp_path):
         f"resolved by conflict decision {resolution.resolution_id}",
     )
     report = build_trace_report(ledger, manifest)
+    followup_reflection = record_reflection(ledger, manifest)
+    followup_tasks = open_tasks_from_reflection(
+        ledger,
+        followup_reflection,
+        skip_existing=False,
+    )
 
     assert resolution.decision.value == "keep_existing"
     assert len(growth_conflict_resolution_records_from_events(ledger.events())) == 1
     assert len(resolved_tasks) == 1
     assert resolved_tasks[0].status.value == "resolved"
     assert report.summary["growth_conflict_resolution_count"] == 1
+    assert "growth conflict" not in " ".join(followup_reflection.observations)
+    assert all(task.kind.value != "resolve_conflict" for task in followup_tasks)
 
 
 def test_lucien_chat_shell_records_memory_confirmation_signal(tmp_path):

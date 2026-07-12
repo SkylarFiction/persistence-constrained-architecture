@@ -6,7 +6,10 @@ from typing import Any
 import uuid
 
 from .growth import active_growth_records
-from .growth_conflicts import growth_conflict_records_from_events
+from .growth_conflicts import (
+    growth_conflict_records_from_events,
+    growth_conflict_resolution_records_from_events,
+)
 from .ledger import ContinuityEvent, ContinuityLedger
 from .manifest import IdentityManifest
 from .memory_cards import memory_cards_from_events
@@ -86,7 +89,15 @@ def build_reflection(
     events = ledger.events()
     claim = derive_current_claim(ledger, manifest)[0]
     active_growth = active_growth_records(events)
-    conflicts = growth_conflict_records_from_events(events)
+    resolved_conflict_ids = {
+        resolution.conflict_id
+        for resolution in growth_conflict_resolution_records_from_events(events)
+    }
+    conflicts = [
+        conflict
+        for conflict in growth_conflict_records_from_events(events)
+        if conflict.conflict_id not in resolved_conflict_ids
+    ]
     memory_cards = memory_cards_from_events(events, manifest.system_id)
     observations: list[str] = []
     recommended_actions: list[str] = []

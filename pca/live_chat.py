@@ -191,6 +191,7 @@ def run_live_chat_server(
             model_mode = normalize_model_mode(str(payload.get("model_mode", "")))
             use_openai = bool(payload.get("use_openai"))
             mission_id = str(payload.get("mission_id", "")).strip() or None
+            suppress_auto_reflect = bool(payload.get("suppress_auto_reflect"))
             before_count = len(ledger.events())
             received_event = ledger.append(
                 "chat.user_message_received",
@@ -201,6 +202,7 @@ def run_live_chat_server(
                     "model_mode": model_mode,
                     "openai_requested": use_openai,
                     "mission_id": mission_id,
+                    "suppress_auto_reflect": suppress_auto_reflect,
                 },
             )
             result = shell.handle_message(
@@ -211,7 +213,7 @@ def run_live_chat_server(
             )
             reflection = None
             opened_tasks = []
-            if _should_auto_reflect(result.to_dict()):
+            if not suppress_auto_reflect and _should_auto_reflect(result.to_dict()):
                 reflection = record_reflection(ledger, manifest)
                 opened_tasks = open_tasks_from_reflection(ledger, reflection)
             _refresh_live_artifacts(ledger, manifest, shell)
@@ -1502,6 +1504,7 @@ def _tv_chat_html() -> str:
         <div class="quick-actions">
           <button id="tvResearch" class="primary" type="button">Do Research + Save PDF</button>
           <button id="tvAskNext" class="secondary" type="button">Ask What To Do Next</button>
+          <button id="tvResolveBlocker" class="secondary" type="button">Review Main Blocker</button>
           <button id="tvRefresh" class="secondary" type="button">Refresh Status</button>
           <button id="tvWorkbench" class="secondary" type="button">Open Full Workbench</button>
         </div>
@@ -1531,6 +1534,7 @@ def _tv_chat_html() -> str:
     const tvResearch = document.getElementById('tvResearch');
     const pdfStatus = document.getElementById('pdfStatus');
     let activeMissionId = '';
+    let primaryInboxItemId = '';
 
     function addTvMessage(kind, text) {
       const welcome = tvMessages.querySelector('.welcome');
@@ -1565,8 +1569,11 @@ def _tv_chat_html() -> str:
       const model = status.model_adapter || {};
       const workbench = status.workbench || {};
       const missions = status.missions || [];
+      const inbox = status.steward_inbox || [];
       const active = (workbench.active_mission || (missions[0] || {}).mission || {});
       activeMissionId = active.mission_id || '';
+      const high = inbox.find(item => item.severity === 'high' || item.severity === 'critical');
+      primaryInboxItemId = high ? high.inbox_id : '';
 
       document.getElementById('brainPill').textContent =
         `Brain: ${usage.latest_provider || model.local_provider || 'local'} / ${usage.latest_model || model.local_model || 'loading'}`;
@@ -1579,6 +1586,9 @@ def _tv_chat_html() -> str:
         workbench.recommended_next_action || 'Ask Lucien what to do next';
       document.getElementById('nextHint').textContent =
         `${workbench.open_steward_inbox_count || 0} steward item(s), ${workbench.blocked_mission_count || 0} blocked mission(s).`;
+      const blockerButton = document.getElementById('tvResolveBlocker');
+      blockerButton.disabled = !primaryInboxItemId;
+      blockerButton.textContent = primaryInboxItemId ? 'Review Main Blocker' : 'No Main Blocker';
     }
 
     async function sendTvMessage(text) {
@@ -1596,12 +1606,13 @@ def _tv_chat_html() -> str:
             message,
             model_mode: brainMode,
             use_openai: brainMode === 'serious_only',
-            mission_id: activeMissionId
+            mission_id: activeMissionId,
+            suppress_auto_reflect: true
           })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'chat failed');
-        addTvMessage('lucien', ((data.result || {}).response) || 'No response returned.');
+        addTvMessage('lucien', ((data.result || {}).response_text) || 'No response returned.');
         await refreshTvStatus();
       } catch (error) {
         addTvMessage('lucien', `I could not complete that: ${error.message}`);
@@ -1643,6 +1654,36 @@ def _tv_chat_html() -> str:
       }
     }
 
+    async function resolveTvMainBlocker() {
+      if (!primaryInboxItemId) {
+        addTvMessage('lucien', 'No high-priority blocker is waiting right now.');
+        return;
+      }
+      const button = document.getElementById('tvResolveBlocker');
+      button.disabled = true;
+      addTvMessage('lucien', 'Reviewing the main blocker through the steward inbox.');
+      try {
+        const response = await fetch('/api/steward', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            action: 'steward_inbox_action',
+            inbox_id: primaryInboxItemId,
+            inbox_action: 'resolve',
+            reason: 'TV mode reviewed main blocker'
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'review failed');
+        addTvMessage('lucien', 'Main blocker reviewed. I refreshed the research state.');
+        await refreshTvStatus();
+      } catch (error) {
+        addTvMessage('lucien', `I could not review the main blocker: ${error.message}`);
+      } finally {
+        button.disabled = !primaryInboxItemId;
+      }
+    }
+
     document.getElementById('tvForm').addEventListener('submit', event => {
       event.preventDefault();
       sendTvMessage(tvInput.value);
@@ -1651,6 +1692,7 @@ def _tv_chat_html() -> str:
       sendTvMessage('Lucien, tell me the one next thing to do for Coherence Physics research. Keep it simple.');
     });
     document.getElementById('tvRefresh').addEventListener('click', refreshTvStatus);
+    document.getElementById('tvResolveBlocker').addEventListener('click', resolveTvMainBlocker);
     document.getElementById('tvWorkbench').addEventListener('click', () => {
       window.location.href = '/workbench';
     });
