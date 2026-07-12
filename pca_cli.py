@@ -6,6 +6,9 @@ from pathlib import Path
 
 from pca.cold_open import cold_open_report, render_cold_open_report_text
 from pca import (
+    mission_argument_graph,
+    render_argument_graph_text,
+    seed_continuity_argument_graph,
     AuditEngine,
     AuditOutcome,
     AuthorityClass,
@@ -335,6 +338,12 @@ def main() -> int:
     source_notes_parser.add_argument("--json", action="store_true")
     source_notes_parser.add_argument("--mission")
     source_notes_parser.add_argument("--limit", type=int, default=6)
+    argument_graph_seed_parser = subparsers.add_parser("argument-graph-seed")
+    argument_graph_seed_parser.add_argument("mission_id")
+    argument_graph_seed_parser.add_argument("--json", action="store_true")
+    argument_graph_show_parser = subparsers.add_parser("argument-graph-show")
+    argument_graph_show_parser.add_argument("mission_id")
+    argument_graph_show_parser.add_argument("--json", action="store_true")
     coherence_paper_parser = subparsers.add_parser("coherence-paper-pipeline")
     coherence_paper_parser.add_argument("--json", action="store_true")
     coherence_paper_parser.add_argument("--mission")
@@ -1068,6 +1077,33 @@ def main() -> int:
             print_json({"research_sandbox": status})
         else:
             print_json(status)
+        return 0
+
+    if args.command == "argument-graph-seed":
+        result = seed_continuity_argument_graph(
+            ledger,
+            manifest,
+            args.mission_id,
+            project_root=Path.cwd(),
+            reason="manual CLI argument graph seed",
+        )
+        if args.json:
+            print_json({"argument_graph_seed": result})
+        else:
+            print(
+                f"seeded argument graph: {result['node_count']} node(s), "
+                f"{result['edge_count']} edge(s) "
+                f"(+{result['created_node_count']} node(s), "
+                f"+{result['created_edge_count']} edge(s) this run)"
+            )
+        return 0
+
+    if args.command == "argument-graph-show":
+        graph = mission_argument_graph(ledger, args.mission_id)
+        if args.json:
+            print_json({"argument_graph": graph})
+        else:
+            print(render_argument_graph_text(graph))
         return 0
 
     if args.command == "research-brief":

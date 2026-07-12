@@ -337,6 +337,11 @@ from .coherence_corpus import (
     index_coherence_corpus,
     render_coherence_corpus_index_text,
 )
+from .argument_graph import (
+    mission_argument_graph,
+    render_argument_graph_text,
+    seed_continuity_argument_graph,
+)
 from .source_notes import (
     extract_source_notes_for_mission,
     render_source_notes_text,
@@ -663,6 +668,7 @@ __all__ = [
     "merge_policy_packs",
     "memory_cards_from_events",
     "memory_signal_records_from_events",
+    "mission_argument_graph",
     "mission_briefs_from_events",
     "mission_flow",
     "mission_flow_from_events",
@@ -686,6 +692,7 @@ __all__ = [
     "record_memory_signal",
     "record_reflection",
     "render_build_review_text",
+    "render_argument_graph_text",
     "render_autonomy_queue_text",
     "render_auto_daily_research_loop_text",
     "render_checkpoint_history_text",
@@ -748,6 +755,7 @@ __all__ = [
     "scenario_ids",
     "select_brain_route",
     "seed_coherence_physics_goals",
+    "seed_continuity_argument_graph",
     "skill_candidates_from_events",
     "skill_suggestions_for_mission",
     "source_note_records_from_events",

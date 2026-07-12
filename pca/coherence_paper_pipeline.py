@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 import uuid
 
+from .argument_graph import seed_continuity_argument_graph
 from .coherence_corpus import index_coherence_corpus
 from .coherence_seed import seed_coherence_physics_goals
 from .ledger import ContinuityLedger
@@ -92,6 +93,21 @@ def run_coherence_paper_pipeline(
         }
     )
 
+    argument_graph = seed_continuity_argument_graph(
+        ledger,
+        manifest,
+        selected_mission["mission_id"],
+        project_root=project_path,
+        reason=reason or "coherence paper pipeline seeded argument graph",
+    )
+    actions.append(
+        {
+            "action": "seed_argument_graph",
+            "nodes": argument_graph.get("node_count", 0),
+            "edges": argument_graph.get("edge_count", 0),
+        }
+    )
+
     autopilot = run_research_autopilot(
         ledger,
         manifest,
@@ -132,6 +148,7 @@ def run_coherence_paper_pipeline(
         manifest,
         selected_mission["mission_id"],
         output_path,
+        project_root=project_path,
     )
     actions.append({"action": "research_pdf_exported", "path": pdf["path"]})
     review = research_review_desk(ledger, selected_mission["mission_id"])

@@ -102,7 +102,9 @@ from pca import (
     extract_source_notes_for_mission,
     discover_coherence_sources,
     index_coherence_corpus,
+    mission_argument_graph,
     research_review_desk,
+    seed_continuity_argument_graph,
     source_note_records_from_events,
     run_coherence_paper_pipeline,
     execute_approved_autonomy_actions,
@@ -3461,6 +3463,113 @@ def test_coherence_paper_pipeline_finishes_with_pdf_packet(tmp_path):
     assert review["pdf_ready"] is True
     assert output_path.read_bytes().startswith(b"%PDF-1.4")
     assert b"Source-Derived Notes" in output_path.read_bytes()
+    assert b"Formal Criteria for Governed Continuity" in output_path.read_bytes()
+    assert b"Argument Structure" in output_path.read_bytes()
+
+
+def test_argument_graph_seed_is_idempotent_and_structured(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    lab = tmp_path / "coherence-falsification-lab" / "results"
+    lab.mkdir(parents=True)
+    (lab / "verdict.md").write_text(
+        "\n".join(
+            [
+                "# Verdict: FAIL",
+                "## Summary",
+                "- RTI did not beat the median lead-time threshold.",
+                "## Reasons",
+                "- Primary lead-time claim missed its bar.",
+                "## Boundary",
+                "This tests RTI only, not full identity continuity.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Argument graph mission",
+        problem_statement="Seed a structured argument for the continuity paper.",
+    )
+
+    first = seed_continuity_argument_graph(
+        ledger,
+        manifest,
+        mission.mission_id,
+        project_root=project_root,
+    )
+    second = seed_continuity_argument_graph(
+        ledger,
+        manifest,
+        mission.mission_id,
+        project_root=project_root,
+    )
+    graph = mission_argument_graph(ledger, mission.mission_id)
+
+    assert first["created_node_count"] == 8
+    assert first["created_edge_count"] == 7
+    assert second["created_node_count"] == 0
+    assert second["created_edge_count"] == 0
+    assert graph["node_count"] == 8
+    assert graph["edge_count"] == 7
+    assert any("FAIL" in node["statement"] for node in graph["nodes"])
+
+
+def test_research_pdf_includes_falsification_and_argument_graph(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    lab = tmp_path / "coherence-falsification-lab" / "results"
+    lab.mkdir(parents=True)
+    (lab / "verdict.md").write_text(
+        "\n".join(
+            [
+                "# Verdict: FAIL",
+                "## Summary",
+                "- RTI failed the primary median lead-time claim.",
+                "## Reasons",
+                "- Detection rate improved but lead-time did not clear the bar.",
+                "## Boundary",
+                "The test covers collapse warning, not full continuity certification.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (corpus / "Coherence_Physics_Source.md").write_text(
+        (
+            "The Recovery Threshold Index tracks degraded recoverability. "
+            "Identity continuity requires memory evidence, authority evidence, "
+            "lineage evidence, and recovery checks."
+        ),
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "argument_packet.pdf"
+
+    result = run_coherence_paper_pipeline(
+        ledger,
+        manifest,
+        project_root=project_root,
+        corpus_roots=["corpus"],
+        corpus_limit=1,
+        force=True,
+        output_path=output_path,
+    )
+    content = output_path.read_bytes()
+
+    assert any(
+        action["action"] == "seed_argument_graph"
+        for action in result["record"]["actions"]
+    )
+    assert b"Existing Falsification Evidence" in content
+    assert b"Formal Criteria for Governed Continuity" in content
+    assert b"Argument Structure" in content
+    assert b"FAIL" in content
 
 
 def test_coherence_paper_pipeline_opens_simple_mission_when_existing_is_completed(tmp_path):

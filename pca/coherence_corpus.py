@@ -189,6 +189,19 @@ CANONICAL_COHERENCE_ROOTS = {
 }
 
 
+def is_relevant_source_path(relative_path: str) -> bool:
+    """Whether a workspace-relative path is admissible as Coherence Physics evidence.
+
+    Applies the same gate as corpus discovery, but keyed on the path alone so it
+    can also re-check evidence and source notes already recorded in ledger
+    history (which may predate this gate or a later tightening of it), rather
+    than only filtering at initial indexing time.
+    """
+    if any(relative_path.startswith(root) for root in CANONICAL_COHERENCE_ROOTS):
+        return True
+    return _matches_noncanonical_relevance(relative_path)
+
+
 def discover_coherence_sources(
     workspace_root: str | Path,
     roots: list[str] | None = None,
