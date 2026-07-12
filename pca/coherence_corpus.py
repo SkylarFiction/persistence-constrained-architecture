@@ -12,6 +12,11 @@ from .evidence_locker import (
     evidence_records_from_events,
     link_evidence,
 )
+from .knowledge_hub import (
+    KnowledgeHubSourceRecord,
+    discover_knowledge_hub_sources,
+    knowledge_hub_sources_from_events,
+)
 from .ledger import ContinuityEvent, ContinuityLedger
 from .manifest import IdentityManifest
 from .missions import MissionStatus, mission_briefs_from_events, require_mission
@@ -43,6 +48,8 @@ THEME_PATTERNS = {
 NON_CANONICAL_INCLUDE_PATTERNS = (
     "coherence physics",
     "coherence codex",
+    "physics of coherence",
+    "the physics of coherence",
     "persistence constrained architecture",
     "pca",
     "csm",
@@ -103,12 +110,21 @@ def index_coherence_corpus(
     mission_id: str | None = None,
     roots: list[str] | None = None,
     limit: int = 12,
+    use_knowledge_hub: bool = False,
     reason: str = "",
 ) -> dict[str, Any]:
     project_path = Path(project_root).resolve()
     workspace_root = project_path.parent
     mission = _select_mission(ledger, mission_id)
-    candidates = discover_coherence_sources(workspace_root, roots=roots, limit=limit)
+    candidates = (
+        discover_coherence_sources_from_knowledge_hub(
+            workspace_root,
+            limit=limit,
+            hub_sources=knowledge_hub_sources_from_events(ledger.events()),
+        )
+        if use_knowledge_hub
+        else discover_coherence_sources(workspace_root, roots=roots, limit=limit)
+    )
     existing_by_source_hash = {
         record.source_hash: record for record in evidence_records_from_events(ledger.events())
     }
@@ -164,12 +180,18 @@ def index_coherence_corpus(
         "indexed_count": len(indexed),
         "reused_count": len(reused),
         "linked_count": len(linked),
+        "source_mode": "knowledge_hub" if use_knowledge_hub else "curated_roots",
         "mission_id": mission["mission_id"] if mission else None,
         "mission_title": mission["title"] if mission else None,
         "themes": _theme_counts(candidates),
         "indexed": indexed,
         "reused": reused,
         "governance": "sources are raw evidence until reviewed by steward",
+        "next_action": (
+            "Run knowledge-hub-index before using --knowledge-hub."
+            if use_knowledge_hub and not candidates
+            else None
+        ),
         "will_not": [
             "treat indexed sources as verified",
             "extract private content into memory automatically",
@@ -249,6 +271,63 @@ def discover_coherence_sources(
             )
         if len(candidates) >= limit:
             break
+    return candidates
+
+
+def discover_coherence_sources_from_knowledge_hub(
+    workspace_root: str | Path,
+    limit: int = 12,
+    hub_scan_limit: int = 1000,
+    hub_sources: list[KnowledgeHubSourceRecord] | None = None,
+) -> list[CorpusCandidate]:
+    """Select Coherence Physics evidence candidates from the whole Master files hub.
+
+    The Knowledge Hub is intentionally broad. This selector narrows it back down
+    for paper writing by reusing the Coherence relevance gate and format/title
+    de-duplication before creating evidence records.
+    """
+    workspace = Path(workspace_root).resolve()
+    records = (
+        [record for record in hub_sources if record.topic == "coherence_physics"]
+        if hub_sources is not None
+        else discover_knowledge_hub_sources(
+            workspace,
+            limit=hub_scan_limit,
+            topic="coherence_physics",
+        )
+    )
+    paths = [workspace / record.relative_path for record in records]
+    candidates: list[CorpusCandidate] = []
+    seen_titles: set[str] = set()
+    for path in sorted(
+        paths,
+        key=lambda candidate: (
+            _normalized_title(candidate),
+            _suffix_priority(candidate),
+            _copy_priority(candidate),
+            str(candidate),
+        ),
+    ):
+        if len(candidates) >= limit:
+            break
+        if not path.is_file() or path.suffix.lower() not in SUPPORTED_SUFFIXES:
+            continue
+        relative_path = _relative_to_workspace(path, workspace)
+        if not is_relevant_source_path(relative_path):
+            continue
+        title_key = _normalized_title(path)
+        if title_key in seen_titles:
+            continue
+        seen_titles.add(title_key)
+        candidates.append(
+            CorpusCandidate(
+                path=path,
+                relative_path=relative_path,
+                theme=classify_coherence_source(relative_path),
+                size_bytes=path.stat().st_size,
+                content_sha256=_file_sha256(path),
+            )
+        )
     return candidates
 
 

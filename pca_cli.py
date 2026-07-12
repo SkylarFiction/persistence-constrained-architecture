@@ -338,6 +338,7 @@ def main() -> int:
     coherence_corpus_parser.add_argument("--mission")
     coherence_corpus_parser.add_argument("--root", action="append", default=[])
     coherence_corpus_parser.add_argument("--limit", type=int, default=12)
+    coherence_corpus_parser.add_argument("--knowledge-hub", action="store_true")
     knowledge_hub_index_parser = subparsers.add_parser("knowledge-hub-index")
     knowledge_hub_index_parser.add_argument("--json", action="store_true")
     knowledge_hub_index_parser.add_argument("--limit", type=int, default=250)
@@ -360,6 +361,7 @@ def main() -> int:
     coherence_paper_parser.add_argument("--mission")
     coherence_paper_parser.add_argument("--root", action="append", default=[])
     coherence_paper_parser.add_argument("--limit", type=int, default=8)
+    coherence_paper_parser.add_argument("--knowledge-hub", action="store_true")
     coherence_paper_parser.add_argument("--force", action="store_true")
     coherence_paper_parser.add_argument(
         "--output",
@@ -1041,6 +1043,7 @@ def main() -> int:
             mission_id=args.mission,
             roots=args.root or None,
             limit=args.limit,
+            use_knowledge_hub=args.knowledge_hub,
             reason="manual CLI Coherence Physics corpus index",
         )
         if args.json:
@@ -1095,6 +1098,7 @@ def main() -> int:
             mission_id=args.mission,
             corpus_roots=args.root or None,
             corpus_limit=args.limit,
+            use_knowledge_hub=args.knowledge_hub,
             force=args.force,
             output_path=args.output,
             reason="manual CLI Coherence Physics paper pipeline",

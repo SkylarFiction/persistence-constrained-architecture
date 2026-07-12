@@ -26,6 +26,7 @@ def run_coherence_paper_pipeline(
     mission_id: str | None = None,
     corpus_roots: list[str] | None = None,
     corpus_limit: int = 8,
+    use_knowledge_hub: bool = False,
     force: bool = False,
     output_path: str | Path = "reports/research_papers/coherence_physics_research_packet.pdf",
     reason: str = "",
@@ -65,6 +66,7 @@ def run_coherence_paper_pipeline(
         mission_id=selected_mission["mission_id"],
         roots=corpus_roots,
         limit=corpus_limit,
+        use_knowledge_hub=use_knowledge_hub,
         reason=reason or "coherence paper pipeline indexed corpus sources",
     )
     actions.append(

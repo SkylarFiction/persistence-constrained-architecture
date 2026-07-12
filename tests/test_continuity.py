@@ -101,6 +101,7 @@ from pca import (
     export_research_pdf,
     extract_source_notes_for_mission,
     discover_coherence_sources,
+    discover_coherence_sources_from_knowledge_hub,
     discover_knowledge_hub_sources,
     index_coherence_corpus,
     index_knowledge_hub,
@@ -3435,6 +3436,48 @@ def test_knowledge_hub_discovery_can_filter_by_topic(tmp_path):
     )
 
     assert [source.relative_path for source in sources] == ["coherence /CSM RTI Research.pdf"]
+
+
+def test_coherence_corpus_can_select_from_knowledge_hub_without_archive_noise(tmp_path):
+    manifest = load_manifest()
+    project_root = tmp_path / "persistence_constrained_architecture"
+    project_root.mkdir()
+    ledger = ContinuityLedger(project_root / "continuity.log")
+    coherence = tmp_path / "coherence "
+    coherence.mkdir()
+    (coherence / "Coherence Physics Source.md").write_text(
+        "Coherence Physics source for continuity research.",
+        encoding="utf-8",
+    )
+    finished = tmp_path / "finished books "
+    finished.mkdir()
+    (finished / "101 Ways to Die Without Dying.pdf").write_bytes(b"%PDF-1.4 fiction")
+    (finished / "The Physics of Coherence.pdf").write_bytes(b"%PDF-1.4 coherence")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Knowledge hub coherence mission",
+        problem_statement="Use the broad hub while selecting only relevant evidence.",
+    )
+
+    index_knowledge_hub(ledger, manifest, project_root=project_root, limit=20)
+    candidates = discover_coherence_sources_from_knowledge_hub(tmp_path, limit=10)
+    result = index_coherence_corpus(
+        ledger,
+        manifest,
+        project_root=project_root,
+        mission_id=mission.mission_id,
+        limit=10,
+        use_knowledge_hub=True,
+    )
+
+    paths = [candidate.relative_path for candidate in candidates]
+    assert "coherence /Coherence Physics Source.md" in paths
+    assert "finished books /The Physics of Coherence.pdf" in paths
+    assert "finished books /101 Ways to Die Without Dying.pdf" not in paths
+    assert result["source_mode"] == "knowledge_hub"
+    assert result["indexed_count"] == 2
+    assert result["linked_count"] == 2
 
 
 def test_source_notes_extract_citation_cards_from_indexed_sources(tmp_path):

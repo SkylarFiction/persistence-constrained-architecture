@@ -334,6 +334,7 @@ from .research_review import (
 from .coherence_corpus import (
     coherence_corpus_index_records_from_events,
     discover_coherence_sources,
+    discover_coherence_sources_from_knowledge_hub,
     index_coherence_corpus,
     render_coherence_corpus_index_text,
 )
@@ -639,6 +640,7 @@ __all__ = [
     "derive_current_claim",
     "derive_self_model",
     "discover_coherence_sources",
+    "discover_coherence_sources_from_knowledge_hub",
     "discover_knowledge_hub_sources",
     "export_latest_anchor",
     "execute_approved_autonomy_actions",
