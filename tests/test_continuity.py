@@ -101,7 +101,10 @@ from pca import (
     export_research_pdf,
     extract_source_notes_for_mission,
     discover_coherence_sources,
+    discover_knowledge_hub_sources,
     index_coherence_corpus,
+    index_knowledge_hub,
+    knowledge_hub_snapshot,
     mission_argument_graph,
     research_review_desk,
     seed_continuity_argument_graph,
@@ -165,6 +168,7 @@ from pca import (
     render_constitution_markdown,
     render_lucien_cockpit_html,
     render_next_governed_build_text,
+    render_knowledge_hub_index_text,
     render_session_replay_html,
     render_trace_report_html,
     recovery_records_from_events,
@@ -3375,6 +3379,62 @@ def test_coherence_corpus_discovery_filters_noncanonical_noise(tmp_path):
         "finished books /PCA Identity Continuity Notes.md",
         "finished books /The_Unified_Coherence_Field_Theory.pdf",
     ]
+
+
+def test_knowledge_hub_indexes_master_files_without_touching_sources(tmp_path):
+    manifest = load_manifest()
+    project_root = tmp_path / "persistence_constrained_architecture"
+    project_root.mkdir()
+    ledger = ContinuityLedger(project_root / "continuity.log")
+    coherence_dir = tmp_path / "coherence "
+    coherence_dir.mkdir()
+    source = coherence_dir / "Coherence Physics Notes.md"
+    source.write_text("Recoverable persistence and identity continuity notes.", encoding="utf-8")
+    fiction_dir = tmp_path / "finished books "
+    fiction_dir.mkdir()
+    story = fiction_dir / "101 Ways to Die Without Dying.pdf"
+    story.write_bytes(b"%PDF-1.4 story archive")
+    generated_dir = project_root / "reports"
+    generated_dir.mkdir()
+    (generated_dir / "lucien_cockpit.html").write_text("generated cockpit", encoding="utf-8")
+    original_bytes = source.read_bytes()
+
+    result = index_knowledge_hub(
+        ledger,
+        manifest,
+        project_root=project_root,
+        limit=20,
+    )
+    snapshot = knowledge_hub_snapshot(ledger.events())
+
+    paths = {source["relative_path"] for source in result["sources"]}
+    assert "coherence /Coherence Physics Notes.md" in paths
+    assert "finished books /101 Ways to Die Without Dying.pdf" in paths
+    assert "persistence_constrained_architecture/reports/lucien_cockpit.html" not in paths
+    assert source.read_bytes() == original_bytes
+    assert result["indexed_count"] == 2
+    assert snapshot["count"] == 2
+    assert snapshot["topic_counts"]["coherence_physics"] == 1
+    assert snapshot["topic_counts"]["fiction_narrative"] == 1
+    assert "read-only" in render_knowledge_hub_index_text(result)
+
+
+def test_knowledge_hub_discovery_can_filter_by_topic(tmp_path):
+    (tmp_path / "coherence ").mkdir()
+    (tmp_path / "coherence " / "CSM RTI Research.pdf").write_bytes(b"%PDF-1.4")
+    (tmp_path / "finished books ").mkdir()
+    (tmp_path / "finished books " / "Novel Chapter.md").write_text(
+        "story",
+        encoding="utf-8",
+    )
+
+    sources = discover_knowledge_hub_sources(
+        tmp_path,
+        limit=10,
+        topic="coherence_physics",
+    )
+
+    assert [source.relative_path for source in sources] == ["coherence /CSM RTI Research.pdf"]
 
 
 def test_source_notes_extract_citation_cards_from_indexed_sources(tmp_path):

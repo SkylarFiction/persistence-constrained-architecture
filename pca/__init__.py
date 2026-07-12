@@ -337,6 +337,15 @@ from .coherence_corpus import (
     index_coherence_corpus,
     render_coherence_corpus_index_text,
 )
+from .knowledge_hub import (
+    KnowledgeHubSourceRecord,
+    discover_knowledge_hub_sources,
+    index_knowledge_hub,
+    knowledge_hub_snapshot,
+    knowledge_hub_sources_from_events,
+    render_knowledge_hub_index_text,
+    render_knowledge_hub_sources_text,
+)
 from .argument_graph import (
     mission_argument_graph,
     render_argument_graph_text,
@@ -630,6 +639,7 @@ __all__ = [
     "derive_current_claim",
     "derive_self_model",
     "discover_coherence_sources",
+    "discover_knowledge_hub_sources",
     "export_latest_anchor",
     "execute_approved_autonomy_actions",
     "execute_autonomy_action",
@@ -655,6 +665,10 @@ __all__ = [
     "growth_conflict_records_from_events",
     "growth_conflict_resolution_records_from_events",
     "index_coherence_corpus",
+    "index_knowledge_hub",
+    "knowledge_hub_snapshot",
+    "knowledge_hub_sources_from_events",
+    "KnowledgeHubSourceRecord",
     "lineage_records",
     "link_checkpoint_to_mission",
     "link_evidence",
@@ -702,6 +716,8 @@ __all__ = [
     "render_coherence_seed_text",
     "render_commit_readiness_text",
     "render_daily_plan_text",
+    "render_knowledge_hub_index_text",
+    "render_knowledge_hub_sources_text",
     "required_evidence_for",
     "required_checks_for_audit",
     "require_mission",

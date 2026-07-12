@@ -104,6 +104,8 @@ from pca import (
     create_goal_record,
     create_research_output,
     index_coherence_corpus,
+    index_knowledge_hub,
+    knowledge_hub_snapshot,
     open_mission,
     open_tasks_from_reflection,
     propose_growth,
@@ -148,6 +150,8 @@ from pca import (
     render_commit_readiness_text,
     render_daily_command_center_text,
     render_daily_plan_text,
+    render_knowledge_hub_index_text,
+    render_knowledge_hub_sources_text,
     render_next_governed_build_text,
     render_project_build_brief_text,
     render_research_autopilot_text,
@@ -334,6 +338,13 @@ def main() -> int:
     coherence_corpus_parser.add_argument("--mission")
     coherence_corpus_parser.add_argument("--root", action="append", default=[])
     coherence_corpus_parser.add_argument("--limit", type=int, default=12)
+    knowledge_hub_index_parser = subparsers.add_parser("knowledge-hub-index")
+    knowledge_hub_index_parser.add_argument("--json", action="store_true")
+    knowledge_hub_index_parser.add_argument("--limit", type=int, default=250)
+    knowledge_hub_index_parser.add_argument("--topic")
+    knowledge_hub_sources_parser = subparsers.add_parser("knowledge-hub-sources")
+    knowledge_hub_sources_parser.add_argument("--json", action="store_true")
+    knowledge_hub_sources_parser.add_argument("--topic")
     source_notes_parser = subparsers.add_parser("coherence-source-notes")
     source_notes_parser.add_argument("--json", action="store_true")
     source_notes_parser.add_argument("--mission")
@@ -1036,6 +1047,29 @@ def main() -> int:
             print_json({"coherence_corpus": result})
         else:
             print(render_coherence_corpus_index_text(result))
+        return 0
+
+    if args.command == "knowledge-hub-index":
+        result = index_knowledge_hub(
+            ledger,
+            manifest,
+            project_root=Path.cwd(),
+            limit=args.limit,
+            topic=args.topic,
+            reason="manual CLI Master files knowledge hub index",
+        )
+        if args.json:
+            print_json({"knowledge_hub": result})
+        else:
+            print(render_knowledge_hub_index_text(result))
+        return 0
+
+    if args.command == "knowledge-hub-sources":
+        snapshot = knowledge_hub_snapshot(ledger.events(), topic=args.topic)
+        if args.json:
+            print_json({"knowledge_hub": snapshot})
+        else:
+            print(render_knowledge_hub_sources_text(snapshot))
         return 0
 
     if args.command == "coherence-source-notes":
