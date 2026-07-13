@@ -3383,6 +3383,35 @@ def test_export_research_pdf_writes_mission_packet(tmp_path):
     assert b"Audit Bundle" in output_path.read_bytes()
 
 
+def test_research_pdf_excludes_damaged_source_notes_from_reader_paper():
+    from pca.research_pdf import (
+        _reader_facing_extraction_quality,
+        _source_note_reader_ready,
+    )
+
+    clean_note = {
+        "note_kind": "claim_candidate",
+        "source_path": "coherence /Coherence_Physics_6.pdf",
+        "summary": (
+            "Coherence Physics VI defines recovery as a return to stable "
+            "structure after disturbance."
+        ),
+    }
+    damaged_examples = [
+        "RT I(t) =taurec(t) tau0",
+        "RT Imat downfirst",
+        "RTI-> infinitybefore collapse",
+        "small perturbationsdeltaCincrease energy",
+        "/x5B/x44/x65/x72/x69/x76/x65/x64",
+    ]
+
+    assert _source_note_reader_ready(clean_note)
+    for text in damaged_examples:
+        quality = _reader_facing_extraction_quality(text)
+        assert quality["usable"] is False
+        assert not _source_note_reader_ready({**clean_note, "summary": text})
+
+
 def test_coherence_corpus_index_links_sources_to_mission(tmp_path):
     manifest = load_manifest()
     ledger = ContinuityLedger(tmp_path / "continuity.log")

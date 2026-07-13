@@ -129,6 +129,10 @@ def _scholarly_paper_lines(
     claim_candidate_notes = [
         note for note in source_notes if note.get("note_kind") == "claim_candidate"
     ]
+    reader_ready_notes = [
+        note for note in claim_candidate_notes if _source_note_reader_ready(note)
+    ]
+    damaged_note_count = len(claim_candidate_notes) - len(reader_ready_notes)
     lines = [
         "Smooth Output Is Not Continuity:",
         "A Coherence Physics Approach to Governed Artificial Identity",
@@ -254,12 +258,16 @@ def _scholarly_paper_lines(
         "7. Existing Falsification Evidence",
         *_falsification_section_lines(falsification_verdict),
         "",
-        "8. Materials and Current Evidence Base",
-        f"This run indexed {len(corpus_sources)} source file(s) and extracted "
-        f"{len(claim_candidate_notes)} argument-bearing source note(s) from them. "
-        "Registration-only inventory notes and the full evidence ledger (record "
-        f"IDs, hashes, review status) are omitted here; see the companion audit "
-        f"bundle ({audit_bundle_path}) for the complete, unfiltered record.",
+            "8. Materials and Current Evidence Base",
+            f"This run indexed {len(corpus_sources)} source file(s) and extracted "
+            f"{len(claim_candidate_notes)} argument-bearing source note(s) from them. "
+            f"{len(reader_ready_notes)} note(s) passed the reader-facing extraction "
+            f"quality gate; {damaged_note_count} note(s) were routed to the audit "
+            "bundle for manual source inspection because they contained malformed "
+            "math, fused words, or other extraction damage. "
+            "Registration-only inventory notes and the full evidence ledger (record "
+            f"IDs, hashes, review status) are omitted here; see the companion audit "
+            f"bundle ({audit_bundle_path}) for the complete, unfiltered record.",
     ]
     if corpus_sources:
         lines.append("Key source files currently registered:")
@@ -268,6 +276,18 @@ def _scholarly_paper_lines(
                 "- "
                 f"{source.get('theme', 'general_coherence')}: "
                 f"{source.get('path', 'unknown source')}"
+            )
+        lines.extend(
+            [
+                "",
+                "Source coverage snapshot:",
+                "Source | Parsed | Notes | Used in paper | Reviewed",
+            ]
+        )
+        for row in _source_coverage_rows(corpus_sources, source_notes)[:12]:
+            lines.append(
+                f"{row['source']} | {row['parsed']} | {row['notes']} | "
+                f"{row['used_in_paper']} | {row['reviewed']}"
             )
     else:
         lines.append(
@@ -287,18 +307,26 @@ def _scholarly_paper_lines(
             "(a source being indexed does not mean it supports any claim) are "
             "omitted; see the audit bundle for the full inventory."
         )
-        for note in claim_candidate_notes[:10]:
-            summary = str(note.get("summary", ""))
-            if _has_extraction_damage(summary):
-                summary = (
-                    "Extraction integrity failure: manual source inspection "
-                    "required. (Raw text stored in the audit bundle.)"
-                )
+        if damaged_note_count:
+            lines.append(
+                f"{damaged_note_count} raw citation card(s) were excluded from this "
+                "reader-facing section because the extracted text showed malformed "
+                "math, fused words, or other integrity problems. They remain in the "
+                "audit bundle for manual review."
+            )
+        for note in reader_ready_notes[:10]:
             lines.append(
                 "- "
                 f"{note.get('theme', 'general_coherence')} / "
                 f"{note.get('title', 'untitled')}: "
-                f"{summary}"
+                f"{note.get('summary', '')}"
+            )
+        if not reader_ready_notes:
+            lines.append(
+                "No extracted citation card is clean enough for reader-facing prose "
+                "yet. The audit bundle preserves the raw notes, but this paper needs "
+                "manual source inspection or improved extraction before those notes "
+                "can support public claims."
             )
     else:
         lines.append(
@@ -592,7 +620,7 @@ def _source_note_findings(source_notes: list[dict[str, Any]]) -> list[str]:
         for note in source_notes
         if note.get("note_kind") == "claim_candidate"
         and is_relevant_source_path(str(note.get("source_path") or ""))
-        and not _has_extraction_damage(str(note.get("summary") or ""))
+        and _source_note_reader_ready(note)
     ]
     if not claim_notes:
         return [
@@ -613,6 +641,48 @@ def _source_note_findings(source_notes: list[dict[str, Any]]) -> list[str]:
             f"suggests: {note.get('summary', '')}"
         )
     return findings
+
+
+def _source_coverage_rows(
+    corpus_sources: list[dict[str, Any]],
+    source_notes: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    notes_by_path: dict[str, list[dict[str, Any]]] = {}
+    for note in source_notes:
+        notes_by_path.setdefault(str(note.get("source_path") or ""), []).append(note)
+    rows: list[dict[str, Any]] = []
+    for source in corpus_sources:
+        path = str(source.get("path") or "")
+        notes = notes_by_path.get(path, [])
+        used = [note for note in notes if _source_note_reader_ready(note)]
+        reviewed = [
+            note for note in notes if str(note.get("review_status") or "") == "reviewed"
+        ]
+        rows.append(
+            {
+                "source": _short_source_name(path),
+                "parsed": "Yes" if notes else "No",
+                "notes": len(notes),
+                "used_in_paper": "Yes" if used else "No",
+                "reviewed": "Yes" if reviewed else "No",
+            }
+        )
+    return rows
+
+
+def _short_source_name(path: str, max_len: int = 54) -> str:
+    name = Path(path).name or path or "unknown source"
+    if len(name) <= max_len:
+        return name
+    return name[: max_len - 3] + "..."
+
+
+def _source_note_reader_ready(note: dict[str, Any]) -> bool:
+    if note.get("note_kind") != "claim_candidate":
+        return False
+    if not is_relevant_source_path(str(note.get("source_path") or "")):
+        return False
+    return _reader_facing_extraction_quality(str(note.get("summary") or ""))["usable"]
 
 
 def _falsification_section_lines(verdict: dict[str, Any] | None) -> list[str]:
@@ -699,6 +769,26 @@ def _write_text_pdf(path: Path, lines: list[str], title: str) -> None:
     _write_pdf_objects(path, objects)
 
 
+# Page geometry, kept as named constants so the lines-per-page limit below is
+# derived from the same numbers _page_stream uses to place text, rather than a
+# hand-picked count that can silently drift out of sync with the layout. The
+# previous hardcoded value of 58 lines/page was never checked against this
+# geometry: content actually starts at PAGE_HEIGHT - TOP_MARGIN - 2 * LEADING
+# (title line, then one blank line, before the first content line) and each
+# line drops by LEADING, so anything past line ~49 was being drawn below
+# y=BOTTOM_MARGIN -- often below y=0 -- and silently clipped by every PDF
+# viewer, truncating the visible page mid-sentence while the "next" page
+# picked up several lines later. Verified by rendering to an image and
+# comparing against the raw content stream, not just by reading extracted
+# text (which doesn't reflect what a viewer actually clips).
+_PAGE_HEIGHT = 792
+_TOP_MARGIN = 44  # matches "50 748 Td": 792 - 748 = 44
+_BOTTOM_MARGIN = 44
+_LEADING = 14
+_CONTENT_START_Y = _PAGE_HEIGHT - _TOP_MARGIN - 2 * _LEADING
+_LINES_PER_PAGE = (_CONTENT_START_Y - _BOTTOM_MARGIN) // _LEADING + 1
+
+
 def _paginate_lines(lines: list[str]) -> list[list[str]]:
     wrapped: list[str] = []
     for line in lines:
@@ -707,12 +797,15 @@ def _paginate_lines(lines: list[str]) -> list[list[str]]:
             wrapped.append("")
             continue
         wrapped.extend(wrap(clean, width=92, replace_whitespace=False) or [""])
-    pages = [wrapped[index : index + 58] for index in range(0, len(wrapped), 58)]
+    pages = [
+        wrapped[index : index + _LINES_PER_PAGE]
+        for index in range(0, len(wrapped), _LINES_PER_PAGE)
+    ]
     return pages or [["No content."]]
 
 
 def _page_stream(lines: list[str], title: str) -> bytes:
-    commands = ["BT", "/F1 10 Tf", "50 748 Td", "14 TL"]
+    commands = ["BT", "/F1 10 Tf", f"50 {_PAGE_HEIGHT - _TOP_MARGIN} Td", f"{_LEADING} TL"]
     commands.append(f"({_escape_pdf_text(_ascii(title))}) Tj")
     commands.append("T*")
     commands.append("T*")
@@ -784,10 +877,60 @@ def _transliterate_unicode(text: str) -> str:
 # garbage, unlike the Unicode symbols _transliterate_unicode handles above, and
 # should never be promoted into a Finding.
 _EXTRACTION_DAMAGE_PATTERN = re.compile(r"(?:/x[0-9A-Fa-f]{2}){3,}")
+_MALFORMED_MATH_PATTERNS = [
+    re.compile(r"\bRT\s*I(?:mat|->|down|up|~|\s*=)", re.IGNORECASE),
+    re.compile(r"\b[A-Za-z]{2,}->\s*\w+", re.IGNORECASE),
+    re.compile(r"\b(?:infinity|before|after|first|last)[A-Za-z]{4,}\b", re.IGNORECASE),
+    re.compile(r"\b(?:tau|rho|delta|grad|mu|alpha|beta|gamma)[A-Za-z]{3,}(?:\(|=|->|\b)", re.IGNORECASE),
+    re.compile(r"\b[A-Za-z]{3,}(?:delta|tau|rho|grad|infinity)[A-Za-z]{2,}\b", re.IGNORECASE),
+]
 
 
 def _has_extraction_damage(text: str) -> bool:
-    return bool(_EXTRACTION_DAMAGE_PATTERN.search(text))
+    return not _reader_facing_extraction_quality(text)["usable"]
+
+
+def _reader_facing_extraction_quality(text: str) -> dict[str, Any]:
+    clean = _transliterate_unicode(str(text))
+    reasons: list[str] = []
+    if _EXTRACTION_DAMAGE_PATTERN.search(clean):
+        reasons.append("raw glyph code leakage")
+    for pattern in _MALFORMED_MATH_PATTERNS:
+        if pattern.search(clean):
+            reasons.append("malformed mathematical extraction")
+            break
+    if _fused_word_score(clean) >= 2:
+        reasons.append("fused words")
+    if clean.count("?") >= 3:
+        reasons.append("replacement characters")
+    return {
+        "usable": not reasons,
+        "reasons": reasons,
+    }
+
+
+def _fused_word_score(text: str) -> int:
+    terms = [
+        "before",
+        "after",
+        "first",
+        "last",
+        "collapse",
+        "recovery",
+        "identity",
+        "continuity",
+        "energy",
+        "field",
+    ]
+    score = 0
+    lowered = text.lower()
+    for left in terms:
+        for right in terms:
+            if left == right:
+                continue
+            if f"{left}{right}" in lowered:
+                score += 1
+    return score
 
 
 def _ascii(text: object) -> str:
