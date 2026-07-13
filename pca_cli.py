@@ -365,7 +365,13 @@ def main() -> int:
     coherence_paper_parser.add_argument("--force", action="store_true")
     coherence_paper_parser.add_argument(
         "--output",
-        default="reports/research_papers/coherence_physics_research_packet.pdf",
+        default="reports/research_papers/coherence_audit_bundle.pdf",
+        help="Audit bundle path (complete, unfiltered machine record).",
+    )
+    coherence_paper_parser.add_argument(
+        "--paper-output",
+        default="reports/research_papers/coherence_paper.pdf",
+        help="Reader-facing scholarly paper path.",
     )
     research_sandbox_parser = subparsers.add_parser("research-sandbox")
     research_sandbox_parser.add_argument("--json", action="store_true")
@@ -383,7 +389,12 @@ def main() -> int:
     research_outputs_parser.add_argument("--json", action="store_true")
     research_pdf_parser = subparsers.add_parser("research-pdf")
     research_pdf_parser.add_argument("mission_id")
-    research_pdf_parser.add_argument("--output", default="reports/lucien_research_packet.pdf")
+    research_pdf_parser.add_argument(
+        "--output", default="reports/research_papers/coherence_audit_bundle.pdf"
+    )
+    research_pdf_parser.add_argument(
+        "--paper-output", default="reports/research_papers/coherence_paper.pdf"
+    )
     research_pdf_parser.add_argument("--json", action="store_true")
     research_review_parser = subparsers.add_parser("research-review")
     research_review_parser.add_argument("--mission")
@@ -1101,6 +1112,7 @@ def main() -> int:
             use_knowledge_hub=args.knowledge_hub,
             force=args.force,
             output_path=args.output,
+            paper_output_path=args.paper_output,
             reason="manual CLI Coherence Physics paper pipeline",
         )
         if args.json:
@@ -1195,11 +1207,18 @@ def main() -> int:
         return 0
 
     if args.command == "research-pdf":
-        result = export_research_pdf(ledger, manifest, args.mission_id, args.output)
+        result = export_research_pdf(
+            ledger,
+            manifest,
+            args.mission_id,
+            args.output,
+            paper_output_path=args.paper_output,
+        )
         if args.json:
             print_json({"research_pdf": result})
         else:
-            print(f"Research PDF written: {result['path']}")
+            print(f"Paper written: {result['paper_path']}")
+            print(f"Audit bundle written: {result['audit_path']}")
         return 0
 
     if args.command == "research-review":

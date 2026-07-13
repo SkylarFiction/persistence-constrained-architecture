@@ -28,7 +28,8 @@ def run_coherence_paper_pipeline(
     corpus_limit: int = 8,
     use_knowledge_hub: bool = False,
     force: bool = False,
-    output_path: str | Path = "reports/research_papers/coherence_physics_research_packet.pdf",
+    output_path: str | Path = "reports/research_papers/coherence_audit_bundle.pdf",
+    paper_output_path: str | Path = "reports/research_papers/coherence_paper.pdf",
     reason: str = "",
 ) -> dict[str, Any]:
     project_path = Path(project_root).resolve()
@@ -151,8 +152,15 @@ def run_coherence_paper_pipeline(
         selected_mission["mission_id"],
         output_path,
         project_root=project_path,
+        paper_output_path=paper_output_path,
     )
-    actions.append({"action": "research_pdf_exported", "path": pdf["path"]})
+    actions.append(
+        {
+            "action": "research_pdf_exported",
+            "path": pdf["audit_path"],
+            "paper_path": pdf["paper_path"],
+        }
+    )
     review = research_review_desk(ledger, selected_mission["mission_id"])
     claim_map = mission_claim_map(ledger, selected_mission["mission_id"])
     record = _record_pipeline(
@@ -196,7 +204,8 @@ def render_coherence_paper_pipeline_text(result: dict[str, Any]) -> str:
         "Coherence Physics Paper Pipeline",
         f"status: {record.get('status')}",
         f"mission: {record.get('mission_title') or 'none'}",
-        f"pdf: {(record.get('pdf') or {}).get('path') or 'none'}",
+        f"paper: {(record.get('pdf') or {}).get('paper_path') or 'none'}",
+        f"audit bundle: {(record.get('pdf') or {}).get('audit_path') or 'none'}",
         f"review next: {(record.get('review') or {}).get('next_action') or 'none'}",
         "actions:",
     ]

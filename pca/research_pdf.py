@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from textwrap import wrap
 from typing import Any
+import re
 
 from .argument_graph import mission_argument_graph
 from .coherence_corpus import coherence_corpus_index_records_from_events, is_relevant_source_path
@@ -24,9 +25,19 @@ def export_research_pdf(
     ledger: ContinuityLedger,
     manifest: IdentityManifest,
     mission_id: str,
-    output_path: str | Path = "reports/lucien_research_packet.pdf",
+    output_path: str | Path = "reports/research_papers/coherence_audit_bundle.pdf",
     project_root: str | Path = ".",
+    paper_output_path: str | Path = "reports/research_papers/coherence_paper.pdf",
 ) -> dict[str, Any]:
+    """Export the two paired research documents for a mission.
+
+    ``output_path`` is the audit bundle (the complete, unfiltered machine
+    record: evidence IDs, hashes, review status, every generated draft).
+    ``paper_output_path`` is the reader-facing scholarly paper: argument,
+    definitions, findings, references -- no raw IDs, no registration stubs,
+    no duplicate drafts. They are two files because a document trying to be
+    both a governance audit trail and a readable paper serves neither well.
+    """
     workspace_root = Path(project_root).resolve().parent
     mission = require_mission(ledger.events(), mission_id)
     brief = next(
@@ -40,10 +51,10 @@ def export_research_pdf(
     # Corpus indexing and source-note extraction are append-only ledger history:
     # a source indexed before the relevance gate existed (or before it was
     # tightened) stays reused indefinitely by source_hash and never gets
-    # re-filtered. Re-checking relevance here, at the point the PDF actually
-    # renders these lists, means an irrelevant source can never resurface in
-    # Materials, References, Source-Derived Notes, or Appendix D regardless of
-    # how old the mission or how the evidence was originally registered.
+    # re-filtered. Re-checking relevance here, at the point the PDFs actually
+    # render these lists, means an irrelevant source can never resurface in
+    # either document regardless of how old the mission or how the evidence
+    # was originally registered.
     corpus_sources = [
         source
         for source in _corpus_sources_for_mission(ledger.events(), mission_id)
@@ -54,15 +65,26 @@ def export_research_pdf(
         for note in source_notes_for_mission(ledger.events(), mission_id)
         if is_relevant_source_path(str(note.get("source_path") or ""))
     ]
-    lines = _research_packet_lines(
+
+    audit_path = Path(output_path)
+    paper_path = Path(paper_output_path)
+    audit_path.parent.mkdir(parents=True, exist_ok=True)
+    paper_path.parent.mkdir(parents=True, exist_ok=True)
+
+    paper_lines = _scholarly_paper_lines(
+        mission_title=mission.title,
+        claim_map=claim_map,
+        corpus_sources=corpus_sources,
+        source_notes=source_notes,
+        falsification_verdict=falsification_lab_verdict(workspace_root),
+        argument_graph=mission_argument_graph(ledger, mission_id),
+        audit_bundle_path=str(audit_path),
+    )
+    audit_lines = _audit_bundle_lines(
         manifest=manifest,
         mission_title=mission.title,
         mission_id=mission_id,
         mission_status=mission.status.value,
-        problem_summary=(
-            f"Recorded privately in ledger: {mission.problem_length} characters, "
-            f"hash {mission.problem_sha256[:16]}"
-        ),
         values=mission.values,
         item_counts=brief.to_dict()["counts"],
         outputs=outputs,
@@ -72,16 +94,15 @@ def export_research_pdf(
         ],
         claim_map=claim_map,
         linked_evidence=linked_evidence,
-        corpus_sources=corpus_sources,
         source_notes=source_notes,
-        falsification_verdict=falsification_lab_verdict(workspace_root),
-        argument_graph=mission_argument_graph(ledger, mission_id),
+        paper_path=str(paper_path),
     )
-    output = Path(output_path)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    _write_text_pdf(output, lines, title=f"Coherence Physics Research Draft - {mission.title}")
+    _write_text_pdf(paper_path, paper_lines, title=f"Coherence Physics Paper - {mission.title}")
+    _write_text_pdf(audit_path, audit_lines, title=f"Coherence Physics Audit Bundle - {mission.title}")
     return {
-        "path": str(output),
+        "path": str(audit_path),
+        "audit_path": str(audit_path),
+        "paper_path": str(paper_path),
         "mission_id": mission_id,
         "mission_title": mission.title,
         "output_count": len(outputs),
@@ -94,26 +115,20 @@ def export_research_pdf(
     }
 
 
-def _research_packet_lines(
-    manifest: IdentityManifest,
+def _scholarly_paper_lines(
     mission_title: str,
-    mission_id: str,
-    mission_status: str,
-    problem_summary: str,
-    values: list[str],
-    item_counts: dict[str, int],
-    outputs,
-    output_contents,
     claim_map: dict[str, Any],
-    linked_evidence: list[dict[str, Any]],
     corpus_sources: list[dict[str, Any]],
     source_notes: list[dict[str, Any]],
     falsification_verdict: dict[str, Any] | None,
     argument_graph: dict[str, Any],
+    audit_bundle_path: str,
 ) -> list[str]:
     claim_count = int(claim_map.get("claim_count", 0) or 0)
-    raw_evidence = int(claim_map.get("raw_evidence_count", 0) or 0)
     reviewed_evidence = int(claim_map.get("reviewed_evidence_count", 0) or 0)
+    claim_candidate_notes = [
+        note for note in source_notes if note.get("note_kind") == "claim_candidate"
+    ]
     lines = [
         "Smooth Output Is Not Continuity:",
         "A Coherence Physics Approach to Governed Artificial Identity",
@@ -240,10 +255,11 @@ def _research_packet_lines(
         *_falsification_section_lines(falsification_verdict),
         "",
         "8. Materials and Current Evidence Base",
-        f"This run contains {len(corpus_sources)} indexed source file(s), "
-        f"{len(source_notes)} extracted source note(s), {len(linked_evidence)} linked "
-        f"evidence record(s), {raw_evidence} raw evidence record(s), and "
-        f"{reviewed_evidence} reviewed evidence record(s).",
+        f"This run indexed {len(corpus_sources)} source file(s) and extracted "
+        f"{len(claim_candidate_notes)} argument-bearing source note(s) from them. "
+        "Registration-only inventory notes and the full evidence ledger (record "
+        f"IDs, hashes, review status) are omitted here; see the companion audit "
+        f"bundle ({audit_bundle_path}) for the complete, unfiltered record.",
     ]
     if corpus_sources:
         lines.append("Key source files currently registered:")
@@ -264,23 +280,31 @@ def _research_packet_lines(
             "9. Source-Derived Notes",
         ]
     )
-    if source_notes:
+    if claim_candidate_notes:
         lines.append(
             "The following citation cards were extracted from indexed local sources. "
-            "They are raw notes, not accepted conclusions."
+            "They are raw notes, not accepted conclusions. Registration-only stubs "
+            "(a source being indexed does not mean it supports any claim) are "
+            "omitted; see the audit bundle for the full inventory."
         )
-        for note in source_notes[:10]:
+        for note in claim_candidate_notes[:10]:
+            summary = str(note.get("summary", ""))
+            if _has_extraction_damage(summary):
+                summary = (
+                    "Extraction integrity failure: manual source inspection "
+                    "required. (Raw text stored in the audit bundle.)"
+                )
             lines.append(
                 "- "
-                f"{note.get('note_kind', 'note')} / "
                 f"{note.get('theme', 'general_coherence')} / "
                 f"{note.get('title', 'untitled')}: "
-                f"{note.get('summary', '')}"
+                f"{summary}"
             )
     else:
         lines.append(
-            "No source notes were available in this export. The next improvement is "
-            "to extract citation cards from the indexed corpus before writing the paper."
+            "No argument-bearing source notes were available in this export. The "
+            "next improvement is to extract citation cards from the indexed "
+            "corpus before writing the paper."
         )
     lines.extend(
         [
@@ -363,31 +387,51 @@ def _research_packet_lines(
             )
     else:
         lines.append("[1] No indexed corpus references were available for this run.")
-    lines.extend(
-        [
-            "",
-            "Appendix A: Governance and Audit Notes",
-            f"Generated: {datetime.now(timezone.utc).isoformat()}",
-            f"Identity: {manifest.system_id}",
-            f"Mission: {mission_title}",
-            f"Mission ID: {mission_id}",
-            f"Mission status: {mission_status}",
-            "Governance notice: this PDF is a draft export. It does not accept claims as true,",
-            "does not accept evidence as reviewed, does not create memory, and does not publish.",
-            "",
-            "Method",
-            "1. Register local Coherence Physics source files as raw evidence.",
-            "2. Link those sources to the active research mission.",
-            "3. Generate proposed research outputs: brief, claim map, next step, and draft paper.",
-            "4. Keep claims provisional until evidence is reviewed by the steward.",
-            "5. Export a paper draft and an appendix so the research can be inspected.",
-            "",
-            "Mission Values",
-            ", ".join(values) if values else "none recorded",
-            "",
-            "Mission Structure",
-        ]
-    )
+    return lines
+
+
+def _audit_bundle_lines(
+    manifest: IdentityManifest,
+    mission_title: str,
+    mission_id: str,
+    mission_status: str,
+    values: list[str],
+    item_counts: dict[str, int],
+    outputs,
+    output_contents,
+    claim_map: dict[str, Any],
+    linked_evidence: list[dict[str, Any]],
+    source_notes: list[dict[str, Any]],
+    paper_path: str,
+) -> list[str]:
+    lines = [
+        f"Audit Bundle - {mission_title}",
+        f"Companion machine record for the reader-facing paper ({paper_path}). "
+        "This document is the complete, unfiltered record: ledger events, "
+        "evidence IDs, hashes, review status, and every generated output, "
+        "including drafts and stubs the paper omits for readability.",
+        "",
+        "Appendix A: Governance and Audit Notes",
+        f"Generated: {datetime.now(timezone.utc).isoformat()}",
+        f"Identity: {manifest.system_id}",
+        f"Mission: {mission_title}",
+        f"Mission ID: {mission_id}",
+        f"Mission status: {mission_status}",
+        "Governance notice: this PDF is a draft export. It does not accept claims as true,",
+        "does not accept evidence as reviewed, does not create memory, and does not publish.",
+        "",
+        "Method",
+        "1. Register local Coherence Physics source files as raw evidence.",
+        "2. Link those sources to the active research mission.",
+        "3. Generate proposed research outputs: brief, claim map, next step, and draft paper.",
+        "4. Keep claims provisional until evidence is reviewed by the steward.",
+        "5. Export a paper draft and an appendix so the research can be inspected.",
+        "",
+        "Mission Values",
+        ", ".join(values) if values else "none recorded",
+        "",
+        "Mission Structure",
+    ]
     for key in ["hypothesis", "evidence", "risk", "plan_step", "intervention", "outcome", "lesson"]:
         lines.append(f"- {key}: {item_counts.get(key, 0)}")
     lines.extend(
@@ -539,20 +583,25 @@ def _source_note_findings(source_notes: list[dict[str, Any]]) -> list[str]:
     # "source_overview" entries. A note also has to pass the same relevance gate
     # corpus discovery applies, re-checked here by path so that evidence already
     # sitting in ledger history from before this gate existed (or from a looser
-    # version of it) cannot resurface as a finding about an unrelated source.
+    # version of it) cannot resurface as a finding about an unrelated source. It
+    # must also be free of extraction damage (_has_extraction_damage) -- genuinely
+    # garbled text is stored and still visible in the audit bundle, but cannot
+    # support a Finding.
     claim_notes = [
         note
         for note in source_notes
         if note.get("note_kind") == "claim_candidate"
         and is_relevant_source_path(str(note.get("source_path") or ""))
+        and not _has_extraction_damage(str(note.get("summary") or ""))
     ]
     if not claim_notes:
         return [
-            "Finding 1: This run has not yet extracted a relevant, argument-bearing "
-            "claim candidate from the indexed sources -- the notes on file are "
-            "either registration stubs or did not pass the source relevance gate. "
-            "The paper cannot yet move beyond a structured draft into "
-            "source-backed argument."
+            "Finding 1: This run has not yet extracted a relevant, "
+            "integrity-checked, argument-bearing claim candidate from the "
+            "indexed sources -- the notes on file are either registration "
+            "stubs, failed the source relevance gate, or failed the extraction "
+            "integrity check. The paper cannot yet move beyond a structured "
+            "draft into source-backed argument."
         ]
     findings: list[str] = [
         "Finding 1: The current source notes give the draft a concrete evidence trail, "
@@ -698,5 +747,48 @@ def _escape_pdf_text(text: str) -> str:
     return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
 
+# The PDF writer only has the standard-14 Helvetica font (WinAnsi/ASCII glyphs),
+# so real Unicode extracted from source PDFs -- Greek letters, math operators,
+# smart punctuation -- can't be drawn directly. Transliterating known symbols to
+# readable ASCII (rather than dropping them to "?") is what actually fixes the
+# "corrupted evidence" appearance: the underlying extracted text is correct, it's
+# this renderer that was destroying it.
+_UNICODE_TRANSLITERATIONS = {
+    "α": "alpha", "β": "beta", "γ": "gamma", "δ": "delta", "Δ": "Delta",
+    "ε": "epsilon", "ζ": "zeta", "η": "eta", "θ": "theta", "ι": "iota",
+    "κ": "kappa", "λ": "lambda", "Λ": "Lambda", "μ": "mu", "µ": "mu",
+    "ν": "nu", "ξ": "xi", "π": "pi", "Π": "Pi", "ρ": "rho", "σ": "sigma",
+    "Σ": "Sigma", "τ": "tau", "υ": "upsilon", "φ": "phi", "Φ": "Phi",
+    "χ": "chi", "ψ": "psi", "ω": "omega", "Ω": "Omega",
+    "∂": "d", "∇": "grad ", "∞": "infinity", "√": "sqrt", "∑": "sum",
+    "∫": "integral", "≈": "~", "≠": "!=", "≤": "<=", "≥": ">=",
+    "≫": ">>", "≪": "<<", "→": "->", "↓": "down", "↑": "up",
+    "±": "+/-", "×": "x", "÷": "/", "∆": "Delta",
+    "−": "-", "–": "-", "—": "--",
+    "‘": "'", "’": "'", "“": '"', "”": '"',
+    "•": "-", "…": "...",
+    "ﬁ": "fi", "ﬂ": "fl",
+}
+
+
+def _transliterate_unicode(text: str) -> str:
+    for source, replacement in _UNICODE_TRANSLITERATIONS.items():
+        if source in text:
+            text = text.replace(source, replacement)
+    return text
+
+
+# Genuine extraction damage: some PDFs use font encodings pypdf can't resolve to
+# real characters, and it falls back to emitting the raw glyph codes as literal
+# "/xNN" tokens (e.g. "/x5B/x44.../x5D" instead of "[Derived]"). This is real
+# garbage, unlike the Unicode symbols _transliterate_unicode handles above, and
+# should never be promoted into a Finding.
+_EXTRACTION_DAMAGE_PATTERN = re.compile(r"(?:/x[0-9A-Fa-f]{2}){3,}")
+
+
+def _has_extraction_damage(text: str) -> bool:
+    return bool(_EXTRACTION_DAMAGE_PATTERN.search(text))
+
+
 def _ascii(text: object) -> str:
-    return str(text).encode("ascii", "replace").decode("ascii")
+    return _transliterate_unicode(str(text)).encode("ascii", "replace").decode("ascii")

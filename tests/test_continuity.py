@@ -1345,7 +1345,7 @@ def test_tv_chat_html_is_simple_default_screen():
 
     assert "Lucien TV Mode" in html
     assert "Coherence Research Display" in html
-    assert "Do Research + Save PDF" in html
+    assert "Do Research + Save Paper" in html
     assert "Review Main Blocker" in html
     assert "tvResearch" in html
     assert "tvResolveBlocker" in html
@@ -1360,7 +1360,9 @@ def test_tv_chat_html_is_simple_default_screen():
     assert "suppress_auto_reflect: true" in html
     assert "steward_inbox_action" in html
     assert "data.result || {}).response)" not in html
-    assert "reports/research_papers/coherence_physics_research_packet.pdf" in html
+    assert "reports/research_papers/coherence_paper.pdf" in html
+    assert "reports/research_papers/coherence_audit_bundle.pdf" in html
+    assert "paper_output_path" in html
     assert "Advanced Diagnostics" not in html
 
 
@@ -3356,18 +3358,29 @@ def test_export_research_pdf_writes_mission_packet(tmp_path):
         "research_brief",
         reason="pdf test research brief",
     )
-    output_path = tmp_path / "research_packet.pdf"
+    output_path = tmp_path / "audit_bundle.pdf"
+    paper_output_path = tmp_path / "paper.pdf"
 
-    result = export_research_pdf(ledger, manifest, mission.mission_id, output_path)
+    result = export_research_pdf(
+        ledger,
+        manifest,
+        mission.mission_id,
+        output_path,
+        paper_output_path=paper_output_path,
+    )
 
     assert result["path"] == str(output_path)
+    assert result["audit_path"] == str(output_path)
+    assert result["paper_path"] == str(paper_output_path)
     assert result["mission_title"] == "PDF research mission"
     assert result["output_count"] == 1
     assert result["evidence_count"] >= 2
     assert result["source_count"] == 0
     assert result["source_note_count"] == 0
     assert output_path.read_bytes().startswith(b"%PDF-1.4")
-    assert b"Smooth Output Is Not Continuity" in output_path.read_bytes()
+    assert paper_output_path.read_bytes().startswith(b"%PDF-1.4")
+    assert b"Smooth Output Is Not Continuity" in paper_output_path.read_bytes()
+    assert b"Audit Bundle" in output_path.read_bytes()
 
 
 def test_coherence_corpus_index_links_sources_to_mission(tmp_path):
@@ -3608,7 +3621,8 @@ def test_coherence_paper_pipeline_finishes_with_pdf_packet(tmp_path):
         ),
         encoding="utf-8",
     )
-    output_path = tmp_path / "coherence_packet.pdf"
+    output_path = tmp_path / "coherence_audit_bundle.pdf"
+    paper_output_path = tmp_path / "coherence_paper.pdf"
 
     result = run_coherence_paper_pipeline(
         ledger,
@@ -3618,6 +3632,7 @@ def test_coherence_paper_pipeline_finishes_with_pdf_packet(tmp_path):
         corpus_limit=2,
         force=True,
         output_path=output_path,
+        paper_output_path=paper_output_path,
     )
     mission_id = result["record"]["mission_id"]
     outputs = research_outputs_from_events(ledger.events(), mission_id)
@@ -3632,9 +3647,10 @@ def test_coherence_paper_pipeline_finishes_with_pdf_packet(tmp_path):
     assert any(output.kind.value == "paper_draft" for output in outputs)
     assert review["pdf_ready"] is True
     assert output_path.read_bytes().startswith(b"%PDF-1.4")
-    assert b"Source-Derived Notes" in output_path.read_bytes()
-    assert b"Formal Criteria for Governed Continuity" in output_path.read_bytes()
-    assert b"Argument Structure" in output_path.read_bytes()
+    assert paper_output_path.read_bytes().startswith(b"%PDF-1.4")
+    assert b"Source-Derived Notes" in paper_output_path.read_bytes()
+    assert b"Formal Criteria for Governed Continuity" in paper_output_path.read_bytes()
+    assert b"Argument Structure" in paper_output_path.read_bytes()
 
 
 def test_argument_graph_seed_is_idempotent_and_structured(tmp_path):
@@ -3719,7 +3735,8 @@ def test_research_pdf_includes_falsification_and_argument_graph(tmp_path):
         ),
         encoding="utf-8",
     )
-    output_path = tmp_path / "argument_packet.pdf"
+    output_path = tmp_path / "argument_audit_bundle.pdf"
+    paper_output_path = tmp_path / "argument_paper.pdf"
 
     result = run_coherence_paper_pipeline(
         ledger,
@@ -3729,8 +3746,9 @@ def test_research_pdf_includes_falsification_and_argument_graph(tmp_path):
         corpus_limit=1,
         force=True,
         output_path=output_path,
+        paper_output_path=paper_output_path,
     )
-    content = output_path.read_bytes()
+    content = paper_output_path.read_bytes()
 
     assert any(
         action["action"] == "seed_argument_graph"
@@ -3773,7 +3791,8 @@ def test_coherence_paper_pipeline_opens_simple_mission_when_existing_is_complete
         project_root=project_root,
         corpus_roots=["corpus"],
         corpus_limit=1,
-        output_path=tmp_path / "simple_packet.pdf",
+        output_path=tmp_path / "simple_audit_bundle.pdf",
+        paper_output_path=tmp_path / "simple_paper.pdf",
     )
 
     assert result["record"]["status"] == "paper_packet_ready"
@@ -3783,6 +3802,7 @@ def test_coherence_paper_pipeline_opens_simple_mission_when_existing_is_complete
         for action in result["record"]["actions"]
     )
     assert Path(result["pdf"]["path"]).exists()
+    assert Path(result["pdf"]["paper_path"]).exists()
 
 
 def test_research_review_desk_summarizes_autopilot_outputs(tmp_path):

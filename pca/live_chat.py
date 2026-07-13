@@ -759,7 +759,9 @@ def _apply_steward_action(
                 corpus_limit=limit,
                 force=force,
                 output_path=payload.get("output_path")
-                or "reports/coherence_physics_research_packet.pdf",
+                or "reports/research_papers/coherence_audit_bundle.pdf",
+                paper_output_path=payload.get("paper_output_path")
+                or "reports/research_papers/coherence_paper.pdf",
                 reason=reason or "live Coherence Physics paper pipeline",
             )
         }
@@ -1502,7 +1504,7 @@ def _tv_chat_html() -> str:
           <div class="hint">Saved to <code>reports/research_papers/</code>.</div>
         </div>
         <div class="quick-actions">
-          <button id="tvResearch" class="primary" type="button">Do Research + Save PDF</button>
+          <button id="tvResearch" class="primary" type="button">Do Research + Save Paper</button>
           <button id="tvAskNext" class="secondary" type="button">Ask What To Do Next</button>
           <button id="tvResolveBlocker" class="secondary" type="button">Review Main Blocker</button>
           <button id="tvRefresh" class="secondary" type="button">Refresh Status</button>
@@ -1625,7 +1627,7 @@ def _tv_chat_html() -> str:
     async function runTvResearch() {
       tvResearch.disabled = true;
       pdfStatus.textContent = 'Working';
-      addTvMessage('lucien', 'Starting one-click Coherence research. I will save a governed PDF draft when it finishes.');
+      addTvMessage('lucien', 'Starting one-click Coherence research. I will save a clean paper and a separate audit bundle when it finishes.');
       try {
         const response = await fetch('/api/steward', {
           method: 'POST',
@@ -1633,18 +1635,19 @@ def _tv_chat_html() -> str:
           body: JSON.stringify({
             action: 'run_coherence_paper_pipeline',
             limit: 12,
-            output_path: 'reports/research_papers/coherence_physics_research_packet.pdf',
-            reason: 'TV mode one-click Coherence research PDF'
+            output_path: 'reports/research_papers/coherence_audit_bundle.pdf',
+            paper_output_path: 'reports/research_papers/coherence_paper.pdf',
+            reason: 'TV mode one-click Coherence research paper and audit bundle'
           })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'research failed');
         const pipeline = data && data.result && data.result.coherence_paper_pipeline ? data.result.coherence_paper_pipeline : null;
         const pdf = pipeline && pipeline.pdf ? pipeline.pdf : null;
-        if (!pdf || !pdf.path) throw new Error('No PDF path returned.');
+        if (!pdf || !pdf.paper_path) throw new Error('No paper path returned.');
         pdfStatus.textContent = 'Saved';
-        addTvMessage('lucien', `Done. I saved the research PDF at ${pdf.path}. It is a governed draft, ready for review.`);
-        window.open('/' + pdf.path, '_blank');
+        addTvMessage('lucien', `Done. I saved the clean paper at ${pdf.paper_path}. The audit bundle is at ${pdf.audit_path}.`);
+        window.open('/' + pdf.paper_path, '_blank');
         await refreshTvStatus();
       } catch (error) {
         pdfStatus.textContent = 'Needs attention';
@@ -2067,7 +2070,7 @@ def _live_chat_html() -> str:
             <div class="start-summary">Lucien will open or reuse a Coherence research mission, index source files, run one governed research pass, draft a paper packet, and save the PDF in <code>reports/research_papers/</code>.</div>
             <div id="oneClickResearchStatus" class="one-click-status">Ready. Evidence remains reviewable; nothing is published.</div>
           </div>
-          <button type="button" id="oneClickResearchPdf" class="one-click-button">Do Research + Save PDF</button>
+          <button type="button" id="oneClickResearchPdf" class="one-click-button">Do Research + Save Paper</button>
         </div>
       </div>
       <div>
@@ -4537,17 +4540,18 @@ def _live_chat_html() -> str:
         action: 'run_coherence_paper_pipeline',
         mission_id: selectedMissionId,
         limit: 8,
-        output_path: 'reports/research_papers/coherence_physics_research_packet.pdf',
+        output_path: 'reports/research_papers/coherence_audit_bundle.pdf',
+        paper_output_path: 'reports/research_papers/coherence_paper.pdf',
         reason: 'ran Coherence Physics paper pipeline from research review desk'
       });
       const pipeline = data && data.result && data.result.coherence_paper_pipeline ? data.result.coherence_paper_pipeline : null;
       const pdf = pipeline && pipeline.pdf ? pipeline.pdf : null;
-      if (!pdf || !pdf.path) {
-        addMessage('lucien', 'Paper pipeline ran, but no PDF path was returned.');
+      if (!pdf || !pdf.paper_path) {
+        addMessage('lucien', 'Paper pipeline ran, but no paper path was returned.');
         return;
       }
-      addMessage('lucien', `Paper packet saved at ${pdf.path}. Opening it now. Treat it as a governed draft until evidence review is complete.`);
-      window.open('/' + pdf.path, '_blank');
+      addMessage('lucien', `Paper saved at ${pdf.paper_path}. Audit bundle saved at ${pdf.audit_path}. Opening the clean paper now.`);
+      window.open('/' + pdf.paper_path, '_blank');
     }
 
     async function runOneClickCoherenceResearch() {
@@ -4558,20 +4562,21 @@ def _live_chat_html() -> str:
         const data = await steward({
           action: 'run_coherence_paper_pipeline',
           limit: 12,
-          output_path: 'reports/research_papers/coherence_physics_research_packet.pdf',
-          reason: 'one-click Coherence research PDF'
+          output_path: 'reports/research_papers/coherence_audit_bundle.pdf',
+          paper_output_path: 'reports/research_papers/coherence_paper.pdf',
+          reason: 'one-click Coherence research paper and audit bundle'
         });
         const pipeline = data && data.result && data.result.coherence_paper_pipeline ? data.result.coherence_paper_pipeline : null;
         const record = pipeline && pipeline.record ? pipeline.record : {};
         const pdf = pipeline && pipeline.pdf ? pipeline.pdf : null;
-        if (!pdf || !pdf.path) {
-          oneClickResearchStatus.textContent = 'Research ran, but no PDF path came back. Check Advanced Diagnostics.';
-          addMessage('lucien', 'The one-click research run did not return a PDF path.');
+        if (!pdf || !pdf.paper_path) {
+          oneClickResearchStatus.textContent = 'Research ran, but no paper path came back. Check Advanced Diagnostics.';
+          addMessage('lucien', 'The one-click research run did not return a paper path.');
           return;
         }
-        oneClickResearchStatus.textContent = `Saved PDF: ${pdf.path}. Mission: ${record.mission_title || 'Coherence Physics Research Program'}. Next: review raw evidence when ready.`;
-        addMessage('lucien', `Done. I saved the Coherence Physics research packet at ${pdf.path}. It is a governed draft, not a final publication.`);
-        window.open('/' + pdf.path, '_blank');
+        oneClickResearchStatus.textContent = `Saved paper: ${pdf.paper_path}. Audit bundle: ${pdf.audit_path}. Mission: ${record.mission_title || 'Coherence Physics Research Program'}.`;
+        addMessage('lucien', `Done. I saved the clean Coherence Physics paper at ${pdf.paper_path}. The governed audit bundle is at ${pdf.audit_path}.`);
+        window.open('/' + pdf.paper_path, '_blank');
       } finally {
         button.disabled = false;
       }
