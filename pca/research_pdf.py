@@ -25,9 +25,9 @@ def export_research_pdf(
     ledger: ContinuityLedger,
     manifest: IdentityManifest,
     mission_id: str,
-    output_path: str | Path = "reports/research_papers/coherence_audit_bundle.pdf",
+    output_path: str | Path = "../knowledge_hub/generated/research_papers/coherence_audit_bundle.pdf",
     project_root: str | Path = ".",
-    paper_output_path: str | Path = "reports/research_papers/coherence_paper.pdf",
+    paper_output_path: str | Path = "../knowledge_hub/generated/research_papers/coherence_paper.pdf",
 ) -> dict[str, Any]:
     """Export the two paired research documents for a mission.
 

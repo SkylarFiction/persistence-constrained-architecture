@@ -365,12 +365,12 @@ def main() -> int:
     coherence_paper_parser.add_argument("--force", action="store_true")
     coherence_paper_parser.add_argument(
         "--output",
-        default="reports/research_papers/coherence_audit_bundle.pdf",
+        default="../knowledge_hub/generated/research_papers/coherence_audit_bundle.pdf",
         help="Audit bundle path (complete, unfiltered machine record).",
     )
     coherence_paper_parser.add_argument(
         "--paper-output",
-        default="reports/research_papers/coherence_paper.pdf",
+        default="../knowledge_hub/generated/research_papers/coherence_paper.pdf",
         help="Reader-facing scholarly paper path.",
     )
     research_sandbox_parser = subparsers.add_parser("research-sandbox")
@@ -390,10 +390,10 @@ def main() -> int:
     research_pdf_parser = subparsers.add_parser("research-pdf")
     research_pdf_parser.add_argument("mission_id")
     research_pdf_parser.add_argument(
-        "--output", default="reports/research_papers/coherence_audit_bundle.pdf"
+        "--output", default="../knowledge_hub/generated/research_papers/coherence_audit_bundle.pdf"
     )
     research_pdf_parser.add_argument(
-        "--paper-output", default="reports/research_papers/coherence_paper.pdf"
+        "--paper-output", default="../knowledge_hub/generated/research_papers/coherence_paper.pdf"
     )
     research_pdf_parser.add_argument("--json", action="store_true")
     research_review_parser = subparsers.add_parser("research-review")

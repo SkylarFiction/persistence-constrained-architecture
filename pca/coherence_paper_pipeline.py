@@ -28,8 +28,8 @@ def run_coherence_paper_pipeline(
     corpus_limit: int = 8,
     use_knowledge_hub: bool = False,
     force: bool = False,
-    output_path: str | Path = "reports/research_papers/coherence_audit_bundle.pdf",
-    paper_output_path: str | Path = "reports/research_papers/coherence_paper.pdf",
+    output_path: str | Path = "../knowledge_hub/generated/research_papers/coherence_audit_bundle.pdf",
+    paper_output_path: str | Path = "../knowledge_hub/generated/research_papers/coherence_paper.pdf",
     reason: str = "",
 ) -> dict[str, Any]:
     project_path = Path(project_root).resolve()

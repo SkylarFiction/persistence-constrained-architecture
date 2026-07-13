@@ -1360,8 +1360,9 @@ def test_tv_chat_html_is_simple_default_screen():
     assert "suppress_auto_reflect: true" in html
     assert "steward_inbox_action" in html
     assert "data.result || {}).response)" not in html
-    assert "reports/research_papers/coherence_paper.pdf" in html
-    assert "reports/research_papers/coherence_audit_bundle.pdf" in html
+    assert "../knowledge_hub/generated/research_papers" in html
+    assert "localDocumentUrl" in html
+    assert "researchOutputPaths" in html
     assert "paper_output_path" in html
     assert "Advanced Diagnostics" not in html
 
