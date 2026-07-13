@@ -3038,9 +3038,10 @@ def _live_chat_html() -> str:
       for (const entry of entries) {
         const row = document.createElement('div');
         row.className = 'item';
-        row.innerHTML = `<div class="item-title">${escapeHtml(entry.support_status || 'unknown')} / ${escapeHtml(entry.confidence || 'unknown')} / ${escapeHtml(entry.claim_status || 'unknown')}</div>
-          <div class="item-meta">${escapeHtml(entry.claim_item_id || 'unknown')} / hash ${escapeHtml(String(entry.claim_hash || '').slice(0, 16))}</div>
-          <div class="item-meta">evidence ${entry.evidence_count || 0} / reviewed ${entry.reviewed_evidence_count || 0} / disputed ${entry.disputed_evidence_count || 0} / stale ${entry.stale_evidence_count || 0}</div>`;
+        row.innerHTML = `<div class="item-title">${escapeHtml(entry.claim_text || entry.claim_item_id || 'claim')}</div>
+          <div class="item-meta">${escapeHtml(entry.claim_type || 'claim')} / ${escapeHtml(entry.support_status || 'unknown')} / confidence ${escapeHtml(entry.confidence || 'unknown')} / review ${escapeHtml(entry.review_state || entry.claim_status || 'raw')}</div>
+          <div class="item-meta">support ${entry.direct_support_count || entry.evidence_count || 0} / counterevidence ${entry.counterevidence_count || 0} / reviewed ${entry.reviewed_evidence_count || 0} / disputed ${entry.disputed_evidence_count || 0}</div>
+          <div class="item-meta">falsification: ${escapeHtml(entry.falsification_condition || 'needs direct protocol')}</div>`;
         missionClaimMap.appendChild(row);
       }
     }

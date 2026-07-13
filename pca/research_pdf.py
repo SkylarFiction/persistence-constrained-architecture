@@ -337,19 +337,31 @@ def _scholarly_paper_lines(
     lines.extend(
         [
             "",
-            "10. Current Claim Map",
+            "10. Current Claim Graph",
             f"This draft contains {claim_count} mapped claim(s). Claims with raw support "
             "should be read as promising but unverified. Claims with reviewed support "
-            "may be candidates for stronger public wording.",
+            "may be candidates for stronger public wording. Each row separates the "
+            "claim's wording, type, support, counterevidence, review state, and "
+            "current falsification condition rather than hiding many propositions "
+            "under one umbrella claim.",
+            "Claim | Type | Status | Support | Counterevidence | Review | Confidence",
         ]
     )
     for entry in claim_map.get("entries", []):
+        claim_text = str(entry.get("claim_text") or entry.get("claim_hash") or "")
+        if len(claim_text) > 84:
+            claim_text = claim_text[:81].rsplit(" ", 1)[0] + "..."
         lines.append(
-            "- "
-            f"Support status: {entry.get('support_status', 'unknown')}; "
-            f"confidence: {entry.get('confidence', 'unknown')}; "
-            f"linked evidence: {entry.get('evidence_count', 0)}."
+            f"{claim_text} | {entry.get('claim_type', 'claim')} | "
+            f"{entry.get('support_status', 'unknown')} | "
+            f"{entry.get('direct_support_count', entry.get('evidence_count', 0))} | "
+            f"{entry.get('counterevidence_count', 0)} | "
+            f"{entry.get('review_state', entry.get('claim_status', 'raw'))} | "
+            f"{entry.get('confidence', 'unknown')}"
         )
+        falsification = str(entry.get("falsification_condition") or "")
+        if falsification:
+            lines.append(f"  Falsification condition: {falsification}")
     source_findings = _source_note_findings(source_notes)
     lines.extend(
         [

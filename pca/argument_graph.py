@@ -314,6 +314,31 @@ def seed_continuity_argument_graph(
         "Fluent output is insufficient evidence of identity continuity.",
         confidence="medium",
     )
+    state_claim = node(
+        ArgumentNodeKind.CLAIM,
+        "Output similarity does not entail preserved memory, authority, or state continuity.",
+        confidence="medium",
+    )
+    lineage_claim = node(
+        ArgumentNodeKind.CLAIM,
+        "PCA can distinguish declared lineage breaks from ordinary continuity when fork and transform events are ledgered.",
+        confidence="low",
+    )
+    ledger_claim = node(
+        ArgumentNodeKind.CLAIM,
+        "A hash-chained continuity ledger preserves a tamper-evident transition record for identity-relevant changes.",
+        confidence="medium",
+    )
+    review_claim = node(
+        ArgumentNodeKind.CLAIM,
+        "Reviewed evidence, not source count alone, should govern the strength of continuity claims.",
+        confidence="medium",
+    )
+    rti_claim = node(
+        ArgumentNodeKind.CLAIM,
+        "Recovery Threshold Index outperforms raw variance as an early warning signal under the locked RTI protocol.",
+        confidence="low",
+    )
     premise = node(
         ArgumentNodeKind.PREMISE,
         "A model may preserve style while its memory, lineage, or authorization state changes.",
@@ -364,12 +389,20 @@ def seed_continuity_argument_graph(
     )
 
     edge(premise, claim, ArgumentRelation.SUPPORTS)
+    edge(premise, state_claim, ArgumentRelation.SUPPORTS)
     edge(implementation_fact, claim, ArgumentRelation.SUPPORTS)
+    edge(implementation_fact, lineage_claim, ArgumentRelation.SUPPORTS)
+    edge(implementation_fact, ledger_claim, ArgumentRelation.SUPPORTS)
+    edge(implementation_fact, review_claim, ArgumentRelation.SUPPORTS)
     edge(counterevidence, claim, ArgumentRelation.CHALLENGES)
+    edge(counterevidence, state_claim, ArgumentRelation.CHALLENGES)
     edge(inference, counterevidence, ArgumentRelation.RESPONDS_TO)
     edge(test, claim, ArgumentRelation.TESTS)
+    edge(test, rti_claim, ArgumentRelation.TESTS)
     edge(verdict, test, ArgumentRelation.YIELDS)
+    edge(verdict, rti_claim, ArgumentRelation.CHALLENGES)
     edge(limitation, claim, ArgumentRelation.LIMITS)
+    edge(limitation, lineage_claim, ArgumentRelation.LIMITS)
 
     record = {
         "mission_id": mission_id,

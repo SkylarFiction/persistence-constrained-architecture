@@ -2753,6 +2753,55 @@ def test_mission_claim_map_tracks_hypothesis_support_status(tmp_path):
     assert reviewed_map["entries"][0]["support_status"] == "reviewed_support"
 
 
+def test_mission_claim_map_decomposes_argument_graph_claims(tmp_path):
+    from pca.mission_claim_map import mission_claim_map
+
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    lab = tmp_path / "coherence-falsification-lab" / "results"
+    lab.mkdir(parents=True)
+    (lab / "verdict.md").write_text(
+        "\n".join(
+            [
+                "# Verdict: FAIL",
+                "## Reasons",
+                "- RTI failed the median lead-time criterion.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Argument claim map mission",
+        problem_statement="Split umbrella continuity claim into testable claims.",
+    )
+    seed_continuity_argument_graph(
+        ledger,
+        manifest,
+        mission.mission_id,
+        project_root=project_root,
+    )
+
+    claim_map = mission_claim_map(ledger, mission.mission_id)
+    entries = claim_map["entries"]
+    by_text = {entry["claim_text"]: entry for entry in entries}
+
+    assert claim_map["claim_count"] == 6
+    assert any(entry["claim_type"] == "implementation_claim" for entry in entries)
+    assert any(entry["claim_type"] == "empirical_subclaim" for entry in entries)
+    assert any(entry["counterevidence_count"] > 0 for entry in entries)
+    assert all("falsification_condition" in entry for entry in entries)
+    assert (
+        by_text[
+            "Recovery Threshold Index outperforms raw variance as an early warning signal under the locked RTI protocol."
+        ]["support_status"]
+        == "tested_with_counterevidence"
+    )
+
+
 def test_workbench_status_counts_blocked_mission_and_inbox(tmp_path):
     manifest = load_manifest()
     ledger = ContinuityLedger(tmp_path / "continuity.log")
@@ -3724,12 +3773,13 @@ def test_argument_graph_seed_is_idempotent_and_structured(tmp_path):
     )
     graph = mission_argument_graph(ledger, mission.mission_id)
 
-    assert first["created_node_count"] == 8
-    assert first["created_edge_count"] == 7
+    assert first["created_node_count"] == 13
+    assert first["created_edge_count"] == 15
     assert second["created_node_count"] == 0
     assert second["created_edge_count"] == 0
-    assert graph["node_count"] == 8
-    assert graph["edge_count"] == 7
+    assert graph["node_count"] == 13
+    assert graph["edge_count"] == 15
+    assert len([node for node in graph["nodes"] if node["kind"] == "claim"]) == 6
     assert any("FAIL" in node["statement"] for node in graph["nodes"])
 
 
