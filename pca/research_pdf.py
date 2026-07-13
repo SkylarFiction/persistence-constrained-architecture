@@ -77,6 +77,7 @@ def export_research_pdf(
     packet_path.parent.mkdir(parents=True, exist_ok=True)
     source_coverage = _source_coverage_rows(corpus_sources, source_notes)
     quality_warnings = _quality_warnings(claim_map, source_coverage, source_notes, regenerations)
+    argument_graph = mission_argument_graph(ledger, mission_id)
 
     paper_lines = _scholarly_paper_lines(
         mission_title=mission.title,
@@ -84,13 +85,14 @@ def export_research_pdf(
         corpus_sources=corpus_sources,
         source_notes=source_notes,
         falsification_verdict=falsification_lab_verdict(workspace_root),
-        argument_graph=mission_argument_graph(ledger, mission_id),
+        argument_graph=argument_graph,
         research_packet_path=str(packet_path),
     )
     packet_lines = _research_packet_lines(
         mission_title=mission.title,
         mission_id=mission_id,
         claim_map=claim_map,
+        argument_graph=argument_graph,
         source_coverage=source_coverage,
         source_notes=source_notes,
         quality_warnings=quality_warnings,
@@ -149,7 +151,6 @@ def _scholarly_paper_lines(
     argument_graph: dict[str, Any],
     research_packet_path: str,
 ) -> list[str]:
-    claim_count = int(claim_map.get("claim_count", 0) or 0)
     reviewed_evidence = int(claim_map.get("reviewed_evidence_count", 0) or 0)
     claim_candidate_notes = [
         note for note in source_notes if note.get("note_kind") == "claim_candidate"
@@ -360,20 +361,21 @@ def _scholarly_paper_lines(
             "next improvement is to extract citation cards from the indexed "
             "corpus before writing the paper."
         )
+    reader_claims = _reader_facing_claim_entries(claim_map)
     lines.extend(
         [
             "",
             "10. Current Claim Graph",
-            f"This draft contains {claim_count} mapped claim(s). Claims with raw support "
-            "should be read as promising but unverified. Claims with reviewed support "
-            "may be candidates for stronger public wording. Each row separates the "
-            "claim's wording, type, support, counterevidence, review state, and "
+            f"This draft contains {len(reader_claims)} mapped claim(s). Claims with raw "
+            "support should be read as promising but unverified. Claims with reviewed "
+            "support may be candidates for stronger public wording. Each row separates "
+            "the claim's wording, type, support, counterevidence, review state, and "
             "current falsification condition rather than hiding many propositions "
             "under one umbrella claim.",
             "Claim | Type | Status | Support | Counterevidence | Review | Confidence",
         ]
     )
-    for entry in claim_map.get("entries", []):
+    for entry in reader_claims:
         claim_text = str(entry.get("claim_text") or entry.get("claim_hash") or "")
         if len(claim_text) > 84:
             claim_text = claim_text[:81].rsplit(" ", 1)[0] + "..."
@@ -460,12 +462,16 @@ def _research_packet_lines(
     mission_title: str,
     mission_id: str,
     claim_map: dict[str, Any],
+    argument_graph: dict[str, Any],
     source_coverage: list[dict[str, Any]],
     source_notes: list[dict[str, Any]],
     quality_warnings: list[dict[str, Any]],
     paper_path: str,
     audit_bundle_path: str,
 ) -> list[str]:
+    nodes_by_id = {node["node_id"]: node for node in argument_graph.get("nodes", [])}
+    nodes_by_hash = {node["statement_hash"]: node for node in argument_graph.get("nodes", [])}
+    reader_claims = _reader_facing_claim_entries(claim_map)
     lines = [
         f"Research Packet - {mission_title}",
         "This packet is the inspectable research layer between the reader-facing "
@@ -474,13 +480,15 @@ def _research_packet_lines(
         "Governance Notice",
         "This packet maps claims to direct support, counterevidence, limitations, "
         "tests, and source coverage. It does not accept raw evidence as reviewed "
-        "and does not treat duplicated source files as independent corroboration.",
+        "and does not treat duplicated source files as independent corroboration. "
+        "Legacy mission-hypothesis placeholders with no argument-graph mapping are "
+        "omitted here (see the audit bundle's Claim Map for the complete record).",
         "",
         "Claim-Evidence Matrix",
         "Claim ID | Exact Claim | Type | Status | Confidence",
     ]
-    for entry in claim_map.get("entries", []):
-        lines.extend(_claim_matrix_entry_lines(entry))
+    for entry in reader_claims:
+        lines.extend(_claim_matrix_entry_lines(entry, nodes_by_id, nodes_by_hash))
     lines.extend(
         [
             "",
@@ -501,15 +509,15 @@ def _research_packet_lines(
             "",
             "Source Coverage Report",
             "Source file | Canonical family | Parsed | Extracted notes | Usable notes | "
-            "Claims supported | Claims challenged | Review status | Reason excluded",
+            "Review status | Reason excluded",
         ]
     )
     if source_coverage:
         for row in source_coverage:
             lines.append(
                 f"{row['source']} | {row['canonical_family']} | {row['parsed']} | "
-                f"{row['notes']} | {row['usable_notes']} | {row['claims_supported']} | "
-                f"{row['claims_challenged']} | {row['review_status']} | {row['reason_excluded']}"
+                f"{row['notes']} | {row['usable_notes']} | "
+                f"{row['review_status']} | {row['reason_excluded']}"
             )
     else:
         lines.append("No source coverage rows available.")
@@ -561,7 +569,26 @@ def _research_packet_lines(
     return lines
 
 
-def _claim_matrix_entry_lines(entry: dict[str, Any]) -> list[str]:
+def _reader_facing_claim_entries(claim_map: dict[str, Any]) -> list[dict[str, Any]]:
+    # "mission_hypothesis" entries are a legacy placeholder carried over from
+    # before claims were decomposed from the argument graph: a hash-named,
+    # contentless stub ("Mission hypothesis <hash>") that is always
+    # unsupported by construction, not a real claim under argument. Audit
+    # consumers still see it (it's real ledger state worth auditing), but
+    # showing it next to substantive typed claims in reader-facing tables
+    # reads as noise, not honesty.
+    return [
+        entry
+        for entry in claim_map.get("entries", [])
+        if entry.get("claim_type") != "mission_hypothesis"
+    ]
+
+
+def _claim_matrix_entry_lines(
+    entry: dict[str, Any],
+    nodes_by_id: dict[str, dict[str, Any]],
+    nodes_by_hash: dict[str, dict[str, Any]],
+) -> list[str]:
     claim_id = str(entry.get("claim_item_id") or entry.get("claim_hash") or "unknown")
     claim_text = str(entry.get("claim_text") or entry.get("claim_hash") or "")
     lines = [
@@ -569,11 +596,14 @@ def _claim_matrix_entry_lines(entry: dict[str, Any]) -> list[str]:
             f"{claim_id} | {claim_text} | {entry.get('claim_type', 'claim')} | "
             f"{entry.get('support_status', 'unknown')} | {entry.get('confidence', 'unknown')}"
         ),
-        f"  Supporting evidence: {_join_ids(entry.get('supporting_evidence_ids') or [])}",
-        f"  Counterevidence: {_join_ids(entry.get('counterevidence_ids') or [])}",
-        f"  Dependencies: {_join_ids(entry.get('dependency_claims') or [])}",
-        f"  Test status: {_join_ids(entry.get('test_ids') or [])}",
-        f"  Limitations: {_join_ids(entry.get('limitation_ids') or [])}",
+        "  Supporting evidence: "
+        + _resolve_statements(entry.get("supporting_evidence_ids") or [], nodes_by_id),
+        "  Counterevidence: "
+        + _resolve_statements(entry.get("counterevidence_ids") or [], nodes_by_id),
+        "  Dependencies: "
+        + _resolve_statements(entry.get("dependency_claims") or [], nodes_by_hash),
+        "  Test status: " + _resolve_statements(entry.get("test_ids") or [], nodes_by_id),
+        "  Limitations: " + _resolve_statements(entry.get("limitation_ids") or [], nodes_by_id),
         f"  Falsification/inspection: {entry.get('falsification_condition') or 'missing'}",
         f"  Human reviewer: {entry.get('human_reviewer') or 'none'}",
         f"  Review notes: {entry.get('review_notes') or 'none'}",
@@ -583,6 +613,28 @@ def _claim_matrix_entry_lines(entry: dict[str, Any]) -> list[str]:
 
 def _join_ids(items: list[str] | tuple[str, ...]) -> str:
     return ", ".join(str(item) for item in items) if items else "none"
+
+
+def _resolve_statements(
+    keys: list[str] | tuple[str, ...], lookup: dict[str, dict[str, Any]]
+) -> str:
+    # The matrix used to print raw node IDs ("argnode_5576f69e-...") for every
+    # supporting/countering reference, which told a reader nothing without
+    # cross-referencing the audit bundle by hand. Resolving to the referenced
+    # node's actual statement (truncated) makes the matrix readable on its own.
+    if not keys:
+        return "none"
+    resolved = []
+    for key in keys:
+        node = lookup.get(str(key))
+        if not node:
+            resolved.append(str(key))
+            continue
+        statement = str(node.get("statement", ""))
+        if len(statement) > 90:
+            statement = statement[:87].rsplit(" ", 1)[0] + "..."
+        resolved.append(statement or str(key))
+    return "; ".join(resolved)
 
 
 def _audit_bundle_lines(
@@ -776,6 +828,14 @@ def _argument_graph_lines(graph: dict[str, Any]) -> list[str]:
                 lines.append(f"  Implementation evidence: {source['statement']}")
             elif relation == "supports":
                 lines.append(f"  Support: {source['statement']}")
+            elif relation == "challenges" and source["kind"] == "verdict":
+                # A failed test's verdict is seeded with its own CHALLENGES edge
+                # (so claim-status classification can tell "tested and failed"
+                # apart from "never tested"), but that's the same fact as the
+                # verdict already shown under "Result" for this claim's Test
+                # line -- rendering it again here would just repeat it under a
+                # misleading "Counterargument" label.
+                continue
             elif relation == "challenges":
                 lines.append(f"  Counterargument: {source['statement']}")
                 for response_edge in incoming.get(source["node_id"], []):
@@ -864,8 +924,6 @@ def _source_coverage_rows(
                 "parsed": "Yes" if notes else "No",
                 "notes": len(notes),
                 "usable_notes": len(used),
-                "claims_supported": "unmapped",
-                "claims_challenged": "unmapped",
                 "review_status": ", ".join(status_values) if status_values else "unreviewed",
                 "reason_excluded": _source_exclusion_reason(notes, used, malformed),
                 "used_in_paper": "Yes" if used else "No",
