@@ -168,7 +168,9 @@ def run_live_chat_server(
                     {"replay": build_session_replay(ledger, manifest, session_id).to_dict()},
                 )
                 return
-            if parsed.path.startswith("/reports/"):
+            if parsed.path.startswith("/reports/") or parsed.path.startswith(
+                "/knowledge_hub/generated/"
+            ):
                 _send_report_file(self, parsed.path)
                 return
             self.send_error(404)
