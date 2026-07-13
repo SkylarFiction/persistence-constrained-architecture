@@ -185,6 +185,34 @@ def create_research_output(
     brief = _mission_brief(ledger.events(), mission_id)
     kind_value = _parse_output_kind(kind)
     content, claim_count = _draft_content(brief, kind_value)
+    existing = _existing_output_for_content(
+        ledger.events(),
+        mission_id=mission_id,
+        kind=kind_value,
+        content_hash=_text_hash(content),
+    )
+    if existing:
+        record = {
+            "identity_id": manifest.system_id,
+            "mission_id": mission_id,
+            "kind": kind_value.value,
+            "existing_output_id": existing.output_id,
+            "content_hash": existing.content_hash,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "reason": reason or f"research sandbox regenerated duplicate {kind_value.value}",
+            "governance": (
+                "duplicate generated content was not stored again; this event "
+                "preserves regeneration history by reference"
+            ),
+        }
+        ledger.append("research.output_regenerated", manifest.system_id, record)
+        return {
+            "output": existing.to_dict(),
+            "evidence": None,
+            "evidence_link": None,
+            "content": content,
+            "regeneration": record,
+        }
     evidence = _proposed_evidence_for_output(
         ledger,
         manifest,
@@ -234,6 +262,20 @@ def research_outputs_from_events(
     return sorted(records, key=lambda record: (record.created_at, record.output_id))
 
 
+def research_output_regenerations_from_events(
+    events: list[ContinuityEvent],
+    mission_id: str | None = None,
+) -> list[dict[str, Any]]:
+    records = [
+        event.payload
+        for event in events
+        if event.event_type == "research.output_regenerated"
+    ]
+    if mission_id:
+        records = [record for record in records if record.get("mission_id") == mission_id]
+    return records
+
+
 def render_research_outputs_text(outputs: list[ResearchSandboxOutputRecord]) -> str:
     lines = ["Research Outputs", f"Outputs: {len(outputs)}"]
     if not outputs:
@@ -279,6 +321,18 @@ def _proposed_evidence_for_output(
         confidence="low",
         reason="research sandbox proposed evidence; not reviewed or accepted",
     )
+
+
+def _existing_output_for_content(
+    events: list[ContinuityEvent],
+    mission_id: str,
+    kind: ResearchOutputKind,
+    content_hash: str,
+) -> ResearchSandboxOutputRecord | None:
+    for output in reversed(research_outputs_from_events(events, mission_id)):
+        if output.kind == kind and output.content_hash == content_hash:
+            return output
+    return None
 
 
 def _mission_brief(events: list[ContinuityEvent], mission_id: str) -> MissionBrief:

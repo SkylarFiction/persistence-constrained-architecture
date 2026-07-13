@@ -373,6 +373,11 @@ def main() -> int:
         default="../knowledge_hub/generated/research_papers/coherence_paper.pdf",
         help="Reader-facing scholarly paper path.",
     )
+    coherence_paper_parser.add_argument(
+        "--packet-output",
+        default="../knowledge_hub/generated/research_papers/coherence_research_packet.pdf",
+        help="Research packet path (claim matrix, source coverage, unresolved questions).",
+    )
     research_sandbox_parser = subparsers.add_parser("research-sandbox")
     research_sandbox_parser.add_argument("--json", action="store_true")
     research_brief_parser = subparsers.add_parser("research-brief")
@@ -394,6 +399,10 @@ def main() -> int:
     )
     research_pdf_parser.add_argument(
         "--paper-output", default="../knowledge_hub/generated/research_papers/coherence_paper.pdf"
+    )
+    research_pdf_parser.add_argument(
+        "--packet-output",
+        default="../knowledge_hub/generated/research_papers/coherence_research_packet.pdf",
     )
     research_pdf_parser.add_argument("--json", action="store_true")
     research_review_parser = subparsers.add_parser("research-review")
@@ -1113,6 +1122,7 @@ def main() -> int:
             force=args.force,
             output_path=args.output,
             paper_output_path=args.paper_output,
+            packet_output_path=args.packet_output,
             reason="manual CLI Coherence Physics paper pipeline",
         )
         if args.json:
@@ -1213,11 +1223,13 @@ def main() -> int:
             args.mission_id,
             args.output,
             paper_output_path=args.paper_output,
+            packet_output_path=args.packet_output,
         )
         if args.json:
             print_json({"research_pdf": result})
         else:
             print(f"Paper written: {result['paper_path']}")
+            print(f"Research packet written: {result['packet_path']}")
             print(f"Audit bundle written: {result['audit_path']}")
         return 0
 

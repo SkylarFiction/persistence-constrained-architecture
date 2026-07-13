@@ -764,6 +764,8 @@ def _apply_steward_action(
                 or "../knowledge_hub/generated/research_papers/coherence_audit_bundle.pdf",
                 paper_output_path=payload.get("paper_output_path")
                 or "../knowledge_hub/generated/research_papers/coherence_paper.pdf",
+                packet_output_path=payload.get("packet_output_path")
+                or "../knowledge_hub/generated/research_papers/coherence_research_packet.pdf",
                 reason=reason or "live Coherence Physics paper pipeline",
             )
         }
@@ -794,7 +796,12 @@ def _apply_steward_action(
                 ledger,
                 manifest,
                 mission_id,
-                payload.get("output_path") or "reports/lucien_research_packet.pdf",
+                payload.get("output_path")
+                or "../knowledge_hub/generated/research_papers/coherence_audit_bundle.pdf",
+                paper_output_path=payload.get("paper_output_path")
+                or "../knowledge_hub/generated/research_papers/coherence_paper.pdf",
+                packet_output_path=payload.get("packet_output_path")
+                or "../knowledge_hub/generated/research_papers/coherence_research_packet.pdf",
             )
         }
 
@@ -1555,7 +1562,8 @@ def _tv_chat_html() -> str:
       const root = '../knowledge_hub/generated/research_papers';
       return {
         output_path: `${root}/${prefix}_audit_bundle_${stamp}.pdf`,
-        paper_output_path: `${root}/${prefix}_paper_${stamp}.pdf`
+        paper_output_path: `${root}/${prefix}_paper_${stamp}.pdf`,
+        packet_output_path: `${root}/${prefix}_research_packet_${stamp}.pdf`
       };
     }
 
@@ -1656,7 +1664,7 @@ def _tv_chat_html() -> str:
     async function runTvResearch() {
       tvResearch.disabled = true;
       pdfStatus.textContent = 'Working';
-      addTvMessage('lucien', 'Starting one-click Coherence research. I will save a clean paper and a separate audit bundle when it finishes.');
+      addTvMessage('lucien', 'Starting one-click Coherence research. I will save a clean paper, research packet, and separate audit bundle when it finishes.');
       try {
         const paths = researchOutputPaths('coherence');
         const response = await fetch('/api/steward', {
@@ -1667,7 +1675,8 @@ def _tv_chat_html() -> str:
             limit: 12,
             output_path: paths.output_path,
             paper_output_path: paths.paper_output_path,
-            reason: 'TV mode one-click Coherence research paper and audit bundle'
+            packet_output_path: paths.packet_output_path,
+            reason: 'TV mode one-click Coherence research paper, packet, and audit bundle'
           })
         });
         const data = await response.json();
@@ -1676,7 +1685,7 @@ def _tv_chat_html() -> str:
         const pdf = pipeline && pipeline.pdf ? pipeline.pdf : null;
         if (!pdf || !pdf.paper_path) throw new Error('No paper path returned.');
         pdfStatus.textContent = 'Saved';
-        addTvMessage('lucien', `Done. I saved the clean paper at ${pdf.paper_path}. The audit bundle is at ${pdf.audit_path}.`);
+        addTvMessage('lucien', `Done. I saved the clean paper at ${pdf.paper_path}. The research packet is at ${pdf.packet_path}. The audit bundle is at ${pdf.audit_path}.`);
         window.open(localDocumentUrl(pdf.paper_path), '_blank');
         await refreshTvStatus();
       } catch (error) {
@@ -2501,7 +2510,8 @@ def _live_chat_html() -> str:
       const root = '../knowledge_hub/generated/research_papers';
       return {
         output_path: `${root}/${prefix}_audit_bundle_${stamp}.pdf`,
-        paper_output_path: `${root}/${prefix}_paper_${stamp}.pdf`
+        paper_output_path: `${root}/${prefix}_paper_${stamp}.pdf`,
+        packet_output_path: `${root}/${prefix}_research_packet_${stamp}.pdf`
       };
     }
 
@@ -4551,9 +4561,13 @@ def _live_chat_html() -> str:
         addMessage('lucien', 'Select an active mission before exporting a research PDF.');
         return;
       }
+      const paths = researchOutputPaths('coherence');
       const data = await steward({
         action: 'export_research_pdf',
         mission_id: selectedMissionId,
+        output_path: paths.output_path,
+        paper_output_path: paths.paper_output_path,
+        packet_output_path: paths.packet_output_path,
         reason: 'exported mission research packet from live workspace'
       });
       const pdf = data && data.result && data.result.research_pdf ? data.result.research_pdf : null;
@@ -4561,8 +4575,8 @@ def _live_chat_html() -> str:
         addMessage('lucien', 'PDF export did not return a file path.');
         return;
       }
-      addMessage('lucien', `Research PDF saved at ${pdf.path}. Opening it now.`);
-      window.open('/' + pdf.path, '_blank');
+      addMessage('lucien', `Research packet saved at ${pdf.packet_path}. Clean paper saved at ${pdf.paper_path}. Opening the packet now.`);
+      window.open(localDocumentUrl(pdf.packet_path || pdf.path), '_blank');
     }
 
     async function indexCorpusForSelectedMission() {
@@ -4591,6 +4605,7 @@ def _live_chat_html() -> str:
         limit: 8,
         output_path: paths.output_path,
         paper_output_path: paths.paper_output_path,
+        packet_output_path: paths.packet_output_path,
         reason: 'ran Coherence Physics paper pipeline from research review desk'
       });
       const pipeline = data && data.result && data.result.coherence_paper_pipeline ? data.result.coherence_paper_pipeline : null;
@@ -4599,14 +4614,14 @@ def _live_chat_html() -> str:
         addMessage('lucien', 'Paper pipeline ran, but no paper path was returned.');
         return;
       }
-      addMessage('lucien', `Paper saved at ${pdf.paper_path}. Audit bundle saved at ${pdf.audit_path}. Opening the clean paper now.`);
+      addMessage('lucien', `Paper saved at ${pdf.paper_path}. Research packet saved at ${pdf.packet_path}. Audit bundle saved at ${pdf.audit_path}. Opening the clean paper now.`);
       window.open(localDocumentUrl(pdf.paper_path), '_blank');
     }
 
     async function runOneClickCoherenceResearch() {
       const button = document.getElementById('oneClickResearchPdf');
       button.disabled = true;
-      oneClickResearchStatus.textContent = 'Working: indexing Coherence sources, running research, drafting, and saving paper plus audit bundle...';
+      oneClickResearchStatus.textContent = 'Working: indexing Coherence sources, running research, drafting, and saving paper, packet, and audit bundle...';
       try {
         const paths = researchOutputPaths('coherence');
         const data = await steward({
@@ -4614,7 +4629,8 @@ def _live_chat_html() -> str:
           limit: 12,
           output_path: paths.output_path,
           paper_output_path: paths.paper_output_path,
-          reason: 'one-click Coherence research paper and audit bundle'
+          packet_output_path: paths.packet_output_path,
+          reason: 'one-click Coherence research paper, packet, and audit bundle'
         });
         const pipeline = data && data.result && data.result.coherence_paper_pipeline ? data.result.coherence_paper_pipeline : null;
         const record = pipeline && pipeline.record ? pipeline.record : {};
@@ -4624,8 +4640,8 @@ def _live_chat_html() -> str:
           addMessage('lucien', 'The one-click research run did not return a paper path.');
           return;
         }
-        oneClickResearchStatus.textContent = `Saved paper: ${pdf.paper_path}. Audit bundle: ${pdf.audit_path}. Mission: ${record.mission_title || 'Coherence Physics Research Program'}.`;
-        addMessage('lucien', `Done. I saved the clean Coherence Physics paper at ${pdf.paper_path}. The governed audit bundle is at ${pdf.audit_path}.`);
+        oneClickResearchStatus.textContent = `Saved paper: ${pdf.paper_path}. Packet: ${pdf.packet_path}. Audit bundle: ${pdf.audit_path}. Mission: ${record.mission_title || 'Coherence Physics Research Program'}.`;
+        addMessage('lucien', `Done. I saved the clean Coherence Physics paper at ${pdf.paper_path}. The research packet is at ${pdf.packet_path}. The governed audit bundle is at ${pdf.audit_path}.`);
         window.open(localDocumentUrl(pdf.paper_path), '_blank');
       } finally {
         button.disabled = false;

@@ -16,6 +16,7 @@ from .mission_claim_map import mission_claim_map
 from .missions import mission_briefs_from_events, require_mission
 from .research_sandbox import (
     render_research_output_content,
+    research_output_regenerations_from_events,
     research_outputs_from_events,
 )
 from .source_notes import source_notes_for_mission
@@ -28,15 +29,16 @@ def export_research_pdf(
     output_path: str | Path = "../knowledge_hub/generated/research_papers/coherence_audit_bundle.pdf",
     project_root: str | Path = ".",
     paper_output_path: str | Path = "../knowledge_hub/generated/research_papers/coherence_paper.pdf",
+    packet_output_path: str | Path = "../knowledge_hub/generated/research_papers/coherence_research_packet.pdf",
 ) -> dict[str, Any]:
     """Export the two paired research documents for a mission.
 
-    ``output_path`` is the audit bundle (the complete, unfiltered machine
-    record: evidence IDs, hashes, review status, every generated draft).
     ``paper_output_path`` is the reader-facing scholarly paper: argument,
     definitions, findings, references -- no raw IDs, no registration stubs,
-    no duplicate drafts. They are two files because a document trying to be
-    both a governance audit trail and a readable paper serves neither well.
+    no duplicate drafts. ``packet_output_path`` is the research packet: claim
+    matrix, source coverage, gaps, counterarguments, and agenda. ``output_path``
+    is the audit bundle: evidence IDs, hashes, review status, duplicate
+    generation events, and complete machine history.
     """
     workspace_root = Path(project_root).resolve().parent
     mission = require_mission(ledger.events(), mission_id)
@@ -46,6 +48,7 @@ def export_research_pdf(
         if item.mission.mission_id == mission_id
     )
     outputs = research_outputs_from_events(ledger.events(), mission_id)
+    regenerations = research_output_regenerations_from_events(ledger.events(), mission_id)
     claim_map = mission_claim_map(ledger, mission_id)
     linked_evidence = evidence_for_target(ledger.events(), "mission", mission_id)
     # Corpus indexing and source-note extraction are append-only ledger history:
@@ -66,10 +69,14 @@ def export_research_pdf(
         if is_relevant_source_path(str(note.get("source_path") or ""))
     ]
 
-    audit_path = Path(output_path)
     paper_path = Path(paper_output_path)
+    packet_path = Path(packet_output_path)
+    audit_path = Path(output_path)
     audit_path.parent.mkdir(parents=True, exist_ok=True)
     paper_path.parent.mkdir(parents=True, exist_ok=True)
+    packet_path.parent.mkdir(parents=True, exist_ok=True)
+    source_coverage = _source_coverage_rows(corpus_sources, source_notes)
+    quality_warnings = _quality_warnings(claim_map, source_coverage, source_notes, regenerations)
 
     paper_lines = _scholarly_paper_lines(
         mission_title=mission.title,
@@ -78,6 +85,16 @@ def export_research_pdf(
         source_notes=source_notes,
         falsification_verdict=falsification_lab_verdict(workspace_root),
         argument_graph=mission_argument_graph(ledger, mission_id),
+        research_packet_path=str(packet_path),
+    )
+    packet_lines = _research_packet_lines(
+        mission_title=mission.title,
+        mission_id=mission_id,
+        claim_map=claim_map,
+        source_coverage=source_coverage,
+        source_notes=source_notes,
+        quality_warnings=quality_warnings,
+        paper_path=str(paper_path),
         audit_bundle_path=str(audit_path),
     )
     audit_lines = _audit_bundle_lines(
@@ -95,14 +112,19 @@ def export_research_pdf(
         claim_map=claim_map,
         linked_evidence=linked_evidence,
         source_notes=source_notes,
+        regenerations=regenerations,
+        quality_warnings=quality_warnings,
         paper_path=str(paper_path),
+        packet_path=str(packet_path),
     )
     _write_text_pdf(paper_path, paper_lines, title=f"Coherence Physics Paper - {mission.title}")
+    _write_text_pdf(packet_path, packet_lines, title=f"Coherence Physics Research Packet - {mission.title}")
     _write_text_pdf(audit_path, audit_lines, title=f"Coherence Physics Audit Bundle - {mission.title}")
     return {
         "path": str(audit_path),
         "audit_path": str(audit_path),
         "paper_path": str(paper_path),
+        "packet_path": str(packet_path),
         "mission_id": mission_id,
         "mission_title": mission.title,
         "output_count": len(outputs),
@@ -110,6 +132,9 @@ def export_research_pdf(
         "source_count": len(corpus_sources),
         "source_note_count": len(source_notes),
         "claim_count": claim_map.get("claim_count", 0),
+        "quality_warnings": quality_warnings,
+        "source_coverage": source_coverage,
+        "duplicate_output_regenerations": len(regenerations),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "governance": "export only; does not accept claims, evidence, memory, or mission outcomes",
     }
@@ -122,7 +147,7 @@ def _scholarly_paper_lines(
     source_notes: list[dict[str, Any]],
     falsification_verdict: dict[str, Any] | None,
     argument_graph: dict[str, Any],
-    audit_bundle_path: str,
+    research_packet_path: str,
 ) -> list[str]:
     claim_count = int(claim_map.get("claim_count", 0) or 0)
     reviewed_evidence = int(claim_map.get("reviewed_evidence_count", 0) or 0)
@@ -265,9 +290,10 @@ def _scholarly_paper_lines(
             f"quality gate; {damaged_note_count} note(s) were routed to the audit "
             "bundle for manual source inspection because they contained malformed "
             "math, fused words, or other extraction damage. "
-            "Registration-only inventory notes and the full evidence ledger (record "
-            f"IDs, hashes, review status) are omitted here; see the companion audit "
-            f"bundle ({audit_bundle_path}) for the complete, unfiltered record.",
+        "Registration-only inventory notes, raw claim IDs, and the full evidence "
+        "ledger are omitted here; see the companion research packet "
+        f"({research_packet_path}) for the claim-evidence matrix and source "
+        "coverage report.",
     ]
     if corpus_sources:
         lines.append("Key source files currently registered:")
@@ -430,6 +456,135 @@ def _scholarly_paper_lines(
     return lines
 
 
+def _research_packet_lines(
+    mission_title: str,
+    mission_id: str,
+    claim_map: dict[str, Any],
+    source_coverage: list[dict[str, Any]],
+    source_notes: list[dict[str, Any]],
+    quality_warnings: list[dict[str, Any]],
+    paper_path: str,
+    audit_bundle_path: str,
+) -> list[str]:
+    lines = [
+        f"Research Packet - {mission_title}",
+        "This packet is the inspectable research layer between the reader-facing "
+        f"paper ({paper_path}) and the full machine audit bundle ({audit_bundle_path}).",
+        "",
+        "Governance Notice",
+        "This packet maps claims to direct support, counterevidence, limitations, "
+        "tests, and source coverage. It does not accept raw evidence as reviewed "
+        "and does not treat duplicated source files as independent corroboration.",
+        "",
+        "Claim-Evidence Matrix",
+        "Claim ID | Exact Claim | Type | Status | Confidence",
+    ]
+    for entry in claim_map.get("entries", []):
+        lines.extend(_claim_matrix_entry_lines(entry))
+    lines.extend(
+        [
+            "",
+            "Quality Gates",
+        ]
+    )
+    if quality_warnings:
+        for warning in quality_warnings:
+            lines.append(
+                "- "
+                f"{warning.get('severity', 'warning')} / {warning.get('kind', 'quality')}: "
+                f"{warning.get('message', '')}"
+            )
+    else:
+        lines.append("- No export quality warnings.")
+    lines.extend(
+        [
+            "",
+            "Source Coverage Report",
+            "Source file | Canonical family | Parsed | Extracted notes | Usable notes | "
+            "Claims supported | Claims challenged | Review status | Reason excluded",
+        ]
+    )
+    if source_coverage:
+        for row in source_coverage:
+            lines.append(
+                f"{row['source']} | {row['canonical_family']} | {row['parsed']} | "
+                f"{row['notes']} | {row['usable_notes']} | {row['claims_supported']} | "
+                f"{row['claims_challenged']} | {row['review_status']} | {row['reason_excluded']}"
+            )
+    else:
+        lines.append("No source coverage rows available.")
+    lines.extend(
+        [
+            "",
+            "Malformed or Manual-Verification Source Notes",
+        ]
+    )
+    flagged_notes = [
+        note
+        for note in source_notes
+        if note.get("note_kind") == "claim_candidate"
+        and not _source_note_reader_ready(note)
+    ]
+    if flagged_notes:
+        for note in flagged_notes[:20]:
+            quality = _reader_facing_extraction_quality(str(note.get("summary") or ""))
+            lines.append(
+                "- "
+                f"{note.get('source_path', 'unknown source')} / "
+                f"{note.get('locator', 'unknown locator')} / "
+                f"reasons={', '.join(quality['reasons']) or 'unknown'}"
+            )
+    else:
+        lines.append("- None flagged in this run.")
+    lines.extend(
+        [
+            "",
+            "Unresolved Questions",
+            "- Which source notes should be promoted from raw to reviewed?",
+            "- Which claims need direct claim-specific evidence instead of mission-level evidence?",
+            "- Which equations require manual reconstruction from clean source pages?",
+            "- Which external peer-reviewed literature should be added as comparison evidence?",
+            "",
+            "Proposed Continuity Experiment",
+            "Create matched behavioral outputs across preserved, memory-altered, "
+            "authorization-altered, forked, and incompatible-restore conditions. "
+            "Compare human output-only judgments against PCA classifications from "
+            "manifest, ledger, evidence state, and declared invariants.",
+            "",
+            "Research Agenda",
+            "- Review source notes with page/section locators.",
+            "- Add direct claim-specific evidence links.",
+            "- Group duplicate source families before counting corroboration.",
+            "- Add external literature review mode for legitimate scholarly sources.",
+        ]
+    )
+    return lines
+
+
+def _claim_matrix_entry_lines(entry: dict[str, Any]) -> list[str]:
+    claim_id = str(entry.get("claim_item_id") or entry.get("claim_hash") or "unknown")
+    claim_text = str(entry.get("claim_text") or entry.get("claim_hash") or "")
+    lines = [
+        (
+            f"{claim_id} | {claim_text} | {entry.get('claim_type', 'claim')} | "
+            f"{entry.get('support_status', 'unknown')} | {entry.get('confidence', 'unknown')}"
+        ),
+        f"  Supporting evidence: {_join_ids(entry.get('supporting_evidence_ids') or [])}",
+        f"  Counterevidence: {_join_ids(entry.get('counterevidence_ids') or [])}",
+        f"  Dependencies: {_join_ids(entry.get('dependency_claims') or [])}",
+        f"  Test status: {_join_ids(entry.get('test_ids') or [])}",
+        f"  Limitations: {_join_ids(entry.get('limitation_ids') or [])}",
+        f"  Falsification/inspection: {entry.get('falsification_condition') or 'missing'}",
+        f"  Human reviewer: {entry.get('human_reviewer') or 'none'}",
+        f"  Review notes: {entry.get('review_notes') or 'none'}",
+    ]
+    return lines
+
+
+def _join_ids(items: list[str] | tuple[str, ...]) -> str:
+    return ", ".join(str(item) for item in items) if items else "none"
+
+
 def _audit_bundle_lines(
     manifest: IdentityManifest,
     mission_title: str,
@@ -442,11 +597,15 @@ def _audit_bundle_lines(
     claim_map: dict[str, Any],
     linked_evidence: list[dict[str, Any]],
     source_notes: list[dict[str, Any]],
+    regenerations: list[dict[str, Any]],
+    quality_warnings: list[dict[str, Any]],
     paper_path: str,
+    packet_path: str,
 ) -> list[str]:
     lines = [
         f"Audit Bundle - {mission_title}",
-        f"Companion machine record for the reader-facing paper ({paper_path}). "
+        f"Companion machine record for the reader-facing paper ({paper_path}) "
+        f"and research packet ({packet_path}). "
         "This document is the complete, unfiltered record: ledger events, "
         "evidence IDs, hashes, review status, and every generated output, "
         "including drafts and stubs the paper omits for readability.",
@@ -490,8 +649,20 @@ def _audit_bundle_lines(
             "- "
             f"{entry.get('support_status', 'unknown')} / "
             f"confidence {entry.get('confidence', 'unknown')} / "
-            f"hash {str(entry.get('claim_hash', ''))[:16]}"
+            f"hash {str(entry.get('claim_hash', ''))[:16]} / "
+            f"support={_join_ids(entry.get('supporting_evidence_ids') or [])} / "
+            f"counter={_join_ids(entry.get('counterevidence_ids') or [])}"
         )
+    lines.extend(["", "Quality Gate Warnings"])
+    if quality_warnings:
+        for warning in quality_warnings:
+            lines.append(
+                "- "
+                f"{warning.get('severity', 'warning')} / {warning.get('kind', 'quality')}: "
+                f"{warning.get('message', '')}"
+            )
+    else:
+        lines.append("- none")
     lines.extend(["", "Linked Evidence"])
     if not linked_evidence:
         lines.append("- none linked")
@@ -521,6 +692,16 @@ def _audit_bundle_lines(
                 _paper_content(content),
             ]
         )
+    lines.extend(["", "Duplicate Output Regeneration Events"])
+    if regenerations:
+        for record in regenerations:
+            lines.append(
+                "- "
+                f"{record.get('kind', 'output')} / existing={record.get('existing_output_id')} / "
+                f"hash={str(record.get('content_hash', ''))[:16]} / {record.get('created_at', '')}"
+            )
+    else:
+        lines.append("- none")
     lines.extend(
         [
             "",
@@ -670,16 +851,141 @@ def _source_coverage_rows(
         reviewed = [
             note for note in notes if str(note.get("review_status") or "") == "reviewed"
         ]
+        malformed = [
+            note for note in notes
+            if note.get("note_kind") == "claim_candidate"
+            and not _source_note_reader_ready(note)
+        ]
+        status_values = sorted({str(note.get("review_status") or "raw") for note in notes})
         rows.append(
             {
                 "source": _short_source_name(path),
+                "canonical_family": _canonical_source_family(path),
                 "parsed": "Yes" if notes else "No",
                 "notes": len(notes),
+                "usable_notes": len(used),
+                "claims_supported": "unmapped",
+                "claims_challenged": "unmapped",
+                "review_status": ", ".join(status_values) if status_values else "unreviewed",
+                "reason_excluded": _source_exclusion_reason(notes, used, malformed),
                 "used_in_paper": "Yes" if used else "No",
                 "reviewed": "Yes" if reviewed else "No",
             }
         )
     return rows
+
+
+def _canonical_source_family(path: str) -> str:
+    name = Path(path).stem.lower()
+    name = re.sub(r"\b(copy|final|draft|revised|v\d+|version\s*\d+)\b", "", name)
+    name = re.sub(r"[_\-\s]+", " ", name).strip()
+    return name or "unknown"
+
+
+def _source_exclusion_reason(
+    notes: list[dict[str, Any]],
+    used: list[dict[str, Any]],
+    malformed: list[dict[str, Any]],
+) -> str:
+    if used:
+        return ""
+    if not notes:
+        return "registered but no source notes extracted"
+    if malformed:
+        return "manual verification required for malformed extraction"
+    if all(note.get("note_kind") == "source_overview" for note in notes):
+        return "registration only; no argument-bearing note"
+    return "no reader-ready claim candidate"
+
+
+def _quality_warnings(
+    claim_map: dict[str, Any],
+    source_coverage: list[dict[str, Any]],
+    source_notes: list[dict[str, Any]],
+    regenerations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    warnings: list[dict[str, Any]] = []
+    for entry in claim_map.get("entries", []):
+        claim_id = str(entry.get("claim_item_id") or entry.get("claim_hash") or "unknown")
+        supports = entry.get("supporting_evidence_ids") or []
+        counters = entry.get("counterevidence_ids") or []
+        limitations = entry.get("limitation_ids") or []
+        falsification = str(entry.get("falsification_condition") or "")
+        if not supports and not counters:
+            warnings.append(
+                {
+                    "severity": "warning",
+                    "kind": "claim_without_direct_evidence",
+                    "claim_id": claim_id,
+                    "message": f"Claim {claim_id} has no direct support or counterevidence mapping.",
+                }
+            )
+        if not limitations and "needs" not in falsification.lower() and not falsification:
+            warnings.append(
+                {
+                    "severity": "warning",
+                    "kind": "claim_without_limitation",
+                    "claim_id": claim_id,
+                    "message": f"Claim {claim_id} has no limitation or inspection condition.",
+                }
+            )
+        if not falsification:
+            warnings.append(
+                {
+                    "severity": "warning",
+                    "kind": "claim_without_falsification_condition",
+                    "claim_id": claim_id,
+                    "message": f"Claim {claim_id} has no falsification or inspection condition.",
+                }
+            )
+    malformed_count = sum(
+        1 for note in source_notes
+        if note.get("note_kind") == "claim_candidate"
+        and not _source_note_reader_ready(note)
+    )
+    if malformed_count:
+        warnings.append(
+            {
+                "severity": "warning",
+                "kind": "malformed_source_notes",
+                "message": f"{malformed_count} source note(s) require manual extraction verification.",
+            }
+        )
+    duplicate_families = _duplicate_source_families(source_coverage)
+    for family, count in duplicate_families.items():
+        warnings.append(
+            {
+                "severity": "warning",
+                "kind": "duplicate_source_family",
+                "message": f"Canonical source family '{family}' appears {count} time(s); do not count as independent corroboration.",
+            }
+        )
+    if regenerations:
+        warnings.append(
+            {
+                "severity": "info",
+                "kind": "duplicate_generated_outputs",
+                "message": f"{len(regenerations)} duplicate generated output regeneration event(s) were stored by reference.",
+            }
+        )
+    unused_sources = [row for row in source_coverage if row.get("used_in_paper") != "Yes"]
+    if unused_sources:
+        warnings.append(
+            {
+                "severity": "info",
+                "kind": "registered_not_used",
+                "message": f"{len(unused_sources)} registered source(s) did not materially contribute reader-ready notes.",
+            }
+        )
+    return warnings
+
+
+def _duplicate_source_families(source_coverage: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in source_coverage:
+        family = str(row.get("canonical_family") or "unknown")
+        counts[family] = counts.get(family, 0) + 1
+    return {family: count for family, count in counts.items() if count > 1}
 
 
 def _short_source_name(path: str, max_len: int = 54) -> str:

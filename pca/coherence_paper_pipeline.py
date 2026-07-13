@@ -30,6 +30,7 @@ def run_coherence_paper_pipeline(
     force: bool = False,
     output_path: str | Path = "../knowledge_hub/generated/research_papers/coherence_audit_bundle.pdf",
     paper_output_path: str | Path = "../knowledge_hub/generated/research_papers/coherence_paper.pdf",
+    packet_output_path: str | Path = "../knowledge_hub/generated/research_papers/coherence_research_packet.pdf",
     reason: str = "",
 ) -> dict[str, Any]:
     project_path = Path(project_root).resolve()
@@ -138,9 +139,18 @@ def run_coherence_paper_pipeline(
         )
         actions.append(
             {
-                "action": "paper_draft_created",
+                "action": (
+                    "paper_draft_regenerated"
+                    if paper_draft.get("regeneration")
+                    else "paper_draft_created"
+                ),
                 "output_id": paper_draft["output"]["output_id"],
-                "evidence_id": paper_draft["evidence"]["evidence_id"],
+                "evidence_id": (
+                    paper_draft["evidence"]["evidence_id"]
+                    if paper_draft.get("evidence")
+                    else None
+                ),
+                "content_hash": (paper_draft.get("regeneration") or {}).get("content_hash"),
             }
         )
     else:
@@ -153,12 +163,14 @@ def run_coherence_paper_pipeline(
         output_path,
         project_root=project_path,
         paper_output_path=paper_output_path,
+        packet_output_path=packet_output_path,
     )
     actions.append(
         {
             "action": "research_pdf_exported",
             "path": pdf["audit_path"],
             "paper_path": pdf["paper_path"],
+            "packet_path": pdf.get("packet_path"),
         }
     )
     review = research_review_desk(ledger, selected_mission["mission_id"])
@@ -205,6 +217,7 @@ def render_coherence_paper_pipeline_text(result: dict[str, Any]) -> str:
         f"status: {record.get('status')}",
         f"mission: {record.get('mission_title') or 'none'}",
         f"paper: {(record.get('pdf') or {}).get('paper_path') or 'none'}",
+        f"research packet: {(record.get('pdf') or {}).get('packet_path') or 'none'}",
         f"audit bundle: {(record.get('pdf') or {}).get('audit_path') or 'none'}",
         f"review next: {(record.get('review') or {}).get('next_action') or 'none'}",
         "actions:",

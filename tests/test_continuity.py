@@ -1364,6 +1364,7 @@ def test_tv_chat_html_is_simple_default_screen():
     assert "localDocumentUrl" in html
     assert "researchOutputPaths" in html
     assert "paper_output_path" in html
+    assert "packet_output_path" in html
     assert "Advanced Diagnostics" not in html
 
 
@@ -2748,10 +2749,12 @@ def test_mission_claim_map_tracks_hypothesis_support_status(tmp_path):
     assert evidence_id
     assert raw_map["claim_count"] == 1
     assert raw_map["evidence_count"] == 1
-    assert raw_map["entries"][0]["support_status"] == "raw_support"
+    assert raw_map["entries"][0]["support_status"] == "unsupported"
+    assert raw_map["entries"][0]["review_state"] == "unmapped"
+    assert raw_map["entries"][0]["supporting_evidence_ids"] == []
     assert reviewed.review_status.value == "reviewed"
     assert reviewed_map["reviewed_evidence_count"] == 1
-    assert reviewed_map["entries"][0]["support_status"] == "reviewed_support"
+    assert reviewed_map["entries"][0]["support_status"] == "unsupported"
 
 
 def test_mission_claim_map_decomposes_argument_graph_claims(tmp_path):
@@ -2795,6 +2798,8 @@ def test_mission_claim_map_decomposes_argument_graph_claims(tmp_path):
     assert any(entry["claim_type"] == "empirical_subclaim" for entry in entries)
     assert any(entry["counterevidence_count"] > 0 for entry in entries)
     assert all("falsification_condition" in entry for entry in entries)
+    assert all("supporting_evidence_ids" in entry for entry in entries)
+    assert all("counterevidence_ids" in entry for entry in entries)
     assert (
         by_text[
             "Recovery Threshold Index outperforms raw variance as an early warning signal under the locked RTI protocol."
@@ -3410,6 +3415,7 @@ def test_export_research_pdf_writes_mission_packet(tmp_path):
     )
     output_path = tmp_path / "audit_bundle.pdf"
     paper_output_path = tmp_path / "paper.pdf"
+    packet_output_path = tmp_path / "packet.pdf"
 
     result = export_research_pdf(
         ledger,
@@ -3417,11 +3423,13 @@ def test_export_research_pdf_writes_mission_packet(tmp_path):
         mission.mission_id,
         output_path,
         paper_output_path=paper_output_path,
+        packet_output_path=packet_output_path,
     )
 
     assert result["path"] == str(output_path)
     assert result["audit_path"] == str(output_path)
     assert result["paper_path"] == str(paper_output_path)
+    assert result["packet_path"] == str(packet_output_path)
     assert result["mission_title"] == "PDF research mission"
     assert result["output_count"] == 1
     assert result["evidence_count"] >= 2
@@ -3429,7 +3437,10 @@ def test_export_research_pdf_writes_mission_packet(tmp_path):
     assert result["source_note_count"] == 0
     assert output_path.read_bytes().startswith(b"%PDF-1.4")
     assert paper_output_path.read_bytes().startswith(b"%PDF-1.4")
+    assert packet_output_path.read_bytes().startswith(b"%PDF-1.4")
     assert b"Smooth Output Is Not Continuity" in paper_output_path.read_bytes()
+    assert b"Claim-Evidence Matrix" in packet_output_path.read_bytes()
+    assert b"Source Coverage Report" in packet_output_path.read_bytes()
     assert b"Audit Bundle" in output_path.read_bytes()
 
 
