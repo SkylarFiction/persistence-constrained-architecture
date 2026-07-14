@@ -3514,7 +3514,11 @@ def test_research_packet_maps_claims_to_source_notes(tmp_path):
     assert b"source_note_test_identity_output" in packet
     assert b"Evidence-Linked Argument" in paper
     assert b"Manuscript Readiness" in paper
+    assert b"Plain-English status" in paper
+    assert b"Final-paper checklist" in paper
     assert b"Source support:" in paper
+    assert b"relevance:" in paper
+    assert b"score=" not in paper
     assert b"Blocking issues before final-paper status" in paper
 
 

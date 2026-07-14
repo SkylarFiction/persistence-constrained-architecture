@@ -417,6 +417,7 @@ def _scholarly_paper_lines(
             "argument. It uses only source-note links that passed the reader-facing "
             "extraction gate. These links are still raw until reviewed, so they "
             "support cautious drafting, not final claims.",
+            *_evidence_link_summary_lines(reader_claims, source_links),
             *_evidence_linked_argument_lines(reader_claims, source_links),
             "",
             "12. Manuscript Readiness",
@@ -649,17 +650,51 @@ def _evidence_linked_argument_lines(
     ]
 
 
+def _evidence_link_summary_lines(
+    reader_claims: list[dict[str, Any]],
+    source_links: list[dict[str, Any]],
+) -> list[str]:
+    linked_claim_ids = {str(link.get("claim_id") or "") for link in source_links}
+    claim_ids = {
+        str(claim.get("claim_item_id") or claim.get("claim_hash") or "")
+        for claim in reader_claims
+    }
+    return [
+        "",
+        "Evidence link summary:",
+        f"- Reader-facing claims: {len(reader_claims)}",
+        f"- Claims with at least one source note: {len(claim_ids & linked_claim_ids)}",
+        f"- Raw source-note links: {len(source_links)}",
+        "- Interpretation: these links make the draft inspectable, but they are "
+        "not peer review and not final verification.",
+        "",
+    ]
+
+
 def _reader_source_link_sentence(link: dict[str, Any]) -> str:
     source = _short_source_name(str(link.get("source_path") or "unknown source"))
     locator = str(link.get("locator") or "source")
     status = str(link.get("review_status") or "raw")
+    relevance = _reader_relevance_label(link.get("score"))
     summary = str(link.get("summary") or "")
     if len(summary) > 170:
         summary = summary[:167].rsplit(" ", 1)[0] + "..."
     return (
-        f"{source}, {locator}, {status} source note, score {link.get('score')}: "
+        f"{source}, {locator}, {status} source note, {relevance} relevance: "
         f"{summary}"
     )
+
+
+def _reader_relevance_label(score: object) -> str:
+    try:
+        value = float(score)
+    except (TypeError, ValueError):
+        return "unscored"
+    if value >= 0.45:
+        return "strong"
+    if value >= 0.25:
+        return "moderate"
+    return "weak"
 
 
 def _paper_readiness(
@@ -696,8 +731,14 @@ def _paper_readiness(
         status = "review_ready_manuscript"
     elif source_links:
         status = "evidence_linked_draft"
+    plain_status = {
+        "draft_packet": "Structured draft, not a paper yet",
+        "evidence_linked_draft": "Evidence-linked draft, still not final",
+        "review_ready_manuscript": "Ready for human manuscript review",
+    }[status]
     return {
         "status": status,
+        "plain_status": plain_status,
         "reader_claim_count": len(reader_claims),
         "source_link_count": len(source_links),
         "linked_claim_count": len(linked_claim_ids & reader_claim_ids),
@@ -705,6 +746,14 @@ def _paper_readiness(
         "reviewed_evidence_count": reviewed_evidence_count,
         "malformed_note_count": malformed_note_count,
         "blockers": blockers,
+        "what_this_is": (
+            "A governed research manuscript draft with traceable claims, raw "
+            "source-note links, and explicit blockers."
+        ),
+        "what_this_is_not": (
+            "Not a final scientific paper, not a peer-reviewed result, and not a "
+            "claim that Coherence Physics has been proven."
+        ),
         "next_actions": [
             "Review source notes and mark usable evidence as reviewed.",
             "Add direct source-note links for unlinked claims.",
@@ -716,7 +765,10 @@ def _paper_readiness(
 
 def _paper_readiness_lines(readiness: dict[str, Any]) -> list[str]:
     lines = [
-        f"Status: {readiness.get('status')}",
+        f"Plain-English status: {readiness.get('plain_status') or readiness.get('status')}",
+        f"Machine status: {readiness.get('status')}",
+        f"What this is: {readiness.get('what_this_is')}",
+        f"What this is not: {readiness.get('what_this_is_not')}",
         f"Reader-facing claims: {readiness.get('reader_claim_count', 0)}",
         f"Claims with source-note links: {readiness.get('linked_claim_count', 0)}",
         f"Raw source-note links: {readiness.get('source_link_count', 0)}",
@@ -729,9 +781,10 @@ def _paper_readiness_lines(readiness: dict[str, Any]) -> list[str]:
             lines.append(f"- {blocker}")
     else:
         lines.append("No readiness blockers reported by this export.")
-    lines.append("Next actions:")
+    lines.append("Final-paper checklist:")
     for action in readiness.get("next_actions") or []:
         lines.append(f"- {action}")
+    lines.append("- After those steps, regenerate the paper and re-check readiness status.")
     return lines
 
 
