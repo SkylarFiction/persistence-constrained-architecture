@@ -92,6 +92,7 @@ from .coherence_corpus import index_coherence_corpus
 from .coherence_paper_pipeline import run_coherence_paper_pipeline
 from .research_pdf import export_research_pdf
 from .research_review import research_review_desks
+from .source_notes import review_source_note, source_notes_for_mission
 from .reflection_queue import (
     open_tasks_from_reflection,
     resolve_matching_reflection_tasks,
@@ -516,6 +517,24 @@ def _apply_steward_action(
             reason=reason,
         )
         return {"evidence": evidence.to_dict()}
+
+    if action == "review_source_note":
+        note_id = str(payload.get("note_id", "")).strip()
+        status = str(payload.get("status", "reviewed")).strip()
+        if not note_id:
+            raise ValueError("note_id is required")
+        if status not in {"reviewed", "rejected", "stale", "disputed"}:
+            raise ValueError("source note status must be reviewed, rejected, stale, or disputed")
+        review = review_source_note(
+            ledger=ledger,
+            manifest=manifest,
+            note_id=note_id,
+            review_status=status,
+            reviewer=str(payload.get("reviewer", "live_steward")),
+            confidence=payload.get("confidence"),
+            reason=reason,
+        )
+        return {"source_note_review": review.to_dict()}
 
     if action == "mission_onboard":
         mission_id = str(payload.get("mission_id", "")).strip()
@@ -980,6 +999,13 @@ def _status_payload(
         )
         for brief in missions
     }
+    mission_source_notes = {
+        brief["mission"]["mission_id"]: source_notes_for_mission(
+            ledger.events(),
+            brief["mission"]["mission_id"],
+        )
+        for brief in missions
+    }
     mission_claim_map_data = mission_claim_maps(ledger)
     research_review_data = research_review_desks(ledger)
     mission_steps = [
@@ -1071,6 +1097,7 @@ def _status_payload(
         "growth_conflicts": unresolved_conflicts,
         "missions": missions,
         "mission_evidence": mission_evidence,
+        "mission_source_notes": mission_source_notes,
         "mission_claim_maps": mission_claim_map_data,
         "research_review_desks": research_review_data,
         "mission_flows": mission_flows,
@@ -2312,6 +2339,17 @@ def _live_chat_html() -> str:
     <section class="mission-dashboard">
       <div class="mission-controls">
         <div>
+          <h2>Review Source Notes</h2>
+          <div class="item-meta">Accept useful citation cards or reject weak lexical matches before they shape the paper.</div>
+        </div>
+        <button type="button" id="sourceNotesReviewRefresh" class="secondary">Refresh Notes</button>
+      </div>
+      <div id="sourceNotesSummary" class="metrics"></div>
+      <div id="sourceNotesReview" class="queue"></div>
+    </section>
+    <section class="mission-dashboard">
+      <div class="mission-controls">
+        <div>
           <h2>Mission Claim Map</h2>
           <div class="item-meta">Shows whether mission hypotheses have raw, reviewed, disputed, stale, or missing evidence.</div>
         </div>
@@ -2558,6 +2596,8 @@ def _live_chat_html() -> str:
     const activeMissionSelect = document.getElementById('activeMissionSelect');
     const missionEvidenceSummary = document.getElementById('missionEvidenceSummary');
     const missionEvidence = document.getElementById('missionEvidence');
+    const sourceNotesSummary = document.getElementById('sourceNotesSummary');
+    const sourceNotesReview = document.getElementById('sourceNotesReview');
     const missionClaimMapSummary = document.getElementById('missionClaimMapSummary');
     const missionClaimMap = document.getElementById('missionClaimMap');
     const goals = document.getElementById('goals');
@@ -2662,6 +2702,7 @@ def _live_chat_html() -> str:
       renderDailyPlan(status.daily_plan || {});
       renderMissions(status.missions || [], status.mission_flows || {}, status.mission_autonomy || []);
       renderMissionEvidence(status.mission_evidence || {}, missionView.activeMission);
+      renderSourceNotesReview(status.mission_source_notes || {}, status.mission_claim_maps || {}, missionView.activeMission);
       renderMissionClaimMap(status.mission_claim_maps || {}, missionView.activeMission);
       renderResearchReviewDesk(status.research_review_desks || {}, missionView.activeMission);
       renderResearchSandbox(status.research_sandbox || {}, status.research_outputs || [], missionView.activeMission);
@@ -3091,6 +3132,98 @@ def _live_chat_html() -> str:
         }
         row.append(title, meta, linkMeta, actions);
         missionEvidence.appendChild(row);
+      }
+    }
+
+    function renderSourceNotesReview(notesByMission, claimMaps, selectedMission) {
+      sourceNotesSummary.innerHTML = '';
+      sourceNotesReview.innerHTML = '';
+      if (!selectedMission || !selectedMission.mission_id) {
+        empty(sourceNotesReview, 'Select or open a mission before reviewing source notes.');
+        return;
+      }
+      const notes = notesByMission[selectedMission.mission_id] || [];
+      const claimMap = claimMaps[selectedMission.mission_id] || {};
+      const counts = {raw: 0, reviewed: 0, rejected: 0, disputed: 0, stale: 0};
+      for (const note of notes) {
+        const status = note.review_status || 'raw';
+        counts[status] = (counts[status] || 0) + 1;
+      }
+      for (const [label, value] of Object.entries(counts)) {
+        const card = document.createElement('div');
+        card.className = 'metric';
+        card.innerHTML = `<div class="label">${escapeHtml(label)}</div><div class="value">${value}</div>`;
+        sourceNotesSummary.appendChild(card);
+      }
+      const claimEntries = claimMap.entries || [];
+      const claimWords = new Set();
+      for (const entry of claimEntries) {
+        for (const token of String(entry.claim_text || '').toLowerCase().match(/[a-z][a-z0-9]{3,}/g) || []) {
+          claimWords.add(token);
+        }
+      }
+      const claimCandidates = notes.filter(note => (note.note_kind || '') === 'claim_candidate');
+      if (!claimCandidates.length) {
+        empty(sourceNotesReview, 'No claim-candidate source notes yet. Run the paper pipeline or extract source notes first.');
+        return;
+      }
+      const priority = {raw: 0, disputed: 1, stale: 2, reviewed: 3, rejected: 4};
+      const ordered = claimCandidates.slice().sort((a, b) => {
+        const ap = priority[a.review_status || 'raw'] ?? 9;
+        const bp = priority[b.review_status || 'raw'] ?? 9;
+        if (ap !== bp) return ap - bp;
+        return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+      });
+      for (const note of ordered.slice(0, 30)) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        const summary = String(note.summary || '');
+        const tokens = new Set(summary.toLowerCase().match(/[a-z][a-z0-9]{3,}/g) || []);
+        const matched = [...claimWords].filter(word => tokens.has(word)).slice(0, 8);
+        const status = note.review_status || 'raw';
+        const title = document.createElement('div');
+        title.className = 'item-title';
+        title.textContent = `${status} / ${note.title || 'source note'} / ${note.confidence || 'unknown'}`;
+        const meta = document.createElement('div');
+        meta.className = 'item-meta';
+        meta.textContent = `${note.note_id || 'unknown'} / ${note.source_path || 'unknown source'} / ${note.locator || 'source'}`;
+        const body = document.createElement('div');
+        body.className = 'item-meta';
+        body.textContent = summary || 'No summary recorded.';
+        const match = document.createElement('div');
+        match.className = 'item-meta';
+        match.textContent = `Claim-term overlap: ${matched.join(', ') || 'none'}${note.review_reason ? ' / last review: ' + note.review_reason : ''}`;
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        if (['raw', 'disputed', 'stale'].includes(status)) {
+          actions.appendChild(button('Accept Note', {
+            action: 'review_source_note',
+            note_id: note.note_id,
+            status: 'reviewed',
+            confidence: note.confidence || 'medium',
+            reason: 'accepted source note from Review Source Notes panel'
+          }));
+          actions.appendChild(button('Reject Weak Match', {
+            action: 'review_source_note',
+            note_id: note.note_id,
+            status: 'rejected',
+            reason: 'rejected weak lexical source-note match from Review Source Notes panel'
+          }));
+          actions.appendChild(button('Dispute', {
+            action: 'review_source_note',
+            note_id: note.note_id,
+            status: 'disputed',
+            reason: 'disputed source note from Review Source Notes panel'
+          }));
+          actions.appendChild(button('Mark Stale', {
+            action: 'review_source_note',
+            note_id: note.note_id,
+            status: 'stale',
+            reason: 'marked source note stale from Review Source Notes panel'
+          }));
+        }
+        row.append(title, meta, body, match, actions);
+        sourceNotesReview.appendChild(row);
       }
     }
 
@@ -4371,6 +4504,11 @@ def _live_chat_html() -> str:
       activeInboxFilter = 'evidence';
       renderStewardInbox((currentStatus || {}).steward_inbox || []);
       stewardInbox.scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
+
+    document.getElementById('sourceNotesReviewRefresh').addEventListener('click', () => {
+      if (currentStatus) renderStatus(currentStatus);
+      sourceNotesReview.scrollIntoView({behavior: 'smooth', block: 'center'});
     });
 
     document.getElementById('missionClaimMapRefresh').addEventListener('click', () => {

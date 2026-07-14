@@ -1318,6 +1318,11 @@ def test_live_chat_html_contains_mission_first_home():
     assert "Mission Claim Map" in html
     assert "missionClaimMap" in html
     assert "missionClaimMapSummary" in html
+    assert "Review Source Notes" in html
+    assert "sourceNotesReview" in html
+    assert "sourceNotesSummary" in html
+    assert "review_source_note" in html
+    assert "Reject Weak Match" in html
     assert "Research Review Desk" in html
     assert "researchReviewSummary" in html
     assert "Research Coherence Physics and Save a PDF" in html
@@ -1389,7 +1394,9 @@ def test_timestamped_research_pdf_is_mirrored_to_stable_name(tmp_path):
 
 def test_live_status_includes_tool_router_state(tmp_path):
     from pca.live_chat import _status_payload
+    from pca.source_notes import SourceNoteRecord
 
+    import hashlib
     manifest = load_manifest()
     ledger = ContinuityLedger(tmp_path / "continuity.log")
     mission = open_mission(
@@ -1404,6 +1411,26 @@ def test_live_status_includes_tool_router_state(tmp_path):
         mission.mission_id,
         reason="status claim map setup",
     )
+    note = SourceNoteRecord(
+        note_id="source_note_live_status",
+        identity_id=manifest.system_id,
+        mission_id=mission.mission_id,
+        source_path="coherence /status-source.pdf",
+        theme="identity_physics",
+        title="Status Source",
+        note_kind="claim_candidate",
+        summary="Fluent output can mask memory and authority changes.",
+        locator="page 1",
+        confidence="medium",
+        review_status="raw",
+        summary_hash=hashlib.sha256(b"live-status-source-note").hexdigest(),
+        excerpt_hash=hashlib.sha256(b"live-status-excerpt").hexdigest(),
+        excerpt_length=64,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        reason="status source note fixture",
+        source_content_sha256="status-source-hash",
+    )
+    ledger.append("source_note.extracted", manifest.system_id, note.to_dict())
 
     status = _status_payload(ledger, manifest)
 
@@ -1411,6 +1438,8 @@ def test_live_status_includes_tool_router_state(tmp_path):
     assert status["mission_claim_maps"][mission.mission_id]["evidence_count"] == 1
     assert status["research_review_desks"][mission.mission_id]["ready"] is True
     assert status["research_review_desks"][mission.mission_id]["cards"]["claims"]["value"] == 1
+    assert status["mission_source_notes"][mission.mission_id][0]["note_id"] == "source_note_live_status"
+    assert status["mission_source_notes"][mission.mission_id][0]["review_status"] == "raw"
     assert status["tools"]["read_file"]["risk"] == "low"
     assert status["tools"]["read_file"]["safety_profile"]["read_only"] is True
     assert status["tools"]["run_check_all"]["requires_approval"] is True
@@ -2075,6 +2104,58 @@ def test_live_steward_action_reviews_mission_evidence_directly(tmp_path):
 
     assert reviewed["evidence"]["review_status"] == "reviewed"
     assert linked[0]["evidence"]["review_status"] == "reviewed"
+
+
+def test_live_steward_action_reviews_source_note_directly(tmp_path):
+    import hashlib
+
+    from pca.source_notes import SourceNoteRecord, source_notes_for_mission
+
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Source note live review mission",
+        problem_statement="Source-note review should be available from the live app.",
+    )
+    note = SourceNoteRecord(
+        note_id="source_note_live_review",
+        identity_id=manifest.system_id,
+        mission_id=mission.mission_id,
+        source_path="coherence /live-review.pdf",
+        theme="identity_physics",
+        title="Live Review Source",
+        note_kind="claim_candidate",
+        summary="A weak lexical match should be rejectable from the app.",
+        locator="page 1",
+        confidence="medium",
+        review_status="raw",
+        summary_hash=hashlib.sha256(b"live-review-source-note").hexdigest(),
+        excerpt_hash=hashlib.sha256(b"live-review-excerpt").hexdigest(),
+        excerpt_length=64,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        reason="live review source note fixture",
+        source_content_sha256="live-review-source-hash",
+    )
+    ledger.append("source_note.extracted", manifest.system_id, note.to_dict())
+
+    result = _apply_steward_action(
+        ledger,
+        manifest,
+        {
+            "action": "review_source_note",
+            "note_id": note.note_id,
+            "status": "rejected",
+            "reason": "rejected weak match from live app test",
+        },
+    )
+    notes = source_notes_for_mission(ledger.events(), mission.mission_id)
+
+    assert result["source_note_review"]["review_status"] == "rejected"
+    assert result["source_note_review"]["note_id"] == note.note_id
+    assert notes[0]["review_status"] == "rejected"
+    assert notes[0]["review_reason"] == "rejected weak match from live app test"
 
 
 def test_live_steward_action_runs_governed_tool(tmp_path):
