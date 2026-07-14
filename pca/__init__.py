@@ -331,6 +331,7 @@ from .research_review import (
     research_review_desk,
     research_review_desks,
 )
+from .research_writer import generate_llama_research_draft, latest_research_writer_draft
 from .coherence_corpus import (
     coherence_corpus_index_records_from_events,
     discover_coherence_sources,
@@ -661,6 +662,7 @@ __all__ = [
     "find_reflection_task",
     "find_steward_inbox_item",
     "followups_from_events",
+    "generate_llama_research_draft",
     "goal_records_from_events",
     "growth_records_from_events",
     "growth_review_records_from_events",
@@ -676,6 +678,7 @@ __all__ = [
     "link_evidence",
     "link_goal_mission",
     "latest_session_id",
+    "latest_research_writer_draft",
     "latest_auto_daily_research_loop",
     "load_anchor_records",
     "load_policy_directory",

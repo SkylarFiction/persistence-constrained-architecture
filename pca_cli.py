@@ -364,6 +364,16 @@ def main() -> int:
     coherence_paper_parser.add_argument("--knowledge-hub", action="store_true")
     coherence_paper_parser.add_argument("--force", action="store_true")
     coherence_paper_parser.add_argument(
+        "--llama-writer",
+        action="store_true",
+        help="Use the configured local model to draft a governed manuscript synthesis.",
+    )
+    coherence_paper_parser.add_argument(
+        "--writer-model-mode",
+        default="local_ollama",
+        help="Model mode for --llama-writer. Defaults to local_ollama.",
+    )
+    coherence_paper_parser.add_argument(
         "--output",
         default="../knowledge_hub/generated/research_papers/coherence_audit_bundle.pdf",
         help="Audit bundle path (complete, unfiltered machine record).",
@@ -1123,6 +1133,8 @@ def main() -> int:
             output_path=args.output,
             paper_output_path=args.paper_output,
             packet_output_path=args.packet_output,
+            llama_writer=args.llama_writer,
+            writer_model_mode=args.writer_model_mode,
             reason="manual CLI Coherence Physics paper pipeline",
         )
         if args.json:

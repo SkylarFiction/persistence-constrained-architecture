@@ -16,6 +16,7 @@ from .research_autopilot import run_research_autopilot
 from .research_pdf import export_research_pdf
 from .research_review import research_review_desk
 from .research_sandbox import create_research_output, research_outputs_from_events
+from .research_writer import generate_llama_research_draft
 from .source_notes import extract_source_notes_for_mission
 
 
@@ -31,6 +32,8 @@ def run_coherence_paper_pipeline(
     output_path: str | Path = "../knowledge_hub/generated/research_papers/coherence_audit_bundle.pdf",
     paper_output_path: str | Path = "../knowledge_hub/generated/research_papers/coherence_paper.pdf",
     packet_output_path: str | Path = "../knowledge_hub/generated/research_papers/coherence_research_packet.pdf",
+    llama_writer: bool = False,
+    writer_model_mode: str = "local_ollama",
     reason: str = "",
 ) -> dict[str, Any]:
     project_path = Path(project_root).resolve()
@@ -156,6 +159,27 @@ def run_coherence_paper_pipeline(
     else:
         actions.append({"action": "paper_draft_skipped", "reason": "existing paper draft"})
 
+    writer_draft = None
+    if llama_writer:
+        writer_draft = generate_llama_research_draft(
+            ledger,
+            manifest,
+            selected_mission["mission_id"],
+            model_mode=writer_model_mode,
+            reason=reason or "coherence paper pipeline generated local manuscript synthesis",
+        )
+        actions.append(
+            {
+                "action": "llama_research_writer",
+                "status": writer_draft.get("status"),
+                "provider": writer_draft.get("provider"),
+                "model": writer_draft.get("model"),
+                "draft_hash": writer_draft.get("draft_hash"),
+            }
+        )
+    else:
+        actions.append({"action": "llama_research_writer_skipped"})
+
     pdf = export_research_pdf(
         ledger,
         manifest,
@@ -190,6 +214,7 @@ def run_coherence_paper_pipeline(
         review=review,
         reason=reason,
         claim_map=claim_map,
+        writer_draft=writer_draft,
     )
     return {
         "record": record,
@@ -197,6 +222,7 @@ def run_coherence_paper_pipeline(
         "source_notes": source_notes,
         "autopilot": autopilot,
         "paper_draft": paper_draft,
+        "writer_draft": writer_draft,
         "pdf": pdf,
         "review": review,
     }
@@ -248,6 +274,7 @@ def _record_pipeline(
     review: dict[str, Any] | None,
     reason: str = "",
     claim_map: dict[str, Any] | None = None,
+    writer_draft: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     record = {
         "pipeline_id": f"coherence_paper_pipeline_{uuid.uuid4()}",
@@ -261,6 +288,7 @@ def _record_pipeline(
         "source_note_summary": _source_note_summary(source_notes),
         "autopilot_status": (autopilot.get("record") or {}).get("status") if autopilot else None,
         "paper_draft_output_id": ((paper_draft or {}).get("output") or {}).get("output_id"),
+        "writer_draft": _writer_draft_summary(writer_draft),
         "pdf": pdf,
         "review": {
             "next_action": (review or {}).get("next_action"),
@@ -371,3 +399,16 @@ def _claim_map_summary(claim_map: dict[str, Any] | None) -> str:
         f"{claim_map.get('raw_evidence_count', 0)} raw evidence, "
         f"{claim_map.get('reviewed_evidence_count', 0)} reviewed evidence"
     )
+
+
+def _writer_draft_summary(writer_draft: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not writer_draft:
+        return None
+    return {
+        "status": writer_draft.get("status"),
+        "provider": writer_draft.get("provider"),
+        "model": writer_draft.get("model"),
+        "draft_hash": writer_draft.get("draft_hash"),
+        "response_length": writer_draft.get("response_length"),
+        "estimated_cost_usd": writer_draft.get("estimated_cost_usd"),
+    }

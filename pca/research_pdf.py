@@ -20,6 +20,7 @@ from .research_sandbox import (
     research_output_regenerations_from_events,
     research_outputs_from_events,
 )
+from .research_writer import latest_research_writer_draft
 from .source_notes import source_notes_for_mission
 
 
@@ -77,6 +78,7 @@ def export_research_pdf(
     paper_path.parent.mkdir(parents=True, exist_ok=True)
     packet_path.parent.mkdir(parents=True, exist_ok=True)
     argument_graph = mission_argument_graph(ledger, mission_id)
+    writer_draft = latest_research_writer_draft(ledger.events(), mission_id)
     reader_claims = _reader_facing_claim_entries(claim_map)
     source_links = claim_source_links(reader_claims, source_notes)
     source_coverage = _source_coverage_rows(corpus_sources, source_notes, source_links)
@@ -97,6 +99,7 @@ def export_research_pdf(
         paper_readiness=paper_readiness,
         corpus_sources=corpus_sources,
         source_notes=source_notes,
+        writer_draft=writer_draft,
         falsification_verdict=falsification_lab_verdict(workspace_root),
         argument_graph=argument_graph,
         research_packet_path=str(packet_path),
@@ -153,6 +156,7 @@ def export_research_pdf(
         "claim_source_links": source_links,
         "paper_readiness": paper_readiness,
         "source_coverage": source_coverage,
+        "research_writer": writer_draft,
         "duplicate_output_regenerations": len(regenerations),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "governance": "export only; does not accept claims, evidence, memory, or mission outcomes",
@@ -167,6 +171,7 @@ def _scholarly_paper_lines(
     paper_readiness: dict[str, Any],
     corpus_sources: list[dict[str, Any]],
     source_notes: list[dict[str, Any]],
+    writer_draft: dict[str, Any] | None,
     falsification_verdict: dict[str, Any] | None,
     argument_graph: dict[str, Any],
     research_packet_path: str,
@@ -422,13 +427,16 @@ def _scholarly_paper_lines(
             "",
             "12. Manuscript Readiness",
             *_paper_readiness_lines(paper_readiness),
+            "",
+            "13. Local Model Manuscript Synthesis",
+            *_writer_draft_lines(writer_draft),
         ]
     )
     source_findings = _source_note_findings(source_notes)
     lines.extend(
         [
             "",
-            "13. Findings",
+            "14. Findings",
             "The findings below are drawn only from claim-candidate source notes "
             "that passed the source relevance gate, not from registration stubs "
             "and not from generic claims about the archive. Section 9 lists all "
@@ -437,14 +445,14 @@ def _scholarly_paper_lines(
             *source_findings,
             *_falsification_finding_lines(falsification_verdict, len(source_findings) + 1),
             "",
-            "14. Argument Structure",
+            "15. Argument Structure",
             "Every line below names the typed object it came from (claim, premise, "
             "implementation fact, counterevidence, inference, test, verdict, or "
             "limitation) so the paragraph can be traced back to what actually "
             "supports it, rather than reading as prewritten prose.",
             *_argument_graph_lines(argument_graph),
             "",
-            "15. Discussion",
+            "16. Discussion",
             "The useful conclusion is cautious: Coherence Physics should be advanced "
             "as a research framework and engineering program before it is presented "
             "as a completed physical theory. Its current strength is the repeatable "
@@ -452,26 +460,26 @@ def _scholarly_paper_lines(
             "actually been put under adversarial test, reporting the result even when "
             "it is mixed rather than favorable.",
             "",
-            "16. Proposed Paper Direction",
+            "17. Proposed Paper Direction",
             "A strong first paper should focus on the narrow, defensible claim: smooth "
             "output is not proof of continuity. From there, PCA can be shown as a "
             "working architecture that records what changed, what evidence exists, "
             "what remains under review, and what claims the system is allowed to make.",
             "",
-            "17. Limitations",
+            "18. Limitations",
             "- This draft is generated from local governed research outputs.",
             "- Raw evidence has not been accepted as reviewed evidence unless marked so.",
             "- The document does not claim proof of consciousness, AGI, personhood, or final physics.",
             "- Source registration is not the same as source interpretation.",
             "",
-            "18. Conclusion",
+            "19. Conclusion",
             "The next best version of Coherence Physics is a paper series built from "
             "reviewed source evidence, explicit claim maps, and falsifiable or "
             "inspectable examples. Lucien can help generate these drafts, but the "
             "system should keep the same rule at every stage: no claim becomes final "
             "without evidence review.",
             "",
-            "19. Research Agenda",
+            "20. Research Agenda",
             "- Review indexed source files and mark useful evidence as reviewed.",
             "- Choose one paper track: PCA/identity continuity, CSM, cognitive physics, or cosmology.",
             "- Replace provisional findings with source-backed claims.",
@@ -785,6 +793,39 @@ def _paper_readiness_lines(readiness: dict[str, Any]) -> list[str]:
     for action in readiness.get("next_actions") or []:
         lines.append(f"- {action}")
     lines.append("- After those steps, regenerate the paper and re-check readiness status.")
+    return lines
+
+
+def _writer_draft_lines(writer_draft: dict[str, Any] | None) -> list[str]:
+    if not writer_draft:
+        return [
+            "No local-model manuscript synthesis has been generated for this export.",
+            "Run the paper pipeline with --llama-writer to ask the local model to "
+            "draft a clearer scholarly synthesis from the governed claim/source map.",
+        ]
+    provider = writer_draft.get("provider") or "unknown"
+    model = writer_draft.get("model") or "unknown"
+    status = writer_draft.get("status") or "unknown"
+    lines = [
+        f"Writer status: {status}",
+        f"Writer brain: {provider} / {model}",
+        "Governance note: this section is AI-assisted prose generated from the "
+        "current governed claim/source map. It does not review evidence, certify "
+        "claims, or replace the manuscript readiness checklist above.",
+    ]
+    if status != "generated":
+        error = writer_draft.get("error") or {}
+        message = error.get("message") if isinstance(error, dict) else ""
+        lines.append(
+            "Writer attempt did not produce a synthesis"
+            + (f": {message}" if message else ".")
+        )
+        return lines
+    draft_text = str(writer_draft.get("draft_text") or "").strip()
+    if not draft_text:
+        lines.append("The writer produced an empty synthesis.")
+        return lines
+    lines.extend(["", *draft_text.splitlines()])
     return lines
 
 

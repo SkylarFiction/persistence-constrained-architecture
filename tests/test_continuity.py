@@ -38,6 +38,7 @@ from pca import (
     MissionStatus,
     ModelAdapterError,
     ModelMessage,
+    ModelResponse,
     OllamaAdapter,
     OpenAICompatibleAdapter,
     OverrideEngine,
@@ -3819,6 +3820,91 @@ def test_coherence_paper_pipeline_finishes_with_pdf_packet(tmp_path):
     assert b"Source-Derived Notes" in paper_output_path.read_bytes()
     assert b"Formal Criteria for Governed Continuity" in paper_output_path.read_bytes()
     assert b"Argument Structure" in paper_output_path.read_bytes()
+
+
+def test_coherence_paper_pipeline_can_include_local_model_writer(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "Coherence_Physics_Source.md").write_text(
+        (
+            "Smooth output is not continuity. A system can preserve style while "
+            "memory, authority, or lineage changes under the surface."
+        ),
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "coherence_audit_bundle.pdf"
+    paper_output_path = tmp_path / "coherence_paper.pdf"
+    packet_output_path = tmp_path / "coherence_research_packet.pdf"
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "message": {
+                        "content": (
+                            "Argument-driven abstract\n"
+                            "This local synthesis argues that fluent output can "
+                            "mask identity discontinuity.\n\n"
+                            "Core contribution\n"
+                            "PCA turns continuity into a governed claim."
+                        )
+                    },
+                    "model": "test-local-model",
+                    "done": True,
+                    "prompt_eval_count": 50,
+                    "eval_count": 40,
+                }
+            ).encode("utf-8")
+
+    def fake_urlopen(req, timeout=0):
+        return FakeResponse()
+
+    old_urlopen = model_adapter_module.request.urlopen
+    old_provider = os.environ.get("LUCIEN_LOCAL_PROVIDER")
+    old_model = os.environ.get("LUCIEN_OLLAMA_MODEL")
+    model_adapter_module.request.urlopen = fake_urlopen
+    os.environ["LUCIEN_LOCAL_PROVIDER"] = "ollama"
+    os.environ["LUCIEN_OLLAMA_MODEL"] = "test-local-model"
+    try:
+        result = run_coherence_paper_pipeline(
+            ledger,
+            manifest,
+            project_root=project_root,
+            corpus_roots=["corpus"],
+            corpus_limit=2,
+            force=True,
+            output_path=output_path,
+            paper_output_path=paper_output_path,
+            packet_output_path=packet_output_path,
+            llama_writer=True,
+            writer_model_mode="local_ollama",
+        )
+    finally:
+        model_adapter_module.request.urlopen = old_urlopen
+        _restore_env("LUCIEN_LOCAL_PROVIDER", old_provider)
+        _restore_env("LUCIEN_OLLAMA_MODEL", old_model)
+
+    writer = result["writer_draft"]
+    assert writer["status"] == "generated"
+    assert writer["provider"] == "ollama"
+    assert writer["model"] == "test-local-model"
+    assert writer["estimated_cost_usd"] == 0.0
+    assert result["record"]["writer_draft"]["draft_hash"] == writer["draft_hash"]
+    paper = paper_output_path.read_bytes()
+    assert b"Local Model Manuscript Synthesis" in paper
+    assert b"Writer brain: ollama / test-local-model" in paper
+    assert b"PCA turns continuity into a governed claim" in paper
+    assert b"does not review evidence" in paper
 
 
 def test_argument_graph_seed_is_idempotent_and_structured(tmp_path):
