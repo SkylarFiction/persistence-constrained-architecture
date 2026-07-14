@@ -111,6 +111,7 @@ from pca import (
     research_review_desk,
     seed_continuity_argument_graph,
     source_note_records_from_events,
+    source_note_review_records_from_events,
     run_coherence_paper_pipeline,
     execute_approved_autonomy_actions,
     execute_autonomy_action,
@@ -192,6 +193,7 @@ from pca import (
     resolve_matching_reflection_tasks,
     review_evidence,
     review_autonomy_action,
+    review_source_note,
     link_checkpoint_to_mission,
     link_evidence,
     link_goal_mission,
@@ -3598,6 +3600,85 @@ def test_claim_source_links_preserve_tentative_matches_without_overclaiming():
     assert links[0]["score"] < 0.25
 
 
+def test_source_note_review_updates_status_and_can_reject_links(tmp_path):
+    import hashlib
+    from datetime import datetime, timezone
+
+    from pca.claim_source_links import claim_source_links
+    from pca.source_notes import SourceNoteRecord, source_notes_for_mission
+
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Source note review mission",
+        problem_statement="Review source notes before allowing them to support claims.",
+    )
+    note = SourceNoteRecord(
+        note_id="source_note_review_target",
+        identity_id=manifest.system_id,
+        mission_id=mission.mission_id,
+        source_path="coherence /test_identity.pdf",
+        theme="identity_physics",
+        title="Test Identity Source",
+        note_kind="claim_candidate",
+        summary=(
+            "Fluent output can continue while identity state, memory, and authority "
+            "change underneath."
+        ),
+        locator="page 1",
+        confidence="medium",
+        review_status="raw",
+        summary_hash=hashlib.sha256(b"source-note-review").hexdigest(),
+        excerpt_hash=hashlib.sha256(b"excerpt-review").hexdigest(),
+        excerpt_length=128,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        reason="test source note review",
+        source_content_sha256="test-source-hash",
+    )
+    ledger.append("source_note.extracted", manifest.system_id, note.to_dict())
+    claims = [
+        {
+            "claim_item_id": "claim_output_continuity",
+            "claim_text": "Fluent output is insufficient evidence of identity continuity.",
+            "claim_type": "continuity_claim",
+        }
+    ]
+
+    reviewed = review_source_note(
+        ledger,
+        manifest,
+        note.note_id,
+        "reviewed",
+        reviewer="test_steward",
+        confidence="high",
+        reason="verified against fixture source",
+    )
+    notes = source_notes_for_mission(ledger.events(), mission.mission_id)
+    links_after_review = claim_source_links(claims, notes)
+    rejected = review_source_note(
+        ledger,
+        manifest,
+        note.note_id,
+        "rejected",
+        reviewer="test_steward",
+        reason="lexical overlap without real support",
+    )
+    notes_after_reject = source_notes_for_mission(ledger.events(), mission.mission_id)
+    links_after_reject = claim_source_links(claims, notes_after_reject)
+    reviews = source_note_review_records_from_events(ledger.events(), note.note_id)
+
+    assert reviewed.review_status == "reviewed"
+    assert rejected.review_status == "rejected"
+    assert notes[0]["review_status"] == "reviewed"
+    assert notes[0]["reviewer"] == "test_steward"
+    assert links_after_review
+    assert notes_after_reject[0]["review_status"] == "rejected"
+    assert links_after_reject == []
+    assert [review.review_status for review in reviews] == ["reviewed", "rejected"]
+
+
 def test_research_pdf_excludes_damaged_source_notes_from_reader_paper():
     from pca.research_pdf import (
         _reader_facing_extraction_quality,
@@ -3978,7 +4059,8 @@ def test_coherence_paper_pipeline_can_include_local_model_writer(tmp_path):
     paper = paper_output_path.read_bytes()
     assert b"Local Model Manuscript Synthesis" in paper
     assert b"Writer brain: ollama / test-local-model" in paper
-    assert b"PCA turns continuity into a governed claim" in paper
+    assert b"Reader-facing draft withheld" in paper
+    assert b"PCA turns continuity into a governed claim" not in paper
     assert b"does not review evidence" in paper
 
 

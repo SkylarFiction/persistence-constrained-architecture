@@ -831,6 +831,18 @@ def _writer_draft_lines(writer_draft: dict[str, Any] | None) -> list[str]:
             + (f": {message}" if message else ".")
         )
         return lines
+    if str(writer_draft.get("review_status") or "raw") != "reviewed":
+        lines.extend(
+            [
+                "Reader-facing draft withheld: the local-model synthesis has not "
+                "been reviewed. It remains useful as an internal writing aid, but "
+                "the clean manuscript does not print it as paper prose.",
+                f"Draft hash: {writer_draft.get('draft_hash') or 'none'}",
+                "Next action: review or rewrite model prose before promoting it "
+                "into the reader-facing manuscript.",
+            ]
+        )
+        return lines
     draft_text = str(writer_draft.get("draft_text") or "").strip()
     if not draft_text:
         lines.append("The writer produced an empty synthesis.")

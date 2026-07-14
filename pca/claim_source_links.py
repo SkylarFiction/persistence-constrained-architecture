@@ -159,6 +159,7 @@ def claim_source_links(
         for note in source_notes
         if note.get("note_kind") == "claim_candidate"
         and str(note.get("note_quality") or "reader_ready") == "reader_ready"
+        and str(note.get("review_status") or "raw") not in {"rejected", "disputed", "stale"}
     ]
     links: list[ClaimSourceLink] = []
     for claim in claim_entries:

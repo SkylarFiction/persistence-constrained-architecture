@@ -123,6 +123,7 @@ from pca import (
     review_growth,
     review_skill_candidate,
     review_evidence,
+    review_source_note,
     link_evidence,
     link_goal_mission,
     safe_load_policy_directory,
@@ -543,6 +544,17 @@ def main() -> int:
     evidence_review_parser.add_argument("--reviewer", default="steward")
     evidence_review_parser.add_argument("--confidence")
     evidence_review_parser.add_argument("--reason", required=True)
+
+    source_note_review_parser = subparsers.add_parser("source-note-review")
+    source_note_review_parser.add_argument("note_id")
+    source_note_review_group = source_note_review_parser.add_mutually_exclusive_group(required=True)
+    source_note_review_group.add_argument("--accept", action="store_true")
+    source_note_review_group.add_argument("--dispute", action="store_true")
+    source_note_review_group.add_argument("--stale", action="store_true")
+    source_note_review_group.add_argument("--reject", action="store_true")
+    source_note_review_parser.add_argument("--reviewer", default="steward")
+    source_note_review_parser.add_argument("--confidence")
+    source_note_review_parser.add_argument("--reason", required=True)
 
     evidence_claim_parser = subparsers.add_parser("evidence-claim")
     evidence_claim_parser.add_argument("--statement", required=True)
@@ -1756,6 +1768,30 @@ def main() -> int:
         except ValueError as exc:
             raise SystemExit(str(exc))
         print_json({"evidence": record.to_dict()})
+        return 0
+
+    if args.command == "source-note-review":
+        if args.accept:
+            status = "reviewed"
+        elif args.dispute:
+            status = "disputed"
+        elif args.stale:
+            status = "stale"
+        else:
+            status = "rejected"
+        try:
+            record = review_source_note(
+                ledger=ledger,
+                manifest=manifest,
+                note_id=args.note_id,
+                review_status=status,
+                reviewer=args.reviewer,
+                confidence=args.confidence,
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"source_note_review": record.to_dict()})
         return 0
 
     if args.command == "evidence-claim":

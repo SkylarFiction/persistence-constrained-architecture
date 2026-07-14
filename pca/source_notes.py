@@ -55,6 +55,58 @@ class SourceNoteRecord:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class SourceNoteReviewRecord:
+    review_id: str
+    identity_id: str
+    note_id: str
+    review_status: str
+    reviewer: str
+    confidence: str | None
+    created_at: str
+    reason: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+SOURCE_NOTE_REVIEW_STATUSES = {"raw", "reviewed", "rejected", "disputed", "stale"}
+
+
+def review_source_note(
+    ledger: ContinuityLedger,
+    manifest: IdentityManifest,
+    note_id: str,
+    review_status: str,
+    reviewer: str = "human_steward",
+    confidence: str | None = None,
+    reason: str = "",
+) -> SourceNoteReviewRecord:
+    status = str(review_status).strip().lower()
+    if status not in SOURCE_NOTE_REVIEW_STATUSES:
+        raise ValueError(f"Unsupported source note review status: {review_status}")
+    note = require_source_note(ledger.events(), note_id)
+    record = SourceNoteReviewRecord(
+        review_id=f"source_note_review_{uuid.uuid4()}",
+        identity_id=manifest.system_id,
+        note_id=note_id,
+        review_status=status,
+        reviewer=reviewer,
+        confidence=confidence,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        reason=reason or f"source note marked {status}",
+    )
+    ledger.append("source_note.reviewed", manifest.system_id, record.to_dict())
+    return record
+
+
+def require_source_note(events: list[ContinuityEvent], note_id: str) -> SourceNoteRecord:
+    for record in source_note_records_from_events(events):
+        if record.note_id == note_id:
+            return record
+    raise ValueError(f"Source note not found: {note_id}")
+
+
 def extract_source_notes_for_mission(
     ledger: ContinuityLedger,
     manifest: IdentityManifest,
@@ -165,11 +217,41 @@ def source_note_records_from_events(
     return records
 
 
+def source_note_review_records_from_events(
+    events: list[ContinuityEvent],
+    note_id: str | None = None,
+) -> list[SourceNoteReviewRecord]:
+    records: list[SourceNoteReviewRecord] = []
+    for event in events:
+        if event.event_type != "source_note.reviewed":
+            continue
+        payload = event.payload
+        if note_id and payload.get("note_id") != note_id:
+            continue
+        records.append(SourceNoteReviewRecord(**payload))
+    return records
+
+
 def source_notes_for_mission(
     events: list[ContinuityEvent],
     mission_id: str,
 ) -> list[dict[str, Any]]:
-    return [record.to_dict() for record in source_note_records_from_events(events, mission_id)]
+    latest_reviews: dict[str, SourceNoteReviewRecord] = {}
+    for review in source_note_review_records_from_events(events):
+        latest_reviews[review.note_id] = review
+    notes: list[dict[str, Any]] = []
+    for record in source_note_records_from_events(events, mission_id):
+        note = record.to_dict()
+        review = latest_reviews.get(record.note_id)
+        if review:
+            note["review_status"] = review.review_status
+            note["reviewer"] = review.reviewer
+            note["review_reason"] = review.reason
+            note["reviewed_at"] = review.created_at
+            if review.confidence:
+                note["confidence"] = review.confidence
+        notes.append(note)
+    return notes
 
 
 def render_source_notes_text(result: dict[str, Any]) -> str:

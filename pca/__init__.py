@@ -357,6 +357,8 @@ from .argument_graph import (
 from .source_notes import (
     extract_source_notes_for_mission,
     render_source_notes_text,
+    review_source_note,
+    source_note_review_records_from_events,
     source_note_records_from_events,
     source_notes_for_mission,
 )
@@ -748,6 +750,7 @@ __all__ = [
     "review_growth",
     "review_skill_candidate",
     "review_evidence",
+    "review_source_note",
     "review_autonomy_action",
     "update_reflection_task",
     "update_goal_status",
@@ -782,6 +785,7 @@ __all__ = [
     "skill_candidates_from_events",
     "skill_suggestions_for_mission",
     "source_note_records_from_events",
+    "source_note_review_records_from_events",
     "source_notes_for_mission",
     "start_chat_session",
     "start_mission_step",
