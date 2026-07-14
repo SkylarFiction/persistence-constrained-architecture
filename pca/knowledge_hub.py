@@ -105,6 +105,7 @@ class KnowledgeHubSourceRecord:
     content_sha256: str
     title: str
     topic: str
+    mtime_ns: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -115,6 +116,7 @@ class KnowledgeHubSourceRecord:
             "content_sha256": self.content_sha256,
             "title": self.title,
             "topic": self.topic,
+            "mtime_ns": self.mtime_ns,
         }
 
     @classmethod
@@ -127,6 +129,7 @@ class KnowledgeHubSourceRecord:
             content_sha256=str(payload["content_sha256"]),
             title=str(payload["title"]),
             topic=str(payload["topic"]),
+            mtime_ns=int(payload.get("mtime_ns", 0)),
         )
 
 
@@ -145,11 +148,11 @@ def index_knowledge_hub(
     research steps can choose relevant evidence deliberately.
     """
     workspace_root = Path(project_root).resolve().parent
-    discovered = discover_knowledge_hub_sources(workspace_root, limit=limit, topic=topic)
-    existing_source_ids = {
-        source.source_id
-        for source in knowledge_hub_sources_from_events(ledger.events())
-    }
+    previous_sources = knowledge_hub_sources_from_events(ledger.events())
+    discovered = discover_knowledge_hub_sources(
+        workspace_root, limit=limit, topic=topic, previous_sources=previous_sources
+    )
+    existing_source_ids = {source.source_id for source in previous_sources}
     new_sources = [source for source in discovered if source.source_id not in existing_source_ids]
     reused_sources = [source for source in discovered if source.source_id in existing_source_ids]
     record = {
@@ -178,8 +181,17 @@ def discover_knowledge_hub_sources(
     workspace_root: str | Path,
     limit: int = 250,
     topic: str | None = None,
+    previous_sources: list[KnowledgeHubSourceRecord] | None = None,
 ) -> list[KnowledgeHubSourceRecord]:
     workspace = Path(workspace_root).resolve()
+    # Hashing the full content of every candidate file is the dominant cost of
+    # indexing (SHA-256 over a few hundred PDFs/books can take tens of
+    # seconds) and was previously done unconditionally on every run, even
+    # when nothing on disk had changed. Cheap stat() metadata (size + mtime)
+    # is enough to tell an unchanged file from a changed one in the common
+    # case, so a file whose size and mtime still match the last indexed
+    # record reuses that record's hash instead of re-reading the file.
+    previous_by_path = {record.relative_path: record for record in previous_sources or []}
     candidates: list[KnowledgeHubSourceRecord] = []
     for current_root, dir_names, file_names in os.walk(workspace):
         root_path = Path(current_root)
@@ -201,17 +213,26 @@ def discover_knowledge_hub_sources(
             source_topic = classify_knowledge_hub_source(relative_path)
             if topic and source_topic != topic:
                 continue
-            size_bytes = path.stat().st_size
-            content_sha256 = _file_sha256(path)
+            stat = path.stat()
+            previous = previous_by_path.get(relative_path)
+            if (
+                previous is not None
+                and previous.size_bytes == stat.st_size
+                and previous.mtime_ns == stat.st_mtime_ns
+            ):
+                content_sha256 = previous.content_sha256
+            else:
+                content_sha256 = _file_sha256(path)
             candidates.append(
                 KnowledgeHubSourceRecord(
                     source_id=_source_id(relative_path, content_sha256),
                     relative_path=relative_path,
                     suffix=suffix,
-                    size_bytes=size_bytes,
+                    size_bytes=stat.st_size,
                     content_sha256=content_sha256,
                     title=_title_from_path(path),
                     topic=source_topic,
+                    mtime_ns=stat.st_mtime_ns,
                 )
             )
         if len(candidates) >= limit:

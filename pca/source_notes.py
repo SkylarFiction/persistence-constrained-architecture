@@ -49,6 +49,7 @@ class SourceNoteRecord:
     excerpt_length: int
     created_at: str
     reason: str
+    source_content_sha256: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -81,11 +82,29 @@ def extract_source_notes_for_mission(
     existing_hashes = {
         record.summary_hash for record in source_note_records_from_events(ledger.events())
     }
+    # Reading and parsing a PDF's full text (pypdf walking every content
+    # stream/font/CMap) is the dominant cost of this function -- profiling a
+    # real run showed it accounting for over 90% of total pipeline runtime --
+    # and it was previously repeated in full on every single run, even for
+    # sources whose notes were already extracted and unchanged. A source
+    # already registered as "reused" (not newly indexed) by corpus indexing
+    # is confirmed unchanged by content hash there, so if it already has any
+    # notes recorded for this mission, re-reading and re-parsing it here is
+    # pure waste: skip straight to reusing the existing notes.
+    existing_notes_by_path: dict[str, list[dict[str, Any]]] = {}
+    for record in source_note_records_from_events(ledger.events(), selected_mission_id):
+        key = (record.source_path, record.source_content_sha256)
+        existing_notes_by_path.setdefault("|".join(key), []).append(record.to_dict())
     created: list[dict[str, Any]] = []
     reused: list[dict[str, Any]] = []
     entries: list[tuple[str, str, dict[str, Any]]] = []
     for source in sources:
         path_text = str(source.get("path") or "")
+        content_sha256 = str(source.get("content_sha256") or "")
+        cached_notes = existing_notes_by_path.get("|".join([path_text, content_sha256]))
+        if cached_notes:
+            reused.extend(cached_notes)
+            continue
         source_path = _resolve_source_path(workspace_root, path_text)
         text = _read_source_text(source_path)
         notes = _notes_for_source(
@@ -95,6 +114,7 @@ def extract_source_notes_for_mission(
             theme=str(source.get("theme") or "general_coherence"),
             title=_title_from_path(path_text),
             text=text,
+            source_content_sha256=content_sha256,
             notes_per_source=notes_per_source,
             reason=reason or "source note extracted for Coherence Physics paper",
         )
@@ -208,6 +228,7 @@ def _notes_for_source(
     theme: str,
     title: str,
     text: str,
+    source_content_sha256: str,
     notes_per_source: int,
     reason: str,
 ) -> list[SourceNoteRecord]:
@@ -254,6 +275,7 @@ def _notes_for_source(
                 excerpt_length=len(excerpt),
                 created_at=now,
                 reason=reason,
+                source_content_sha256=source_content_sha256,
             )
         )
     return records

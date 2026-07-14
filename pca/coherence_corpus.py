@@ -144,6 +144,7 @@ def index_coherence_corpus(
                     "evidence_id": evidence.evidence_id,
                     "path": candidate.relative_path,
                     "theme": candidate.theme,
+                    "content_sha256": candidate.content_sha256,
                 }
             )
         else:
@@ -162,6 +163,7 @@ def index_coherence_corpus(
                     "evidence_id": evidence.evidence_id,
                     "path": candidate.relative_path,
                     "theme": candidate.theme,
+                    "content_sha256": candidate.content_sha256,
                 }
             )
         if mission and (evidence.evidence_id, "mission", mission["mission_id"]) not in existing_links:
@@ -296,6 +298,7 @@ def discover_coherence_sources_from_knowledge_hub(
             topic="coherence_physics",
         )
     )
+    records_by_path = {record.relative_path: record for record in records}
     paths = [workspace / record.relative_path for record in records]
     candidates: list[CorpusCandidate] = []
     seen_titles: set[str] = set()
@@ -325,7 +328,7 @@ def discover_coherence_sources_from_knowledge_hub(
                 relative_path=relative_path,
                 theme=classify_coherence_source(relative_path),
                 size_bytes=path.stat().st_size,
-                content_sha256=_file_sha256(path),
+                content_sha256=records_by_path[relative_path].content_sha256,
             )
         )
     return candidates
