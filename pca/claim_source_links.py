@@ -144,7 +144,8 @@ def claim_source_links(
     source_notes: list[dict[str, Any]],
     *,
     max_links_per_claim: int = 3,
-    min_score: float = 0.25,
+    min_score: float = 0.16,
+    confident_score: float = 0.25,
 ) -> list[dict[str, Any]]:
     """Build a conservative, derived claim-to-source-note map.
 
@@ -181,7 +182,7 @@ def claim_source_links(
                     note_id=str(note.get("note_id") or ""),
                     source_path=str(note.get("source_path") or ""),
                     locator=str(note.get("locator") or ""),
-                    relation=_relation(summary),
+                    relation=_relation(summary, score, confident_score),
                     score=round(score, 3),
                     link_strength=_link_strength(score),
                     matched_terms=matched,
@@ -232,11 +233,12 @@ def _score_match(
     return coverage * 0.75 + density * 0.25 + bonus
 
 
-def _relation(summary: str) -> str:
+def _relation(summary: str, score: float, confident_score: float) -> str:
     lowered = summary.lower()
+    prefix = "tentative_" if score < confident_score else ""
     if any(term in lowered for term in CHALLENGE_TERMS):
-        return "challenges"
-    return "supports"
+        return f"{prefix}challenges"
+    return f"{prefix}supports"
 
 
 def _link_strength(score: float) -> str:

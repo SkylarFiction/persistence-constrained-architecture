@@ -644,10 +644,18 @@ def _evidence_linked_argument_lines(
             continue
         supporting = [link for link in links if link.get("relation") == "supports"]
         challenging = [link for link in links if link.get("relation") == "challenges"]
+        tentative = [
+            link for link in links if str(link.get("relation") or "").startswith("tentative_")
+        ]
         for link in supporting[:2]:
             lines.append("  Source support: " + _reader_source_link_sentence(link))
         for link in challenging[:2]:
             lines.append("  Source challenge: " + _reader_source_link_sentence(link))
+        for link in tentative[:2]:
+            lines.append(
+                "  Tentative source link requiring verification: "
+                + _reader_source_link_sentence(link)
+            )
         if not challenging and claim.get("counterevidence_count", 0):
             lines.append(
                 "  Counterevidence note: argument-graph counterevidence exists, "
@@ -867,6 +875,7 @@ def _claim_matrix_entry_lines(
         + _resolve_statements(entry.get("dependency_claims") or [], nodes_by_hash),
         "  Source note support: " + _source_link_summary(source_links, relation="supports"),
         "  Source note challenges: " + _source_link_summary(source_links, relation="challenges"),
+        "  Tentative source links: " + _tentative_source_link_summary(source_links),
         "  Test status: " + _resolve_statements(entry.get("test_ids") or [], nodes_by_id),
         "  Limitations: " + _resolve_statements(entry.get("limitation_ids") or [], nodes_by_id),
         f"  Falsification/inspection: {entry.get('falsification_condition') or 'missing'}",
@@ -888,6 +897,28 @@ def _source_link_summary(source_links: list[dict[str, Any]], relation: str) -> s
         score = link.get("score")
         parts.append(
             f"{link.get('note_id')} ({source_name}, {locator}, score={score}, terms={matched})"
+        )
+    return "; ".join(parts)
+
+
+def _tentative_source_link_summary(source_links: list[dict[str, Any]]) -> str:
+    selected = [
+        link
+        for link in source_links
+        if str(link.get("relation") or "").startswith("tentative_")
+    ]
+    if not selected:
+        return "none"
+    parts = []
+    for link in selected[:3]:
+        source_name = _short_source_name(str(link.get("source_path") or ""))
+        locator = str(link.get("locator") or "source")
+        relation = str(link.get("relation") or "tentative")
+        strength = str(link.get("link_strength") or "tentative")
+        matched = ", ".join(link.get("matched_terms") or [])
+        parts.append(
+            f"{link.get('note_id')} ({relation}, {strength}, {source_name}, "
+            f"{locator}, terms={matched})"
         )
     return "; ".join(parts)
 

@@ -3565,6 +3565,39 @@ def test_research_packet_maps_claims_to_source_notes(tmp_path):
     assert b"Blocking issues before final-paper status" in paper
 
 
+def test_claim_source_links_preserve_tentative_matches_without_overclaiming():
+    from pca.claim_source_links import claim_source_links
+
+    links = claim_source_links(
+        [
+            {
+                "claim_item_id": "claim_output_style",
+                "claim_text": "Fluent output is insufficient evidence of identity continuity.",
+                "claim_type": "continuity_claim",
+            }
+        ],
+        [
+            {
+                "note_id": "note_output_identity",
+                "source_path": "coherence /Coherence_Physics_7.pdf",
+                "locator": "text-snippet-1",
+                "note_kind": "claim_candidate",
+                "note_quality": "reader_ready",
+                "review_status": "raw",
+                "summary": (
+                    "At collapse, recoverability is lost, identity structure "
+                    "fails, and output variables collapse."
+                ),
+            }
+        ],
+    )
+
+    assert len(links) == 1
+    assert links[0]["relation"] == "tentative_challenges"
+    assert links[0]["link_strength"] == "tentative"
+    assert links[0]["score"] < 0.25
+
+
 def test_research_pdf_excludes_damaged_source_notes_from_reader_paper():
     from pca.research_pdf import (
         _reader_facing_extraction_quality,
