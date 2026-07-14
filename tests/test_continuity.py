@@ -3444,6 +3444,75 @@ def test_export_research_pdf_writes_mission_packet(tmp_path):
     assert b"Audit Bundle" in output_path.read_bytes()
 
 
+def test_research_packet_maps_claims_to_source_notes(tmp_path):
+    import hashlib
+    from datetime import datetime, timezone
+
+    from pca.argument_graph import seed_continuity_argument_graph
+    from pca.source_notes import SourceNoteRecord
+
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Claim source link mission",
+        problem_statement="Map source notes to continuity claims.",
+    )
+    seed_continuity_argument_graph(
+        ledger,
+        manifest,
+        mission.mission_id,
+        project_root=tmp_path,
+    )
+    note = SourceNoteRecord(
+        note_id="source_note_test_identity_output",
+        identity_id=manifest.system_id,
+        mission_id=mission.mission_id,
+        source_path="coherence /test_identity.pdf",
+        theme="identity_physics",
+        title="Test Identity Source",
+        note_kind="claim_candidate",
+        summary=(
+            "A model may preserve output style while memory, authority, and "
+            "lineage state change, so output similarity is not enough for "
+            "identity continuity."
+        ),
+        locator="page 1 section identity",
+        confidence="medium",
+        review_status="raw",
+        summary_hash=hashlib.sha256(b"source-note").hexdigest(),
+        excerpt_hash=hashlib.sha256(b"excerpt").hexdigest(),
+        excerpt_length=128,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        reason="test source note",
+        source_content_sha256="test-source-hash",
+    )
+    ledger.append("source_note.extracted", manifest.system_id, note.to_dict())
+
+    output_path = tmp_path / "audit.pdf"
+    paper_output_path = tmp_path / "paper.pdf"
+    packet_output_path = tmp_path / "packet.pdf"
+    result = export_research_pdf(
+        ledger,
+        manifest,
+        mission.mission_id,
+        output_path,
+        project_root=tmp_path,
+        paper_output_path=paper_output_path,
+        packet_output_path=packet_output_path,
+    )
+
+    assert result["claim_source_links"]
+    assert any(
+        link["note_id"] == "source_note_test_identity_output"
+        for link in result["claim_source_links"]
+    )
+    packet = packet_output_path.read_bytes()
+    assert b"Source note support" in packet
+    assert b"source_note_test_identity_output" in packet
+
+
 def test_research_pdf_excludes_damaged_source_notes_from_reader_paper():
     from pca.research_pdf import (
         _reader_facing_extraction_quality,

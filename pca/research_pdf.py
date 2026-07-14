@@ -7,6 +7,7 @@ from typing import Any
 import re
 
 from .argument_graph import mission_argument_graph
+from .claim_source_links import claim_source_links
 from .coherence_corpus import coherence_corpus_index_records_from_events, is_relevant_source_path
 from .evidence_locker import evidence_for_target
 from .falsification_lab import falsification_lab_verdict
@@ -64,7 +65,7 @@ def export_research_pdf(
         if is_relevant_source_path(str(source.get("path") or ""))
     ]
     source_notes = [
-        note
+        _annotate_source_note_quality(note)
         for note in source_notes_for_mission(ledger.events(), mission_id)
         if is_relevant_source_path(str(note.get("source_path") or ""))
     ]
@@ -75,9 +76,11 @@ def export_research_pdf(
     audit_path.parent.mkdir(parents=True, exist_ok=True)
     paper_path.parent.mkdir(parents=True, exist_ok=True)
     packet_path.parent.mkdir(parents=True, exist_ok=True)
-    source_coverage = _source_coverage_rows(corpus_sources, source_notes)
-    quality_warnings = _quality_warnings(claim_map, source_coverage, source_notes, regenerations)
     argument_graph = mission_argument_graph(ledger, mission_id)
+    reader_claims = _reader_facing_claim_entries(claim_map)
+    source_links = claim_source_links(reader_claims, source_notes)
+    source_coverage = _source_coverage_rows(corpus_sources, source_notes, source_links)
+    quality_warnings = _quality_warnings(claim_map, source_coverage, source_notes, regenerations)
 
     paper_lines = _scholarly_paper_lines(
         mission_title=mission.title,
@@ -93,6 +96,7 @@ def export_research_pdf(
         mission_id=mission_id,
         claim_map=claim_map,
         argument_graph=argument_graph,
+        source_links=source_links,
         source_coverage=source_coverage,
         source_notes=source_notes,
         quality_warnings=quality_warnings,
@@ -114,6 +118,7 @@ def export_research_pdf(
         claim_map=claim_map,
         linked_evidence=linked_evidence,
         source_notes=source_notes,
+        source_links=source_links,
         regenerations=regenerations,
         quality_warnings=quality_warnings,
         paper_path=str(paper_path),
@@ -135,6 +140,7 @@ def export_research_pdf(
         "source_note_count": len(source_notes),
         "claim_count": claim_map.get("claim_count", 0),
         "quality_warnings": quality_warnings,
+        "claim_source_links": source_links,
         "source_coverage": source_coverage,
         "duplicate_output_regenerations": len(regenerations),
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -463,6 +469,7 @@ def _research_packet_lines(
     mission_id: str,
     claim_map: dict[str, Any],
     argument_graph: dict[str, Any],
+    source_links: list[dict[str, Any]],
     source_coverage: list[dict[str, Any]],
     source_notes: list[dict[str, Any]],
     quality_warnings: list[dict[str, Any]],
@@ -472,6 +479,9 @@ def _research_packet_lines(
     nodes_by_id = {node["node_id"]: node for node in argument_graph.get("nodes", [])}
     nodes_by_hash = {node["statement_hash"]: node for node in argument_graph.get("nodes", [])}
     reader_claims = _reader_facing_claim_entries(claim_map)
+    source_links_by_claim: dict[str, list[dict[str, Any]]] = {}
+    for link in source_links:
+        source_links_by_claim.setdefault(str(link.get("claim_id") or ""), []).append(link)
     lines = [
         f"Research Packet - {mission_title}",
         "This packet is the inspectable research layer between the reader-facing "
@@ -488,7 +498,15 @@ def _research_packet_lines(
         "Claim ID | Exact Claim | Type | Status | Confidence",
     ]
     for entry in reader_claims:
-        lines.extend(_claim_matrix_entry_lines(entry, nodes_by_id, nodes_by_hash))
+        claim_id = str(entry.get("claim_item_id") or entry.get("claim_hash") or "")
+        lines.extend(
+            _claim_matrix_entry_lines(
+                entry,
+                nodes_by_id,
+                nodes_by_hash,
+                source_links_by_claim.get(claim_id, []),
+            )
+        )
     lines.extend(
         [
             "",
@@ -509,7 +527,7 @@ def _research_packet_lines(
             "",
             "Source Coverage Report",
             "Source file | Canonical family | Parsed | Extracted notes | Usable notes | "
-            "Review status | Reason excluded",
+            "Claim links | Review status | Reason excluded",
         ]
     )
     if source_coverage:
@@ -517,7 +535,7 @@ def _research_packet_lines(
             lines.append(
                 f"{row['source']} | {row['canonical_family']} | {row['parsed']} | "
                 f"{row['notes']} | {row['usable_notes']} | "
-                f"{row['review_status']} | {row['reason_excluded']}"
+                f"{row['claim_links']} | {row['review_status']} | {row['reason_excluded']}"
             )
     else:
         lines.append("No source coverage rows available.")
@@ -588,6 +606,7 @@ def _claim_matrix_entry_lines(
     entry: dict[str, Any],
     nodes_by_id: dict[str, dict[str, Any]],
     nodes_by_hash: dict[str, dict[str, Any]],
+    source_links: list[dict[str, Any]],
 ) -> list[str]:
     claim_id = str(entry.get("claim_item_id") or entry.get("claim_hash") or "unknown")
     claim_text = str(entry.get("claim_text") or entry.get("claim_hash") or "")
@@ -602,6 +621,8 @@ def _claim_matrix_entry_lines(
         + _resolve_statements(entry.get("counterevidence_ids") or [], nodes_by_id),
         "  Dependencies: "
         + _resolve_statements(entry.get("dependency_claims") or [], nodes_by_hash),
+        "  Source note support: " + _source_link_summary(source_links, relation="supports"),
+        "  Source note challenges: " + _source_link_summary(source_links, relation="challenges"),
         "  Test status: " + _resolve_statements(entry.get("test_ids") or [], nodes_by_id),
         "  Limitations: " + _resolve_statements(entry.get("limitation_ids") or [], nodes_by_id),
         f"  Falsification/inspection: {entry.get('falsification_condition') or 'missing'}",
@@ -609,6 +630,22 @@ def _claim_matrix_entry_lines(
         f"  Review notes: {entry.get('review_notes') or 'none'}",
     ]
     return lines
+
+
+def _source_link_summary(source_links: list[dict[str, Any]], relation: str) -> str:
+    selected = [link for link in source_links if link.get("relation") == relation]
+    if not selected:
+        return "none"
+    parts = []
+    for link in selected[:3]:
+        source_name = _short_source_name(str(link.get("source_path") or ""))
+        locator = str(link.get("locator") or "source")
+        matched = ", ".join(link.get("matched_terms") or [])
+        score = link.get("score")
+        parts.append(
+            f"{link.get('note_id')} ({source_name}, {locator}, score={score}, terms={matched})"
+        )
+    return "; ".join(parts)
 
 
 def _join_ids(items: list[str] | tuple[str, ...]) -> str:
@@ -649,6 +686,7 @@ def _audit_bundle_lines(
     claim_map: dict[str, Any],
     linked_evidence: list[dict[str, Any]],
     source_notes: list[dict[str, Any]],
+    source_links: list[dict[str, Any]],
     regenerations: list[dict[str, Any]],
     quality_warnings: list[dict[str, Any]],
     paper_path: str,
@@ -705,6 +743,17 @@ def _audit_bundle_lines(
             f"support={_join_ids(entry.get('supporting_evidence_ids') or [])} / "
             f"counter={_join_ids(entry.get('counterevidence_ids') or [])}"
         )
+    lines.extend(["", "Claim-to-Source Links"])
+    if source_links:
+        for link in source_links:
+            lines.append(
+                "- "
+                f"{link.get('relation')} / claim={link.get('claim_id')} / "
+                f"note={link.get('note_id')} / score={link.get('score')} / "
+                f"{link.get('source_path')} / {link.get('locator')}"
+            )
+    else:
+        lines.append("- none")
     lines.extend(["", "Quality Gate Warnings"])
     if quality_warnings:
         for warning in quality_warnings:
@@ -899,10 +948,15 @@ def _source_note_findings(source_notes: list[dict[str, Any]]) -> list[str]:
 def _source_coverage_rows(
     corpus_sources: list[dict[str, Any]],
     source_notes: list[dict[str, Any]],
+    source_links: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     notes_by_path: dict[str, list[dict[str, Any]]] = {}
     for note in source_notes:
         notes_by_path.setdefault(str(note.get("source_path") or ""), []).append(note)
+    link_count_by_path: dict[str, int] = {}
+    for link in source_links or []:
+        path = str(link.get("source_path") or "")
+        link_count_by_path[path] = link_count_by_path.get(path, 0) + 1
     rows: list[dict[str, Any]] = []
     for source in corpus_sources:
         path = str(source.get("path") or "")
@@ -924,6 +978,7 @@ def _source_coverage_rows(
                 "parsed": "Yes" if notes else "No",
                 "notes": len(notes),
                 "usable_notes": len(used),
+                "claim_links": link_count_by_path.get(path, 0),
                 "review_status": ", ".join(status_values) if status_values else "unreviewed",
                 "reason_excluded": _source_exclusion_reason(notes, used, malformed),
                 "used_in_paper": "Yes" if used else "No",
@@ -931,6 +986,14 @@ def _source_coverage_rows(
             }
         )
     return rows
+
+
+def _annotate_source_note_quality(note: dict[str, Any]) -> dict[str, Any]:
+    annotated = dict(note)
+    annotated["note_quality"] = (
+        "reader_ready" if _source_note_reader_ready(note) else "manual_verification"
+    )
+    return annotated
 
 
 def _canonical_source_family(path: str) -> str:
