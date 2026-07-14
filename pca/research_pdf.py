@@ -684,11 +684,13 @@ def _reader_source_link_sentence(link: dict[str, Any]) -> str:
     locator = str(link.get("locator") or "source")
     status = str(link.get("review_status") or "raw")
     relevance = _reader_relevance_label(link.get("score"))
+    strength = str(link.get("link_strength") or relevance)
     summary = str(link.get("summary") or "")
     if len(summary) > 170:
         summary = summary[:167].rsplit(" ", 1)[0] + "..."
     return (
-        f"{source}, {locator}, {status} source note, {relevance} relevance: "
+        f"{source}, {locator}, {status} source note, {strength} link "
+        f"(relevance: {relevance}): "
         f"{summary}"
     )
 

@@ -160,10 +160,18 @@ def run_research_autopilot(
         outputs.append(output)
         actions.append(
             {
-                "action": "research_output_created",
+                "action": (
+                    "research_output_skipped_unchanged"
+                    if output.get("skipped")
+                    else "research_output_created"
+                ),
                 "kind": kind,
                 "output_id": output["output"]["output_id"],
-                "evidence_id": output["evidence"]["evidence_id"],
+                "evidence_id": (
+                    output["evidence"]["evidence_id"]
+                    if output.get("evidence")
+                    else None
+                ),
             }
         )
 

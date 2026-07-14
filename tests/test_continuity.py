@@ -166,6 +166,7 @@ from pca import (
     render_coherence_seed_text,
     render_commit_readiness_text,
     render_project_build_brief_text,
+    render_research_output_content,
     render_research_outputs_text,
     render_constitution_markdown,
     render_lucien_cockpit_html,
@@ -3290,6 +3291,47 @@ def test_research_sandbox_brief_creates_proposed_output_without_high_priority_bl
     assert sandbox["proposed_output_count"] == 1
     assert not [task for task in tasks if task.severity in {"high", "critical"}]
     assert steward_inbox(ledger) == []
+
+
+def test_research_sandbox_skips_unchanged_duplicate_without_ledger_noise(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Duplicate sandbox mission",
+        problem_statement="Repeated drafts should not create noisy duplicate events.",
+    )
+
+    first = create_research_output(
+        ledger,
+        manifest,
+        mission.mission_id,
+        "paper_draft",
+    )
+    event_count_after_first = len(ledger.events())
+    second = create_research_output(
+        ledger,
+        manifest,
+        mission.mission_id,
+        "paper_draft",
+    )
+
+    outputs = research_outputs_from_events(ledger.events(), mission.mission_id)
+    regenerations = [
+        event
+        for event in ledger.events()
+        if event.event_type == "research.output_regenerated"
+    ]
+    content = render_research_output_content(ledger.events(), outputs[0])
+
+    assert len(outputs) == 1
+    assert first["output"]["output_id"] == second["output"]["output_id"]
+    assert second["skipped"]["status"] == "unchanged_duplicate"
+    assert len(ledger.events()) == event_count_after_first
+    assert regenerations == []
+    assert "Core claims to develop" in content
+    assert "Current blockers before this becomes a real paper" in content
 
 
 def test_research_sandbox_classifies_restricted_actions():

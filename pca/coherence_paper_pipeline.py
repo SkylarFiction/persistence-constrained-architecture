@@ -142,18 +142,17 @@ def run_coherence_paper_pipeline(
         )
         actions.append(
             {
-                "action": (
-                    "paper_draft_regenerated"
-                    if paper_draft.get("regeneration")
-                    else "paper_draft_created"
-                ),
+                "action": _paper_draft_action(paper_draft),
                 "output_id": paper_draft["output"]["output_id"],
                 "evidence_id": (
                     paper_draft["evidence"]["evidence_id"]
                     if paper_draft.get("evidence")
                     else None
                 ),
-                "content_hash": (paper_draft.get("regeneration") or {}).get("content_hash"),
+                "content_hash": (
+                    (paper_draft.get("skipped") or {}).get("content_hash")
+                    or (paper_draft.get("output") or {}).get("content_hash")
+                ),
             }
         )
     else:
@@ -369,6 +368,14 @@ def _has_paper_draft(ledger: ContinuityLedger, mission_id: str) -> bool:
         output.kind.value == "paper_draft"
         for output in research_outputs_from_events(ledger.events(), mission_id)
     )
+
+
+def _paper_draft_action(paper_draft: dict[str, Any]) -> str:
+    if paper_draft.get("skipped"):
+        return "paper_draft_skipped_unchanged"
+    if paper_draft.get("regeneration"):
+        return "paper_draft_regenerated"
+    return "paper_draft_created"
 
 
 def _corpus_summary(corpus: dict[str, Any] | None) -> str:

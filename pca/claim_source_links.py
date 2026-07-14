@@ -116,6 +116,7 @@ class ClaimSourceLink:
     locator: str
     relation: str
     score: float
+    link_strength: str
     matched_terms: tuple[str, ...]
     review_status: str
     note_quality: str
@@ -130,6 +131,7 @@ class ClaimSourceLink:
             "locator": self.locator,
             "relation": self.relation,
             "score": self.score,
+            "link_strength": self.link_strength,
             "matched_terms": list(self.matched_terms),
             "review_status": self.review_status,
             "note_quality": self.note_quality,
@@ -142,7 +144,7 @@ def claim_source_links(
     source_notes: list[dict[str, Any]],
     *,
     max_links_per_claim: int = 3,
-    min_score: float = 0.16,
+    min_score: float = 0.25,
 ) -> list[dict[str, Any]]:
     """Build a conservative, derived claim-to-source-note map.
 
@@ -181,6 +183,7 @@ def claim_source_links(
                     locator=str(note.get("locator") or ""),
                     relation=_relation(summary),
                     score=round(score, 3),
+                    link_strength=_link_strength(score),
                     matched_terms=matched,
                     review_status=str(note.get("review_status") or "raw"),
                     note_quality=str(note.get("note_quality") or "reader_ready"),
@@ -234,6 +237,14 @@ def _relation(summary: str) -> str:
     if any(term in lowered for term in CHALLENGE_TERMS):
         return "challenges"
     return "supports"
+
+
+def _link_strength(score: float) -> str:
+    if score >= 0.55:
+        return "strong"
+    if score >= 0.35:
+        return "moderate"
+    return "tentative"
 
 
 def _truncate(text: str, max_len: int) -> str:

@@ -7,10 +7,12 @@ from typing import Any
 import hashlib
 import uuid
 
+from .argument_graph import argument_nodes_for_mission
 from .evidence_locker import EvidenceRecord, add_evidence, link_evidence
 from .ledger import ContinuityEvent, ContinuityLedger
 from .manifest import IdentityManifest
 from .missions import MissionBrief, mission_briefs_from_events, require_mission
+from .source_notes import source_notes_for_mission
 
 
 def _text_hash(text: str) -> str:
@@ -184,7 +186,7 @@ def create_research_output(
     require_mission(ledger.events(), mission_id)
     brief = _mission_brief(ledger.events(), mission_id)
     kind_value = _parse_output_kind(kind)
-    content, claim_count = _draft_content(brief, kind_value)
+    content, claim_count = _draft_content(ledger.events(), brief, kind_value)
     existing = _existing_output_for_content(
         ledger.events(),
         mission_id=mission_id,
@@ -192,26 +194,24 @@ def create_research_output(
         content_hash=_text_hash(content),
     )
     if existing:
-        record = {
-            "identity_id": manifest.system_id,
-            "mission_id": mission_id,
-            "kind": kind_value.value,
-            "existing_output_id": existing.output_id,
-            "content_hash": existing.content_hash,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "reason": reason or f"research sandbox regenerated duplicate {kind_value.value}",
-            "governance": (
-                "duplicate generated content was not stored again; this event "
-                "preserves regeneration history by reference"
-            ),
-        }
-        ledger.append("research.output_regenerated", manifest.system_id, record)
         return {
             "output": existing.to_dict(),
             "evidence": None,
             "evidence_link": None,
             "content": content,
-            "regeneration": record,
+            "skipped": {
+                "status": "unchanged_duplicate",
+                "existing_output_id": existing.output_id,
+                "content_hash": existing.content_hash,
+                "reason": (
+                    reason
+                    or f"unchanged {kind_value.value} was not regenerated"
+                ),
+                "governance": (
+                    "unchanged duplicate content was not stored and no extra "
+                    "ledger event was written"
+                ),
+            },
         }
     evidence = _proposed_evidence_for_output(
         ledger,
@@ -301,7 +301,7 @@ def render_research_output_content(
     output: ResearchSandboxOutputRecord,
 ) -> str:
     brief = _mission_brief(events, output.mission_id)
-    content, _ = _draft_content(brief, output.kind)
+    content, _ = _draft_content(events, brief, output.kind)
     return content
 
 
@@ -343,6 +343,7 @@ def _mission_brief(events: list[ContinuityEvent], mission_id: str) -> MissionBri
 
 
 def _draft_content(
+    events: list[ContinuityEvent],
     brief: MissionBrief,
     kind: ResearchOutputKind,
 ) -> tuple[str, int]:
@@ -382,20 +383,7 @@ def _draft_content(
         lines.append("- Evidence status: unresolved until linked evidence is reviewed.")
         return "\n".join(lines), max(1, len(hypotheses))
     if kind == ResearchOutputKind.PAPER_DRAFT:
-        return (
-            "\n".join(
-                [
-                    f"# Paper Draft Skeleton: {mission.title}",
-                    "",
-                    "1. Problem: continuity claims need governance.",
-                    "2. Framework: persistence, boundaries, recovery, and evidence.",
-                    "3. Current mission evidence: proposed only.",
-                    "4. Risks and limits: do not overclaim consciousness, proof, or personhood.",
-                    "5. Next work: gather reviewed sources and testable examples.",
-                ]
-            ),
-            len(hypotheses),
-        )
+        return _paper_draft_content(events, brief)
     if kind == ResearchOutputKind.EXPERIMENT_PROPOSAL:
         return (
             "\n".join(
@@ -419,6 +407,84 @@ def _draft_content(
         f"Source summary draft for {mission.title}: no external source attached yet; add sources before review.",
         0,
     )
+
+
+def _paper_draft_content(
+    events: list[ContinuityEvent],
+    brief: MissionBrief,
+) -> tuple[str, int]:
+    mission = brief.mission
+    claim_nodes = [
+        node
+        for node in argument_nodes_for_mission(events, mission.mission_id)
+        if node.kind.value == "claim"
+    ]
+    notes = [
+        note
+        for note in source_notes_for_mission(events, mission.mission_id)
+        if note.get("note_kind") == "claim_candidate"
+    ]
+    lines = [
+        f"# Paper Draft: {mission.title}",
+        "",
+        "Working title: Smooth Output Is Not Continuity",
+        "",
+        "Draft status: proposed manuscript skeleton built from the current claim "
+        "graph and source-note inventory. It is not reviewed evidence and not a "
+        "final paper.",
+        "",
+        "Central research question",
+        "When an artificial system changes memory, authority, lineage, or runtime "
+        "state, what evidence is required before it may claim continuity rather "
+        "than merely fluent behavioral similarity?",
+        "",
+        "Core claims to develop",
+    ]
+    if claim_nodes:
+        for index, node in enumerate(claim_nodes[:8], start=1):
+            lines.append(f"{index}. {node.statement}")
+    else:
+        lines.append("1. Add a first argument-graph claim before treating this as a paper draft.")
+    lines.extend(
+        [
+            "",
+            "Source-derived material to inspect",
+        ]
+    )
+    if notes:
+        for index, note in enumerate(notes[:6], start=1):
+            summary = str(note.get("summary") or "")
+            if len(summary) > 260:
+                summary = summary[:257].rsplit(" ", 1)[0] + "..."
+            lines.append(
+                f"{index}. {note.get('title', 'source')} / "
+                f"{note.get('locator', 'source')}: {summary}"
+            )
+    else:
+        lines.append("1. No source-note excerpts are available yet.")
+    lines.extend(
+        [
+            "",
+            "Argument path",
+            "1. Define artificial continuity as a governed claim, not as smooth output.",
+            "2. Explain which identity-relevant records must persist: memory, "
+            "commitments, authority, lineage, evidence, and recovery state.",
+            "3. Show how PCA records transformations and constrains what the system "
+            "may say after review, fork, migration, or breach.",
+            "4. Separate internal Coherence Physics source reconstruction from "
+            "external scientific validation.",
+            "5. Name the next falsifiable or inspectable experiment before making "
+            "strong claims.",
+            "",
+            "Current blockers before this becomes a real paper",
+            "- Evidence is still raw until reviewed by the steward.",
+            "- Weak source-note matches must be checked against the original PDFs.",
+            "- Malformed math extraction must be repaired before equations are used.",
+            "- External scholarly literature is still needed.",
+            "- The direct continuity experiment must be run and reported.",
+        ]
+    )
+    return "\n".join(lines), max(1, len(claim_nodes))
 
 
 def _title_for_kind(brief: MissionBrief, kind: ResearchOutputKind) -> str:
