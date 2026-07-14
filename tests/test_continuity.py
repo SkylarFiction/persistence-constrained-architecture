@@ -3509,8 +3509,13 @@ def test_research_packet_maps_claims_to_source_notes(tmp_path):
         for link in result["claim_source_links"]
     )
     packet = packet_output_path.read_bytes()
+    paper = paper_output_path.read_bytes()
     assert b"Source note support" in packet
     assert b"source_note_test_identity_output" in packet
+    assert b"Evidence-Linked Argument" in paper
+    assert b"Manuscript Readiness" in paper
+    assert b"Source support:" in paper
+    assert b"Blocking issues before final-paper status" in paper
 
 
 def test_research_pdf_excludes_damaged_source_notes_from_reader_paper():

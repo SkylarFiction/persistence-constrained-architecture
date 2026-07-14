@@ -81,10 +81,20 @@ def export_research_pdf(
     source_links = claim_source_links(reader_claims, source_notes)
     source_coverage = _source_coverage_rows(corpus_sources, source_notes, source_links)
     quality_warnings = _quality_warnings(claim_map, source_coverage, source_notes, regenerations)
+    paper_readiness = _paper_readiness(
+        claim_map=claim_map,
+        reader_claims=reader_claims,
+        source_links=source_links,
+        source_notes=source_notes,
+        corpus_sources=corpus_sources,
+    )
 
     paper_lines = _scholarly_paper_lines(
         mission_title=mission.title,
         claim_map=claim_map,
+        reader_claims=reader_claims,
+        source_links=source_links,
+        paper_readiness=paper_readiness,
         corpus_sources=corpus_sources,
         source_notes=source_notes,
         falsification_verdict=falsification_lab_verdict(workspace_root),
@@ -141,6 +151,7 @@ def export_research_pdf(
         "claim_count": claim_map.get("claim_count", 0),
         "quality_warnings": quality_warnings,
         "claim_source_links": source_links,
+        "paper_readiness": paper_readiness,
         "source_coverage": source_coverage,
         "duplicate_output_regenerations": len(regenerations),
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -151,6 +162,9 @@ def export_research_pdf(
 def _scholarly_paper_lines(
     mission_title: str,
     claim_map: dict[str, Any],
+    reader_claims: list[dict[str, Any]],
+    source_links: list[dict[str, Any]],
+    paper_readiness: dict[str, Any],
     corpus_sources: list[dict[str, Any]],
     source_notes: list[dict[str, Any]],
     falsification_verdict: dict[str, Any] | None,
@@ -367,7 +381,6 @@ def _scholarly_paper_lines(
             "next improvement is to extract citation cards from the indexed "
             "corpus before writing the paper."
         )
-    reader_claims = _reader_facing_claim_entries(claim_map)
     lines.extend(
         [
             "",
@@ -396,11 +409,25 @@ def _scholarly_paper_lines(
         falsification = str(entry.get("falsification_condition") or "")
         if falsification:
             lines.append(f"  Falsification condition: {falsification}")
+    lines.extend(
+        [
+            "",
+            "11. Evidence-Linked Argument",
+            "This section is the closest current version of the paper's core "
+            "argument. It uses only source-note links that passed the reader-facing "
+            "extraction gate. These links are still raw until reviewed, so they "
+            "support cautious drafting, not final claims.",
+            *_evidence_linked_argument_lines(reader_claims, source_links),
+            "",
+            "12. Manuscript Readiness",
+            *_paper_readiness_lines(paper_readiness),
+        ]
+    )
     source_findings = _source_note_findings(source_notes)
     lines.extend(
         [
             "",
-            "11. Findings",
+            "13. Findings",
             "The findings below are drawn only from claim-candidate source notes "
             "that passed the source relevance gate, not from registration stubs "
             "and not from generic claims about the archive. Section 9 lists all "
@@ -409,14 +436,14 @@ def _scholarly_paper_lines(
             *source_findings,
             *_falsification_finding_lines(falsification_verdict, len(source_findings) + 1),
             "",
-            "12. Argument Structure",
+            "14. Argument Structure",
             "Every line below names the typed object it came from (claim, premise, "
             "implementation fact, counterevidence, inference, test, verdict, or "
             "limitation) so the paragraph can be traced back to what actually "
             "supports it, rather than reading as prewritten prose.",
             *_argument_graph_lines(argument_graph),
             "",
-            "13. Discussion",
+            "15. Discussion",
             "The useful conclusion is cautious: Coherence Physics should be advanced "
             "as a research framework and engineering program before it is presented "
             "as a completed physical theory. Its current strength is the repeatable "
@@ -424,26 +451,26 @@ def _scholarly_paper_lines(
             "actually been put under adversarial test, reporting the result even when "
             "it is mixed rather than favorable.",
             "",
-            "14. Proposed Paper Direction",
+            "16. Proposed Paper Direction",
             "A strong first paper should focus on the narrow, defensible claim: smooth "
             "output is not proof of continuity. From there, PCA can be shown as a "
             "working architecture that records what changed, what evidence exists, "
             "what remains under review, and what claims the system is allowed to make.",
             "",
-            "15. Limitations",
+            "17. Limitations",
             "- This draft is generated from local governed research outputs.",
             "- Raw evidence has not been accepted as reviewed evidence unless marked so.",
             "- The document does not claim proof of consciousness, AGI, personhood, or final physics.",
             "- Source registration is not the same as source interpretation.",
             "",
-            "16. Conclusion",
+            "18. Conclusion",
             "The next best version of Coherence Physics is a paper series built from "
             "reviewed source evidence, explicit claim maps, and falsifiable or "
             "inspectable examples. Lucien can help generate these drafts, but the "
             "system should keep the same rule at every stage: no claim becomes final "
             "without evidence review.",
             "",
-            "17. Research Agenda",
+            "19. Research Agenda",
             "- Review indexed source files and mark useful evidence as reviewed.",
             "- Choose one paper track: PCA/identity continuity, CSM, cognitive physics, or cosmology.",
             "- Replace provisional findings with source-backed claims.",
@@ -584,6 +611,127 @@ def _research_packet_lines(
             "- Add external literature review mode for legitimate scholarly sources.",
         ]
     )
+    return lines
+
+
+def _evidence_linked_argument_lines(
+    reader_claims: list[dict[str, Any]],
+    source_links: list[dict[str, Any]],
+) -> list[str]:
+    links_by_claim: dict[str, list[dict[str, Any]]] = {}
+    for link in source_links:
+        links_by_claim.setdefault(str(link.get("claim_id") or ""), []).append(link)
+    lines: list[str] = []
+    for index, claim in enumerate(reader_claims, start=1):
+        claim_id = str(claim.get("claim_item_id") or claim.get("claim_hash") or "")
+        claim_text = str(claim.get("claim_text") or "")
+        links = links_by_claim.get(claim_id, [])
+        lines.append(f"Claim {index}: {claim_text}")
+        if not links:
+            lines.append(
+                "  Evidence status: no reader-ready source note is directly linked "
+                "to this claim yet. The claim should remain provisional."
+            )
+            continue
+        supporting = [link for link in links if link.get("relation") == "supports"]
+        challenging = [link for link in links if link.get("relation") == "challenges"]
+        for link in supporting[:2]:
+            lines.append("  Source support: " + _reader_source_link_sentence(link))
+        for link in challenging[:2]:
+            lines.append("  Source challenge: " + _reader_source_link_sentence(link))
+        if not challenging and claim.get("counterevidence_count", 0):
+            lines.append(
+                "  Counterevidence note: argument-graph counterevidence exists, "
+                "but no reader-ready source note has been linked to it yet."
+            )
+    return lines or [
+        "No reader-facing claims were available for evidence-linked drafting."
+    ]
+
+
+def _reader_source_link_sentence(link: dict[str, Any]) -> str:
+    source = _short_source_name(str(link.get("source_path") or "unknown source"))
+    locator = str(link.get("locator") or "source")
+    status = str(link.get("review_status") or "raw")
+    summary = str(link.get("summary") or "")
+    if len(summary) > 170:
+        summary = summary[:167].rsplit(" ", 1)[0] + "..."
+    return (
+        f"{source}, {locator}, {status} source note, score {link.get('score')}: "
+        f"{summary}"
+    )
+
+
+def _paper_readiness(
+    claim_map: dict[str, Any],
+    reader_claims: list[dict[str, Any]],
+    source_links: list[dict[str, Any]],
+    source_notes: list[dict[str, Any]],
+    corpus_sources: list[dict[str, Any]],
+) -> dict[str, Any]:
+    reader_claim_ids = {
+        str(entry.get("claim_item_id") or entry.get("claim_hash") or "")
+        for entry in reader_claims
+    }
+    linked_claim_ids = {str(link.get("claim_id") or "") for link in source_links}
+    unlinked_claim_count = len(reader_claim_ids - linked_claim_ids)
+    reviewed_evidence_count = int(claim_map.get("reviewed_evidence_count", 0) or 0)
+    malformed_note_count = sum(
+        1
+        for note in source_notes
+        if note.get("note_kind") == "claim_candidate"
+        and note.get("note_quality") != "reader_ready"
+    )
+    blockers: list[str] = []
+    if reviewed_evidence_count == 0:
+        blockers.append("No evidence has been steward-reviewed yet.")
+    if unlinked_claim_count:
+        blockers.append(f"{unlinked_claim_count} reader-facing claim(s) lack direct source-note links.")
+    if malformed_note_count:
+        blockers.append(f"{malformed_note_count} source note(s) require manual extraction verification.")
+    if not any("web" in str(source.get("source_mode") or "").lower() for source in corpus_sources):
+        blockers.append("No external scholarly literature review has been attached yet.")
+    status = "draft_packet"
+    if not blockers:
+        status = "review_ready_manuscript"
+    elif source_links:
+        status = "evidence_linked_draft"
+    return {
+        "status": status,
+        "reader_claim_count": len(reader_claims),
+        "source_link_count": len(source_links),
+        "linked_claim_count": len(linked_claim_ids & reader_claim_ids),
+        "unlinked_claim_count": unlinked_claim_count,
+        "reviewed_evidence_count": reviewed_evidence_count,
+        "malformed_note_count": malformed_note_count,
+        "blockers": blockers,
+        "next_actions": [
+            "Review source notes and mark usable evidence as reviewed.",
+            "Add direct source-note links for unlinked claims.",
+            "Add external scholarly literature before calling this a final paper.",
+            "Run the direct continuity experiment and report the result.",
+        ],
+    }
+
+
+def _paper_readiness_lines(readiness: dict[str, Any]) -> list[str]:
+    lines = [
+        f"Status: {readiness.get('status')}",
+        f"Reader-facing claims: {readiness.get('reader_claim_count', 0)}",
+        f"Claims with source-note links: {readiness.get('linked_claim_count', 0)}",
+        f"Raw source-note links: {readiness.get('source_link_count', 0)}",
+        f"Reviewed evidence records: {readiness.get('reviewed_evidence_count', 0)}",
+    ]
+    blockers = readiness.get("blockers") or []
+    if blockers:
+        lines.append("Blocking issues before final-paper status:")
+        for blocker in blockers:
+            lines.append(f"- {blocker}")
+    else:
+        lines.append("No readiness blockers reported by this export.")
+    lines.append("Next actions:")
+    for action in readiness.get("next_actions") or []:
+        lines.append(f"- {action}")
     return lines
 
 
