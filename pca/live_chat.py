@@ -3,6 +3,8 @@ from __future__ import annotations
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import argparse
 import json
+import re
+import shutil
 from pathlib import Path
 from typing import Any
 from urllib import error, request
@@ -277,6 +279,28 @@ def _refresh_live_artifacts(
     write_constitution_markdown(report, manifest, "LUCIEN_CONSTITUTION.md")
     shell._write_dashboard()
     shell._write_cockpit()
+
+
+_TIMESTAMP_SUFFIX_PATTERN = re.compile(r"_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z(?=\.pdf$)")
+
+
+def _publish_latest_copy(path_str: str) -> None:
+    """Mirror a freshly written timestamped PDF onto a stable filename.
+
+    The TV Mode "Do Research + Save Paper" button stamps every generated
+    file with a unique timestamp so each run's output is kept as permanent
+    history, but that means there was never a fixed, discoverable path a
+    user (or another tool) could open to see "the current paper" -- opening
+    coherence_paper.pdf always showed whatever the first run ever produced,
+    since nothing after that run wrote to that name again. Copying the
+    timestamped output onto its un-timestamped name after every run keeps
+    the history intact while also keeping that fixed name current.
+    """
+    written = Path(path_str)
+    stable_name = _TIMESTAMP_SUFFIX_PATTERN.sub("", written.name)
+    if stable_name == written.name or not written.exists():
+        return
+    shutil.copyfile(written, written.with_name(stable_name))
 
 
 def _apply_steward_action(
@@ -752,23 +776,27 @@ def _apply_steward_action(
         mission_id = str(payload.get("mission_id", "")).strip() or None
         limit = int(payload.get("limit") or 8)
         force = bool(payload.get("force"))
-        return {
-            "coherence_paper_pipeline": run_coherence_paper_pipeline(
-                ledger,
-                manifest,
-                project_root=Path.cwd(),
-                mission_id=mission_id,
-                corpus_limit=limit,
-                force=force,
-                output_path=payload.get("output_path")
-                or "../knowledge_hub/generated/research_papers/coherence_audit_bundle.pdf",
-                paper_output_path=payload.get("paper_output_path")
-                or "../knowledge_hub/generated/research_papers/coherence_paper.pdf",
-                packet_output_path=payload.get("packet_output_path")
-                or "../knowledge_hub/generated/research_papers/coherence_research_packet.pdf",
-                reason=reason or "live Coherence Physics paper pipeline",
-            )
-        }
+        pipeline_result = run_coherence_paper_pipeline(
+            ledger,
+            manifest,
+            project_root=Path.cwd(),
+            mission_id=mission_id,
+            corpus_limit=limit,
+            force=force,
+            output_path=payload.get("output_path")
+            or "../knowledge_hub/generated/research_papers/coherence_audit_bundle.pdf",
+            paper_output_path=payload.get("paper_output_path")
+            or "../knowledge_hub/generated/research_papers/coherence_paper.pdf",
+            packet_output_path=payload.get("packet_output_path")
+            or "../knowledge_hub/generated/research_papers/coherence_research_packet.pdf",
+            reason=reason or "live Coherence Physics paper pipeline",
+        )
+        pdf_paths = pipeline_result.get("pdf") or {}
+        for key in ("paper_path", "packet_path", "audit_path"):
+            path_value = pdf_paths.get(key)
+            if path_value:
+                _publish_latest_copy(path_value)
+        return {"coherence_paper_pipeline": pipeline_result}
 
     if action == "create_research_output":
         mission_id = str(payload.get("mission_id", "")).strip()
@@ -791,19 +819,22 @@ def _apply_steward_action(
         mission_id = str(payload.get("mission_id", "")).strip()
         if not mission_id:
             raise ValueError("mission_id is required")
-        return {
-            "research_pdf": export_research_pdf(
-                ledger,
-                manifest,
-                mission_id,
-                payload.get("output_path")
-                or "../knowledge_hub/generated/research_papers/coherence_audit_bundle.pdf",
-                paper_output_path=payload.get("paper_output_path")
-                or "../knowledge_hub/generated/research_papers/coherence_paper.pdf",
-                packet_output_path=payload.get("packet_output_path")
-                or "../knowledge_hub/generated/research_papers/coherence_research_packet.pdf",
-            )
-        }
+        pdf_result = export_research_pdf(
+            ledger,
+            manifest,
+            mission_id,
+            payload.get("output_path")
+            or "../knowledge_hub/generated/research_papers/coherence_audit_bundle.pdf",
+            paper_output_path=payload.get("paper_output_path")
+            or "../knowledge_hub/generated/research_papers/coherence_paper.pdf",
+            packet_output_path=payload.get("packet_output_path")
+            or "../knowledge_hub/generated/research_papers/coherence_research_packet.pdf",
+        )
+        for key in ("paper_path", "packet_path", "audit_path"):
+            path_value = pdf_result.get(key)
+            if path_value:
+                _publish_latest_copy(path_value)
+        return {"research_pdf": pdf_result}
 
     if action == "autonomy_review":
         item_id = str(payload.get("item_id", "")).strip()

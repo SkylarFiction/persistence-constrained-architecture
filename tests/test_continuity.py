@@ -1372,6 +1372,21 @@ def test_tv_chat_html_is_simple_default_screen():
     assert "Advanced Diagnostics" not in html
 
 
+def test_timestamped_research_pdf_is_mirrored_to_stable_name(tmp_path):
+    from pca.live_chat import _publish_latest_copy
+
+    timestamped = tmp_path / "coherence_paper_2026-07-14T13-46-25-005Z.pdf"
+    stable = tmp_path / "coherence_paper.pdf"
+    timestamped.write_bytes(b"%PDF-1.4 latest paper")
+
+    _publish_latest_copy(str(timestamped))
+
+    assert stable.read_bytes() == b"%PDF-1.4 latest paper"
+    timestamped.write_bytes(b"%PDF-1.4 newer paper")
+    _publish_latest_copy(str(timestamped))
+    assert stable.read_bytes() == b"%PDF-1.4 newer paper"
+
+
 def test_live_status_includes_tool_router_state(tmp_path):
     from pca.live_chat import _status_payload
 
@@ -3487,6 +3502,44 @@ def test_export_research_pdf_writes_mission_packet(tmp_path):
     assert b"Claim-Evidence Matrix" in packet_output_path.read_bytes()
     assert b"Source Coverage Report" in packet_output_path.read_bytes()
     assert b"Audit Bundle" in output_path.read_bytes()
+
+
+def test_audit_bundle_collapses_duplicate_research_outputs(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="PDF duplicate mission",
+        problem_statement="Avoid repeated duplicate draft blocks in the audit bundle.",
+    )
+    first = create_research_output(
+        ledger,
+        manifest,
+        mission.mission_id,
+        "research_brief",
+        reason="pdf duplicate first draft",
+    )
+    duplicate = dict(first["output"])
+    duplicate["output_id"] = "research_output_duplicate_same_hash"
+    duplicate["created_at"] = "2026-07-14T00:00:00+00:00"
+    ledger.append("research.output_created", manifest.system_id, duplicate)
+    output_path = tmp_path / "audit_bundle.pdf"
+    paper_output_path = tmp_path / "paper.pdf"
+    packet_output_path = tmp_path / "packet.pdf"
+
+    export_research_pdf(
+        ledger,
+        manifest,
+        mission.mission_id,
+        output_path,
+        paper_output_path=paper_output_path,
+        packet_output_path=packet_output_path,
+    )
+    audit = output_path.read_bytes()
+
+    assert b"unchanged across 2 regeneration" in audit
+    assert audit.count(b"Research Brief: PDF duplicate mission") == 1
 
 
 def test_research_packet_maps_claims_to_source_notes(tmp_path):

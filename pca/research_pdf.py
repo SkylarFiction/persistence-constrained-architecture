@@ -1066,18 +1066,39 @@ def _audit_bundle_lines(
     lines.extend(["", "Appendix B: Research Outputs"])
     if not outputs:
         lines.append("No research outputs have been generated for this mission yet.")
+    # Every regeneration of an unchanged output used to append its own full
+    # copy here with nothing to distinguish it from the last one -- a paper
+    # regenerated 30+ times over several days produced 30+ identical blocks
+    # of the same text, growing the audit bundle unboundedly on every run.
+    # The "Duplicate Output Regeneration Events" list below already records
+    # each regeneration precisely (existing ID, hash, timestamp); this
+    # section only needs to show each distinct (kind, content) once, with a
+    # count, rather than repeat the content itself per historical event.
+    seen_content: dict[tuple[str, str], dict[str, Any]] = {}
     for output, content in output_contents:
+        key = (output.kind.value, output.content_hash)
+        if key not in seen_content:
+            seen_content[key] = {"output": output, "content": content, "count": 0}
+        seen_content[key]["count"] += 1
+    for entry in seen_content.values():
+        output = entry["output"]
+        repeat_note = (
+            f" (unchanged across {entry['count']} regeneration(s); see Duplicate "
+            "Output Regeneration Events below)"
+            if entry["count"] > 1
+            else ""
+        )
         lines.extend(
             [
                 "",
-                output.title,
+                output.title + repeat_note,
                 f"Kind: {output.kind.value}",
                 f"Status: {output.status}",
                 f"Confidence: {output.confidence}",
                 f"Claims: {output.claim_count}",
                 f"Evidence IDs: {', '.join(output.evidence_ids) or 'none'}",
                 "",
-                _paper_content(content),
+                _paper_content(entry["content"]),
             ]
         )
     lines.extend(["", "Duplicate Output Regeneration Events"])
