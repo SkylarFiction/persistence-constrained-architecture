@@ -30,6 +30,11 @@ from .commit_readiness import commit_readiness
 from .cold_open import cold_open_report
 from .daily_command_center import daily_command_center
 from .evidence_locker import add_evidence, evidence_for_target, link_evidence, review_evidence
+from .external_literature import (
+    add_external_literature,
+    external_literature_for_mission,
+    review_external_literature,
+)
 from .growth import (
     GrowthReviewDecision,
     GrowthStatus,
@@ -537,6 +542,47 @@ def _apply_steward_action(
         )
         return {"source_note_review": review.to_dict()}
 
+    if action == "add_external_literature":
+        mission_id = str(payload.get("mission_id", "")).strip()
+        title = str(payload.get("title", "")).strip()
+        if not mission_id:
+            raise ValueError("mission_id is required")
+        if not title:
+            raise ValueError("title is required")
+        record = add_external_literature(
+            ledger=ledger,
+            manifest=manifest,
+            mission_id=mission_id,
+            title=title,
+            authors=str(payload.get("authors", "")).strip(),
+            year=str(payload.get("year", "")).strip(),
+            venue=str(payload.get("venue", "")).strip(),
+            doi=str(payload.get("doi", "")).strip(),
+            url=str(payload.get("url", "")).strip(),
+            summary=str(payload.get("summary", "")).strip(),
+            confidence=str(payload.get("confidence", "unknown")).strip() or "unknown",
+            reason=reason or "added external literature from live app",
+        )
+        return {"external_literature": record.to_dict()}
+
+    if action == "review_external_literature":
+        literature_id = str(payload.get("literature_id", "")).strip()
+        status = str(payload.get("status", "reviewed")).strip()
+        if not literature_id:
+            raise ValueError("literature_id is required")
+        if status not in {"reviewed", "rejected", "stale", "disputed"}:
+            raise ValueError("external literature status must be reviewed, rejected, stale, or disputed")
+        review = review_external_literature(
+            ledger=ledger,
+            manifest=manifest,
+            literature_id=literature_id,
+            review_status=status,
+            reviewer=str(payload.get("reviewer", "live_steward")),
+            confidence=payload.get("confidence"),
+            reason=reason,
+        )
+        return {"external_literature_review": review.to_dict()}
+
     if action == "mission_onboard":
         mission_id = str(payload.get("mission_id", "")).strip()
         if not mission_id:
@@ -1007,6 +1053,13 @@ def _status_payload(
         )
         for brief in missions
     }
+    mission_external_literature = {
+        brief["mission"]["mission_id"]: external_literature_for_mission(
+            ledger.events(),
+            brief["mission"]["mission_id"],
+        )
+        for brief in missions
+    }
     paper_readiness = {}
     for brief in missions:
         mission_id = brief["mission"]["mission_id"]
@@ -1117,6 +1170,7 @@ def _status_payload(
         "missions": missions,
         "mission_evidence": mission_evidence,
         "mission_source_notes": mission_source_notes,
+        "mission_external_literature": mission_external_literature,
         "paper_readiness": paper_readiness,
         "mission_claim_maps": mission_claim_map_data,
         "research_review_desks": research_review_data,
@@ -2322,6 +2376,7 @@ def _live_chat_html() -> str:
         </div>
         <div class="actions">
           <button type="button" id="paperGatherSources" class="secondary">Gather Sources</button>
+          <button type="button" id="paperAddExternal" class="secondary">Add External Source</button>
           <button type="button" id="paperReviewNotes" class="secondary">Review Notes</button>
           <button type="button" id="paperCheckReadiness" class="secondary">Check Readiness</button>
           <button type="button" id="paperGenerateFinal" class="primary">Generate Final Paper</button>
@@ -2331,6 +2386,8 @@ def _live_chat_html() -> str:
       <div id="paperReadinessSummary" class="item"></div>
       <div id="paperReadinessCards" class="mission-card-grid"></div>
       <div id="paperReadinessBlockers" class="queue"></div>
+      <div id="externalLiteratureSummary" class="metrics"></div>
+      <div id="externalLiteratureList" class="queue"></div>
     </section>
     <section class="mission-dashboard">
       <div class="mission-controls">
@@ -2635,6 +2692,8 @@ def _live_chat_html() -> str:
     const paperReadinessSummary = document.getElementById('paperReadinessSummary');
     const paperReadinessCards = document.getElementById('paperReadinessCards');
     const paperReadinessBlockers = document.getElementById('paperReadinessBlockers');
+    const externalLiteratureSummary = document.getElementById('externalLiteratureSummary');
+    const externalLiteratureList = document.getElementById('externalLiteratureList');
     const missionEvidenceSummary = document.getElementById('missionEvidenceSummary');
     const missionEvidence = document.getElementById('missionEvidence');
     const sourceNotesSummary = document.getElementById('sourceNotesSummary');
@@ -2743,6 +2802,7 @@ def _live_chat_html() -> str:
       renderDailyPlan(status.daily_plan || {});
       renderMissions(status.missions || [], status.mission_flows || {}, status.mission_autonomy || []);
       renderPaperReadiness(status.paper_readiness || {}, missionView.activeMission);
+      renderExternalLiterature(status.mission_external_literature || {}, missionView.activeMission);
       renderMissionEvidence(status.mission_evidence || {}, missionView.activeMission);
       renderSourceNotesReview(status.mission_source_notes || {}, status.mission_claim_maps || {}, missionView.activeMission);
       renderMissionClaimMap(status.mission_claim_maps || {}, missionView.activeMission);
@@ -3216,6 +3276,79 @@ def _live_chat_html() -> str:
         row.className = 'item';
         row.innerHTML = `<div class="item-title">Needs Work</div><div class="item-meta">${escapeHtml(blocker)}</div>`;
         paperReadinessBlockers.appendChild(row);
+      }
+    }
+
+    function renderExternalLiterature(recordsByMission, selectedMission) {
+      externalLiteratureSummary.innerHTML = '';
+      externalLiteratureList.innerHTML = '';
+      if (!selectedMission || !selectedMission.mission_id) {
+        empty(externalLiteratureList, 'Select or open a mission before adding external literature.');
+        return;
+      }
+      const records = recordsByMission[selectedMission.mission_id] || [];
+      const counts = {raw: 0, reviewed: 0, rejected: 0, disputed: 0, stale: 0};
+      for (const record of records) {
+        const status = record.review_status || 'raw';
+        counts[status] = (counts[status] || 0) + 1;
+      }
+      for (const [label, value] of Object.entries(counts)) {
+        const card = document.createElement('div');
+        card.className = 'metric';
+        card.innerHTML = `<div class="label">${escapeHtml(label)}</div><div class="value">${value}</div>`;
+        externalLiteratureSummary.appendChild(card);
+      }
+      if (!records.length) {
+        empty(externalLiteratureList, 'No external scholarly literature attached yet. Add a DOI, URL, or paper title before final-paper status.');
+        return;
+      }
+      for (const record of records.slice().reverse()) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        const status = record.review_status || 'raw';
+        const title = document.createElement('div');
+        title.className = 'item-title';
+        title.textContent = `${status} / ${record.title || 'external source'} / ${record.year || 'unknown year'}`;
+        const meta = document.createElement('div');
+        meta.className = 'item-meta';
+        meta.textContent = `${record.literature_id || 'unknown'} / ${record.authors || 'unknown authors'} / ${record.venue || 'unknown venue'}`;
+        const locator = document.createElement('div');
+        locator.className = 'item-meta';
+        locator.textContent = `locator: ${record.doi || record.url || 'manual source'}${record.review_reason ? ' / last review: ' + record.review_reason : ''}`;
+        const summary = document.createElement('div');
+        summary.className = 'item-meta';
+        summary.textContent = record.summary || 'No summary recorded.';
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        if (['raw', 'disputed', 'stale'].includes(status)) {
+          actions.appendChild(button('Accept External Source', {
+            action: 'review_external_literature',
+            literature_id: record.literature_id,
+            status: 'reviewed',
+            confidence: record.confidence || 'medium',
+            reason: 'accepted external scholarly source from Make Paper panel'
+          }));
+          actions.appendChild(button('Reject', {
+            action: 'review_external_literature',
+            literature_id: record.literature_id,
+            status: 'rejected',
+            reason: 'rejected external scholarly source from Make Paper panel'
+          }));
+          actions.appendChild(button('Dispute', {
+            action: 'review_external_literature',
+            literature_id: record.literature_id,
+            status: 'disputed',
+            reason: 'disputed external scholarly source from Make Paper panel'
+          }));
+          actions.appendChild(button('Mark Stale', {
+            action: 'review_external_literature',
+            literature_id: record.literature_id,
+            status: 'stale',
+            reason: 'marked external scholarly source stale from Make Paper panel'
+          }));
+        }
+        row.append(title, meta, locator, summary, actions);
+        externalLiteratureList.appendChild(row);
       }
     }
 
@@ -4884,6 +5017,31 @@ def _live_chat_html() -> str:
       await indexCorpusForSelectedMission();
     }
 
+    async function addExternalLiteratureForPaper() {
+      if (!requireSelectedMissionForPaper()) return;
+      const title = window.prompt('External paper title');
+      if (!title || !title.trim()) return;
+      const locator = window.prompt('DOI or URL for this paper') || '';
+      const summary = window.prompt('Short reason this paper matters for the Coherence paper') || '';
+      const payload = {
+        action: 'add_external_literature',
+        mission_id: selectedMissionId,
+        title: title.trim(),
+        summary: summary.trim(),
+        reason: 'added external literature from Make Paper panel'
+      };
+      if (locator.trim().startsWith('http')) {
+        payload.url = locator.trim();
+      } else {
+        payload.doi = locator.trim();
+      }
+      const data = await steward(payload);
+      const record = data && data.result && data.result.external_literature ? data.result.external_literature : null;
+      if (record) {
+        addMessage('lucien', `External literature attached as raw review item: ${record.title}. Review it before final-paper status.`);
+      }
+    }
+
     function jumpToSourceNotesReview() {
       if (!requireSelectedMissionForPaper()) return;
       sourceNotesReview.scrollIntoView({behavior: 'smooth', block: 'center'});
@@ -4935,6 +5093,8 @@ def _live_chat_html() -> str:
     document.getElementById('oneClickResearchPdf').addEventListener('click', runOneClickCoherenceResearch);
 
     document.getElementById('paperGatherSources').addEventListener('click', gatherSourcesForPaper);
+
+    document.getElementById('paperAddExternal').addEventListener('click', addExternalLiteratureForPaper);
 
     document.getElementById('paperReviewNotes').addEventListener('click', jumpToSourceNotesReview);
 

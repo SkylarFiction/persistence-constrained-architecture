@@ -9,6 +9,7 @@ from .coherence_corpus import (
     coherence_corpus_index_records_from_events,
     is_relevant_source_path,
 )
+from .external_literature import external_literature_for_mission
 from .ledger import ContinuityLedger
 from .mission_claim_map import mission_claim_map
 from .missions import mission_briefs_from_events
@@ -34,12 +35,14 @@ def paper_readiness_for_mission(
     ]
     source_links = claim_source_links(reader_claims, source_notes)
     corpus_sources = corpus_sources_for_mission(ledger, mission_id)
+    external_literature = external_literature_for_mission(ledger.events(), mission_id)
     readiness = compute_paper_readiness(
         claim_map=claim_map,
         reader_claims=reader_claims,
         source_links=source_links,
         source_notes=source_notes,
         corpus_sources=corpus_sources,
+        external_literature=external_literature,
     )
     readiness["mission_id"] = mission_id
     readiness["mission_title"] = claim_map.get("mission_title")
@@ -51,10 +54,15 @@ def paper_readiness_for_mission(
         1 for note in source_notes if str(note.get("review_status") or "raw") == "raw"
     )
     readiness["claim_source_links"] = source_links
-    readiness["external_source_count"] = sum(
-        1 for source in corpus_sources
-        if "web" in str(source.get("source_mode") or "").lower()
-    )
+    readiness["external_literature"] = external_literature
+    readiness["external_source_count"] = len([
+        item for item in external_literature
+        if str(item.get("review_status") or "raw") != "rejected"
+    ])
+    readiness["reviewed_external_source_count"] = len([
+        item for item in external_literature
+        if str(item.get("review_status") or "") == "reviewed"
+    ])
     readiness["recommended_action"] = recommended_paper_action(readiness)
     readiness["buttons"] = [
         {"id": "gather_sources", "label": "Gather Sources"},
@@ -73,7 +81,9 @@ def compute_paper_readiness(
     source_links: list[dict[str, Any]],
     source_notes: list[dict[str, Any]],
     corpus_sources: list[dict[str, Any]],
+    external_literature: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    external_literature = external_literature or []
     reader_claim_ids = {
         str(entry.get("claim_item_id") or entry.get("claim_hash") or "")
         for entry in reader_claims
@@ -98,8 +108,18 @@ def compute_paper_readiness(
         blockers.append(f"{unlinked_claim_count} reader-facing claim(s) lack direct source-note links.")
     if malformed_note_count:
         blockers.append(f"{malformed_note_count} source note(s) require manual extraction verification.")
-    if not any("web" in str(source.get("source_mode") or "").lower() for source in corpus_sources):
+    external_count = len([
+        item for item in external_literature
+        if str(item.get("review_status") or "raw") != "rejected"
+    ])
+    reviewed_external_count = len([
+        item for item in external_literature
+        if str(item.get("review_status") or "") == "reviewed"
+    ])
+    if external_count == 0:
         blockers.append("No external scholarly literature review has been attached yet.")
+    elif reviewed_external_count == 0:
+        blockers.append("External scholarly literature is attached, but none has been steward-reviewed yet.")
     status = "draft_packet"
     if not blockers:
         status = "review_ready_manuscript"
@@ -119,6 +139,8 @@ def compute_paper_readiness(
         "linked_claim_count": len(linked_claim_ids & reader_claim_ids),
         "unlinked_claim_count": unlinked_claim_count,
         "reviewed_source_link_count": len(reviewed_source_links),
+        "external_source_count": external_count,
+        "reviewed_external_source_count": reviewed_external_count,
         "reviewed_evidence_count": reviewed_evidence_count,
         "malformed_note_count": malformed_note_count,
         "blockers": blockers,
@@ -162,7 +184,7 @@ def render_paper_readiness_text(readiness: dict[str, Any]) -> str:
         f"source notes reviewed: {readiness.get('reviewed_source_note_count', 0)} / {readiness.get('source_note_count', 0)}",
         f"reviewed source links: {readiness.get('reviewed_source_link_count', 0)}",
         f"malformed source notes: {readiness.get('malformed_note_count', 0)}",
-        f"external sources: {readiness.get('external_source_count', 0)}",
+        f"external sources reviewed: {readiness.get('reviewed_external_source_count', 0)} / {readiness.get('external_source_count', 0)}",
         f"next: {readiness.get('recommended_action') or 'none'}",
     ]
     blockers = readiness.get("blockers") or []
@@ -186,6 +208,8 @@ def recommended_paper_action(readiness: dict[str, Any]) -> str:
         return "Fix or reject malformed source notes."
     if readiness.get("external_source_count", 0) == 0:
         return "Add external scholarly literature before final-paper status."
+    if readiness.get("reviewed_external_source_count", 0) == 0:
+        return "Review attached external literature before final-paper status."
     if readiness.get("ready"):
         return "Generate the final paper and inspect the PDF."
     return "Run paper readiness again after the current review work."
@@ -248,4 +272,3 @@ def corpus_sources_for_mission(
                 seen.add(key)
                 sources.append({**item, "source_mode": source_mode})
     return sources
-

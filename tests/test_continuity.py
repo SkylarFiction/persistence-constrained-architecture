@@ -58,6 +58,7 @@ from pca import (
     accepted_skills_from_events,
     add_evidence,
     add_evidence_claim,
+    add_external_literature,
     append_ledger_anchor,
     active_followups,
     auto_daily_research_loop_records_from_events,
@@ -195,6 +196,7 @@ from pca import (
     resolve_matching_reflection_tasks,
     review_evidence,
     review_autonomy_action,
+    review_external_literature,
     review_source_note,
     link_checkpoint_to_mission,
     link_evidence,
@@ -1331,7 +1333,13 @@ def test_live_chat_html_contains_mission_first_home():
     assert "paperReadinessSummary" in html
     assert "paperReadinessCards" in html
     assert "paperGenerateFinal" in html
+    assert "paperAddExternal" in html
+    assert "externalLiteratureSummary" in html
+    assert "externalLiteratureList" in html
+    assert "add_external_literature" in html
+    assert "review_external_literature" in html
     assert "renderPaperReadiness(status.paper_readiness || {}, missionView.activeMission)" in html
+    assert "renderExternalLiterature(status.mission_external_literature || {}, missionView.activeMission)" in html
     assert "Research Coherence Physics and Save a PDF" in html
     assert "oneClickResearchPdf" in html
     assert "runOneClickCoherenceResearch" in html
@@ -1438,6 +1446,15 @@ def test_live_status_includes_tool_router_state(tmp_path):
         source_content_sha256="status-source-hash",
     )
     ledger.append("source_note.extracted", manifest.system_id, note.to_dict())
+    external = add_external_literature(
+        ledger,
+        manifest,
+        mission.mission_id,
+        title="External status source",
+        url="https://example.test/status-source",
+        summary="External comparison source for status payload.",
+        reason="status external literature fixture",
+    )
 
     status = _status_payload(ledger, manifest)
 
@@ -1447,6 +1464,8 @@ def test_live_status_includes_tool_router_state(tmp_path):
     assert status["research_review_desks"][mission.mission_id]["cards"]["claims"]["value"] == 1
     assert status["mission_source_notes"][mission.mission_id][0]["note_id"] == "source_note_live_status"
     assert status["mission_source_notes"][mission.mission_id][0]["review_status"] == "raw"
+    assert status["mission_external_literature"][mission.mission_id][0]["literature_id"] == external.literature_id
+    assert status["mission_external_literature"][mission.mission_id][0]["review_status"] == "raw"
     assert status["paper_readiness"][mission.mission_id]["ready"] is False
     assert status["paper_readiness"][mission.mission_id]["recommended_action"]
     assert status["tools"]["read_file"]["risk"] == "low"
@@ -2165,6 +2184,47 @@ def test_live_steward_action_reviews_source_note_directly(tmp_path):
     assert result["source_note_review"]["note_id"] == note.note_id
     assert notes[0]["review_status"] == "rejected"
     assert notes[0]["review_reason"] == "rejected weak match from live app test"
+
+
+def test_live_steward_action_adds_and_reviews_external_literature(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Live external literature mission",
+        problem_statement="External literature should be stewarded from the live app.",
+    )
+
+    added = _apply_steward_action(
+        ledger,
+        manifest,
+        {
+            "action": "add_external_literature",
+            "mission_id": mission.mission_id,
+            "title": "External AI Identity Paper",
+            "url": "https://example.test/identity-paper",
+            "summary": "External comparison source for AI identity continuity.",
+            "reason": "added from live app test",
+        },
+    )
+    literature_id = added["external_literature"]["literature_id"]
+    reviewed = _apply_steward_action(
+        ledger,
+        manifest,
+        {
+            "action": "review_external_literature",
+            "literature_id": literature_id,
+            "status": "reviewed",
+            "reason": "accepted external literature from live app test",
+        },
+    )
+
+    readiness = paper_readiness_for_mission(ledger, mission.mission_id)
+
+    assert added["external_literature"]["review_status"] == "raw"
+    assert reviewed["external_literature_review"]["review_status"] == "reviewed"
+    assert readiness["reviewed_external_source_count"] == 1
 
 
 def test_live_steward_action_runs_governed_tool(tmp_path):
@@ -3767,6 +3827,50 @@ def test_paper_readiness_gate_reports_blockers_and_next_action(tmp_path):
     assert any("reviewed" in blocker.lower() for blocker in readiness["blockers"])
     assert "Paper Readiness" in rendered
     assert "source notes reviewed: 0 / 1" in rendered
+
+
+def test_reviewed_external_literature_updates_paper_readiness(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="External literature readiness mission",
+        problem_statement="Attach outside literature before final paper status.",
+    )
+
+    raw = add_external_literature(
+        ledger,
+        manifest,
+        mission.mission_id,
+        title="A Survey of Agent Memory",
+        authors="Example Author",
+        year="2025",
+        venue="Journal of Testable AI Systems",
+        doi="10.0000/example",
+        summary="External comparison literature for memory and agent identity.",
+        reason="test external literature intake",
+    )
+    raw_readiness = paper_readiness_for_mission(ledger, mission.mission_id)
+
+    assert raw_readiness["external_source_count"] == 1
+    assert raw_readiness["reviewed_external_source_count"] == 0
+    assert any("none has been steward-reviewed" in blocker for blocker in raw_readiness["blockers"])
+
+    review = review_external_literature(
+        ledger,
+        manifest,
+        raw.literature_id,
+        "reviewed",
+        confidence="medium",
+        reason="reviewed external literature for readiness test",
+    )
+    reviewed_readiness = paper_readiness_for_mission(ledger, mission.mission_id)
+
+    assert review.review_status == "reviewed"
+    assert reviewed_readiness["external_source_count"] == 1
+    assert reviewed_readiness["reviewed_external_source_count"] == 1
+    assert not any("external scholarly literature" in blocker.lower() for blocker in reviewed_readiness["blockers"])
 
 
 def test_claim_source_links_preserve_tentative_matches_without_overclaiming():

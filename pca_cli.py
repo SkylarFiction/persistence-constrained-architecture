@@ -39,6 +39,7 @@ from pca import (
     TransformRequest,
     add_evidence,
     add_evidence_claim,
+    add_external_literature,
     add_goal_blocker,
     append_ledger_anchor,
     apply_steward_inbox_action,
@@ -123,6 +124,7 @@ from pca import (
     review_growth,
     review_skill_candidate,
     review_evidence,
+    review_external_literature,
     review_source_note,
     link_evidence,
     link_goal_mission,
@@ -153,6 +155,7 @@ from pca import (
     render_daily_plan_text,
     render_knowledge_hub_index_text,
     render_knowledge_hub_sources_text,
+    render_external_literature_text,
     render_next_governed_build_text,
     render_paper_readiness_text,
     render_project_build_brief_text,
@@ -187,6 +190,7 @@ from pca import (
     propose_autonomy_action,
     review_autonomy_action,
     research_outputs_from_events,
+    external_literature_for_mission,
     paper_readiness_for_mission,
     research_review_desk,
     research_sandbox_status,
@@ -560,6 +564,33 @@ def main() -> int:
     source_note_review_parser.add_argument("--reviewer", default="steward")
     source_note_review_parser.add_argument("--confidence")
     source_note_review_parser.add_argument("--reason", required=True)
+
+    external_literature_add_parser = subparsers.add_parser("external-literature-add")
+    external_literature_add_parser.add_argument("mission_id")
+    external_literature_add_parser.add_argument("--title", required=True)
+    external_literature_add_parser.add_argument("--authors", default="")
+    external_literature_add_parser.add_argument("--year", default="")
+    external_literature_add_parser.add_argument("--venue", default="")
+    external_literature_add_parser.add_argument("--doi", default="")
+    external_literature_add_parser.add_argument("--url", default="")
+    external_literature_add_parser.add_argument("--summary", default="")
+    external_literature_add_parser.add_argument("--confidence", default="unknown")
+    external_literature_add_parser.add_argument("--reason", default="")
+
+    external_literature_review_parser = subparsers.add_parser("external-literature-review")
+    external_literature_review_parser.add_argument("literature_id")
+    external_literature_review_group = external_literature_review_parser.add_mutually_exclusive_group(required=True)
+    external_literature_review_group.add_argument("--accept", action="store_true")
+    external_literature_review_group.add_argument("--dispute", action="store_true")
+    external_literature_review_group.add_argument("--stale", action="store_true")
+    external_literature_review_group.add_argument("--reject", action="store_true")
+    external_literature_review_parser.add_argument("--reviewer", default="steward")
+    external_literature_review_parser.add_argument("--confidence")
+    external_literature_review_parser.add_argument("--reason", required=True)
+
+    external_literature_parser = subparsers.add_parser("external-literature")
+    external_literature_parser.add_argument("mission_id")
+    external_literature_parser.add_argument("--json", action="store_true")
 
     evidence_claim_parser = subparsers.add_parser("evidence-claim")
     evidence_claim_parser.add_argument("--statement", required=True)
@@ -1805,6 +1836,59 @@ def main() -> int:
         except ValueError as exc:
             raise SystemExit(str(exc))
         print_json({"source_note_review": record.to_dict()})
+        return 0
+
+    if args.command == "external-literature-add":
+        try:
+            record = add_external_literature(
+                ledger=ledger,
+                manifest=manifest,
+                mission_id=args.mission_id,
+                title=args.title,
+                authors=args.authors,
+                year=args.year,
+                venue=args.venue,
+                doi=args.doi,
+                url=args.url,
+                summary=args.summary,
+                confidence=args.confidence,
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"external_literature": record.to_dict()})
+        return 0
+
+    if args.command == "external-literature-review":
+        if args.accept:
+            status = "reviewed"
+        elif args.dispute:
+            status = "disputed"
+        elif args.stale:
+            status = "stale"
+        else:
+            status = "rejected"
+        try:
+            record = review_external_literature(
+                ledger=ledger,
+                manifest=manifest,
+                literature_id=args.literature_id,
+                review_status=status,
+                reviewer=args.reviewer,
+                confidence=args.confidence,
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"external_literature_review": record.to_dict()})
+        return 0
+
+    if args.command == "external-literature":
+        records = external_literature_for_mission(ledger.events(), args.mission_id)
+        if args.json:
+            print_json({"external_literature": records})
+        else:
+            print(render_external_literature_text(records))
         return 0
 
     if args.command == "evidence-claim":

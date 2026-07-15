@@ -10,6 +10,7 @@ from .argument_graph import mission_argument_graph
 from .claim_source_links import claim_source_links
 from .coherence_corpus import coherence_corpus_index_records_from_events, is_relevant_source_path
 from .evidence_locker import evidence_for_target
+from .external_literature import external_literature_for_mission
 from .falsification_lab import falsification_lab_verdict
 from .ledger import ContinuityLedger
 from .manifest import IdentityManifest
@@ -70,6 +71,7 @@ def export_research_pdf(
         for note in source_notes_for_mission(ledger.events(), mission_id)
         if is_relevant_source_path(str(note.get("source_path") or ""))
     ]
+    external_literature = external_literature_for_mission(ledger.events(), mission_id)
 
     paper_path = Path(paper_output_path)
     packet_path = Path(packet_output_path)
@@ -89,6 +91,7 @@ def export_research_pdf(
         source_links=source_links,
         source_notes=source_notes,
         corpus_sources=corpus_sources,
+        external_literature=external_literature,
     )
 
     paper_lines = _scholarly_paper_lines(
@@ -721,7 +724,9 @@ def _paper_readiness(
     source_links: list[dict[str, Any]],
     source_notes: list[dict[str, Any]],
     corpus_sources: list[dict[str, Any]],
+    external_literature: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    external_literature = external_literature or []
     reader_claim_ids = {
         str(entry.get("claim_item_id") or entry.get("claim_hash") or "")
         for entry in reader_claims
@@ -742,8 +747,18 @@ def _paper_readiness(
         blockers.append(f"{unlinked_claim_count} reader-facing claim(s) lack direct source-note links.")
     if malformed_note_count:
         blockers.append(f"{malformed_note_count} source note(s) require manual extraction verification.")
-    if not any("web" in str(source.get("source_mode") or "").lower() for source in corpus_sources):
+    external_count = len([
+        item for item in external_literature
+        if str(item.get("review_status") or "raw") != "rejected"
+    ])
+    reviewed_external_count = len([
+        item for item in external_literature
+        if str(item.get("review_status") or "") == "reviewed"
+    ])
+    if external_count == 0:
         blockers.append("No external scholarly literature review has been attached yet.")
+    elif reviewed_external_count == 0:
+        blockers.append("External scholarly literature is attached, but none has been steward-reviewed yet.")
     status = "draft_packet"
     if not blockers:
         status = "review_ready_manuscript"
@@ -761,6 +776,8 @@ def _paper_readiness(
         "source_link_count": len(source_links),
         "linked_claim_count": len(linked_claim_ids & reader_claim_ids),
         "unlinked_claim_count": unlinked_claim_count,
+        "external_source_count": external_count,
+        "reviewed_external_source_count": reviewed_external_count,
         "reviewed_evidence_count": reviewed_evidence_count,
         "malformed_note_count": malformed_note_count,
         "blockers": blockers,
@@ -790,6 +807,7 @@ def _paper_readiness_lines(readiness: dict[str, Any]) -> list[str]:
         f"Reader-facing claims: {readiness.get('reader_claim_count', 0)}",
         f"Claims with source-note links: {readiness.get('linked_claim_count', 0)}",
         f"Raw source-note links: {readiness.get('source_link_count', 0)}",
+        f"External scholarly sources reviewed: {readiness.get('reviewed_external_source_count', 0)} / {readiness.get('external_source_count', 0)}",
         f"Reviewed evidence records: {readiness.get('reviewed_evidence_count', 0)}",
     ]
     blockers = readiness.get("blockers") or []
