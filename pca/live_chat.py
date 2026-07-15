@@ -5,6 +5,9 @@ import argparse
 import json
 import re
 import shutil
+import threading
+import time
+import webbrowser
 from pathlib import Path
 from typing import Any
 from urllib import error, request
@@ -128,6 +131,8 @@ def run_live_chat_server(
     port: int = 8787,
     manifest_path: str | Path = "examples/minimal_identity.json",
     ledger_path: str | Path = "data/lucien_chat.log",
+    open_browser: bool = False,
+    open_delay: float = 1.0,
 ) -> None:
     manifest = IdentityManifest.from_dict(
         json.loads(Path(manifest_path).read_text(encoding="utf-8"))
@@ -272,9 +277,50 @@ def run_live_chat_server(
         def log_message(self, format: str, *args: Any) -> None:
             return
 
-    server = ThreadingHTTPServer((host, port), Handler)
-    print(f"Lucien Live Chat v0.1: http://{host}:{port}")
-    server.serve_forever()
+    server = _bind_live_chat_server(host, port, Handler)
+    actual_host, actual_port = server.server_address[:2]
+    display_host = host if host not in {"", "0.0.0.0"} else "127.0.0.1"
+    url = f"http://{display_host}:{actual_port}/"
+    print(f"Lucien Live Chat v0.1: {url}", flush=True)
+    if open_browser:
+        threading.Thread(
+            target=_open_browser_after_delay,
+            args=(url, open_delay),
+            daemon=True,
+        ).start()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        return
+    finally:
+        server.server_close()
+
+
+def _open_browser_after_delay(url: str, delay: float) -> None:
+    time.sleep(max(0.0, delay))
+    webbrowser.open(url)
+
+
+def _bind_live_chat_server(
+    host: str,
+    port: int,
+    handler: type[BaseHTTPRequestHandler],
+) -> ThreadingHTTPServer:
+    if port != 0:
+        return ThreadingHTTPServer((host, port), handler)
+
+    first_port = 8787
+    last_port = 8899
+    last_error: OSError | None = None
+    for candidate_port in range(first_port, last_port + 1):
+        try:
+            return ThreadingHTTPServer((host, candidate_port), handler)
+        except OSError as exc:
+            last_error = exc
+            continue
+    raise OSError(
+        f"No open Lucien port found between {first_port} and {last_port}."
+    ) from last_error
 
 
 def _refresh_live_artifacts(

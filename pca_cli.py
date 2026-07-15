@@ -537,6 +537,8 @@ def main() -> int:
     live_chat_parser = subparsers.add_parser("live-chat")
     live_chat_parser.add_argument("--host", default="127.0.0.1")
     live_chat_parser.add_argument("--port", type=int, default=8787)
+    live_chat_parser.add_argument("--open-browser", action="store_true")
+    live_chat_parser.add_argument("--open-delay", type=float, default=1.0)
 
     demo_parser = subparsers.add_parser("demo")
     demo_parser.add_argument("--host", default="127.0.0.1")
@@ -1571,6 +1573,8 @@ def main() -> int:
             port=args.port,
             manifest_path=args.manifest,
             ledger_path=_chat_ledger_path(args.ledger),
+            open_browser=args.open_browser,
+            open_delay=args.open_delay,
         )
         return 0
 
