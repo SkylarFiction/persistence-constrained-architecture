@@ -173,11 +173,13 @@ from pca import (
     render_lucien_cockpit_html,
     render_next_governed_build_text,
     render_knowledge_hub_index_text,
+    render_paper_readiness_text,
     render_session_replay_html,
     render_trace_report_html,
     recovery_records_from_events,
     research_outputs_from_events,
     research_sandbox_status,
+    paper_readiness_for_mission,
     safe_load_policy_pack,
     select_brain_route,
     propose_growth,
@@ -1325,6 +1327,11 @@ def test_live_chat_html_contains_mission_first_home():
     assert "Reject Weak Match" in html
     assert "Research Review Desk" in html
     assert "researchReviewSummary" in html
+    assert "Make Paper" in html
+    assert "paperReadinessSummary" in html
+    assert "paperReadinessCards" in html
+    assert "paperGenerateFinal" in html
+    assert "renderPaperReadiness(status.paper_readiness || {}, missionView.activeMission)" in html
     assert "Research Coherence Physics and Save a PDF" in html
     assert "oneClickResearchPdf" in html
     assert "runOneClickCoherenceResearch" in html
@@ -1440,6 +1447,8 @@ def test_live_status_includes_tool_router_state(tmp_path):
     assert status["research_review_desks"][mission.mission_id]["cards"]["claims"]["value"] == 1
     assert status["mission_source_notes"][mission.mission_id][0]["note_id"] == "source_note_live_status"
     assert status["mission_source_notes"][mission.mission_id][0]["review_status"] == "raw"
+    assert status["paper_readiness"][mission.mission_id]["ready"] is False
+    assert status["paper_readiness"][mission.mission_id]["recommended_action"]
     assert status["tools"]["read_file"]["risk"] == "low"
     assert status["tools"]["read_file"]["safety_profile"]["read_only"] is True
     assert status["tools"]["run_check_all"]["requires_approval"] is True
@@ -3699,6 +3708,65 @@ def test_research_packet_maps_claims_to_source_notes(tmp_path):
     assert b"relevance:" in paper
     assert b"score=" not in paper
     assert b"Blocking issues before final-paper status" in paper
+
+
+def test_paper_readiness_gate_reports_blockers_and_next_action(tmp_path):
+    import hashlib
+    from datetime import datetime, timezone
+
+    from pca.argument_graph import seed_continuity_argument_graph
+    from pca.source_notes import SourceNoteRecord
+
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Paper readiness mission",
+        problem_statement="Check whether a governed paper is ready to finalize.",
+    )
+    seed_continuity_argument_graph(
+        ledger,
+        manifest,
+        mission.mission_id,
+        project_root=tmp_path,
+    )
+    note = SourceNoteRecord(
+        note_id="source_note_readiness_identity",
+        identity_id=manifest.system_id,
+        mission_id=mission.mission_id,
+        source_path="coherence /readiness_identity.pdf",
+        theme="identity_physics",
+        title="Readiness Identity Source",
+        note_kind="claim_candidate",
+        summary=(
+            "A system can preserve smooth output while memory, authority, and "
+            "lineage change, so output style alone does not establish continuity."
+        ),
+        locator="page 2",
+        confidence="medium",
+        review_status="raw",
+        summary_hash=hashlib.sha256(b"readiness-source-note").hexdigest(),
+        excerpt_hash=hashlib.sha256(b"readiness-excerpt").hexdigest(),
+        excerpt_length=128,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        reason="paper readiness source note",
+        source_content_sha256="readiness-source-hash",
+    )
+    ledger.append("source_note.extracted", manifest.system_id, note.to_dict())
+
+    readiness = paper_readiness_for_mission(ledger, mission.mission_id)
+    rendered = render_paper_readiness_text(readiness)
+
+    assert readiness["ready"] is False
+    assert readiness["reader_claim_count"] >= 1
+    assert readiness["source_note_count"] == 1
+    assert readiness["linked_claim_count"] >= 1
+    assert readiness["reviewed_source_note_count"] == 0
+    assert readiness["recommended_action"]
+    assert any("reviewed" in blocker.lower() for blocker in readiness["blockers"])
+    assert "Paper Readiness" in rendered
+    assert "source notes reviewed: 0 / 1" in rendered
 
 
 def test_claim_source_links_preserve_tentative_matches_without_overclaiming():

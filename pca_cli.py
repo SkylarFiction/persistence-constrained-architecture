@@ -154,6 +154,7 @@ from pca import (
     render_knowledge_hub_index_text,
     render_knowledge_hub_sources_text,
     render_next_governed_build_text,
+    render_paper_readiness_text,
     render_project_build_brief_text,
     render_research_autopilot_text,
     render_research_review_text,
@@ -186,6 +187,7 @@ from pca import (
     propose_autonomy_action,
     review_autonomy_action,
     research_outputs_from_events,
+    paper_readiness_for_mission,
     research_review_desk,
     research_sandbox_status,
 )
@@ -419,6 +421,9 @@ def main() -> int:
     research_review_parser = subparsers.add_parser("research-review")
     research_review_parser.add_argument("--mission")
     research_review_parser.add_argument("--json", action="store_true")
+    paper_readiness_parser = subparsers.add_parser("paper-readiness")
+    paper_readiness_parser.add_argument("mission_id")
+    paper_readiness_parser.add_argument("--json", action="store_true")
     certification_parser = subparsers.add_parser("continuity-certification")
     certification_parser.add_argument("--json", action="store_true")
     daily_plan_parser = subparsers.add_parser("daily-plan")
@@ -1263,6 +1268,14 @@ def main() -> int:
             print_json({"research_review": result})
         else:
             print(render_research_review_text(result))
+        return 0
+
+    if args.command == "paper-readiness":
+        result = paper_readiness_for_mission(ledger, args.mission_id)
+        if args.json:
+            print_json({"paper_readiness": result})
+        else:
+            print(render_paper_readiness_text(result))
         return 0
 
     if args.command == "continuity-certification":

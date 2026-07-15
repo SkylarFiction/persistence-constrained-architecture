@@ -90,6 +90,7 @@ from .research_sandbox import (
 from .research_autopilot import run_research_autopilot
 from .coherence_corpus import index_coherence_corpus
 from .coherence_paper_pipeline import run_coherence_paper_pipeline
+from .paper_readiness import paper_readiness_for_mission
 from .research_pdf import export_research_pdf
 from .research_review import research_review_desks
 from .source_notes import review_source_note, source_notes_for_mission
@@ -1006,6 +1007,24 @@ def _status_payload(
         )
         for brief in missions
     }
+    paper_readiness = {}
+    for brief in missions:
+        mission_id = brief["mission"]["mission_id"]
+        try:
+            paper_readiness[mission_id] = paper_readiness_for_mission(
+                ledger,
+                mission_id,
+            )
+        except Exception as exc:
+            paper_readiness[mission_id] = {
+                "mission_id": mission_id,
+                "mission_title": brief["mission"].get("title"),
+                "status": "unavailable",
+                "plain_status": "Paper readiness unavailable",
+                "ready": False,
+                "blockers": [str(exc)],
+                "recommended_action": "Run the paper pipeline or inspect diagnostics.",
+            }
     mission_claim_map_data = mission_claim_maps(ledger)
     research_review_data = research_review_desks(ledger)
     mission_steps = [
@@ -1098,6 +1117,7 @@ def _status_payload(
         "missions": missions,
         "mission_evidence": mission_evidence,
         "mission_source_notes": mission_source_notes,
+        "paper_readiness": paper_readiness,
         "mission_claim_maps": mission_claim_map_data,
         "research_review_desks": research_review_data,
         "mission_flows": mission_flows,
@@ -2297,6 +2317,24 @@ def _live_chat_html() -> str:
     <section class="mission-dashboard">
       <div class="mission-controls">
         <div>
+          <h2>Make Paper</h2>
+          <div class="item-meta">Check whether the active mission is ready for a reader-facing paper, then generate the clean PDF when the evidence gate allows it.</div>
+        </div>
+        <div class="actions">
+          <button type="button" id="paperGatherSources" class="secondary">Gather Sources</button>
+          <button type="button" id="paperReviewNotes" class="secondary">Review Notes</button>
+          <button type="button" id="paperCheckReadiness" class="secondary">Check Readiness</button>
+          <button type="button" id="paperGenerateFinal" class="primary">Generate Final Paper</button>
+          <button type="button" id="paperOpenFolder" class="secondary">Open Paper Folder</button>
+        </div>
+      </div>
+      <div id="paperReadinessSummary" class="item"></div>
+      <div id="paperReadinessCards" class="mission-card-grid"></div>
+      <div id="paperReadinessBlockers" class="queue"></div>
+    </section>
+    <section class="mission-dashboard">
+      <div class="mission-controls">
+        <div>
           <h2>Project Build Brief</h2>
           <div class="item-meta">Local repo state and the safest next engineering move.</div>
         </div>
@@ -2594,6 +2632,9 @@ def _live_chat_html() -> str:
     const missions = document.getElementById('missions');
     const missionCards = document.getElementById('missionCards');
     const activeMissionSelect = document.getElementById('activeMissionSelect');
+    const paperReadinessSummary = document.getElementById('paperReadinessSummary');
+    const paperReadinessCards = document.getElementById('paperReadinessCards');
+    const paperReadinessBlockers = document.getElementById('paperReadinessBlockers');
     const missionEvidenceSummary = document.getElementById('missionEvidenceSummary');
     const missionEvidence = document.getElementById('missionEvidence');
     const sourceNotesSummary = document.getElementById('sourceNotesSummary');
@@ -2701,6 +2742,7 @@ def _live_chat_html() -> str:
       renderGoals(status.goals || [], status.missions || []);
       renderDailyPlan(status.daily_plan || {});
       renderMissions(status.missions || [], status.mission_flows || {}, status.mission_autonomy || []);
+      renderPaperReadiness(status.paper_readiness || {}, missionView.activeMission);
       renderMissionEvidence(status.mission_evidence || {}, missionView.activeMission);
       renderSourceNotesReview(status.mission_source_notes || {}, status.mission_claim_maps || {}, missionView.activeMission);
       renderMissionClaimMap(status.mission_claim_maps || {}, missionView.activeMission);
@@ -3132,6 +3174,48 @@ def _live_chat_html() -> str:
         }
         row.append(title, meta, linkMeta, actions);
         missionEvidence.appendChild(row);
+      }
+    }
+
+    function renderPaperReadiness(readinessByMission, selectedMission) {
+      paperReadinessSummary.innerHTML = '';
+      paperReadinessCards.innerHTML = '';
+      paperReadinessBlockers.innerHTML = '';
+      if (!selectedMission || !selectedMission.mission_id) {
+        empty(paperReadinessSummary, 'Select or open a mission before making a paper.');
+        empty(paperReadinessBlockers, 'No active paper workflow yet.');
+        return;
+      }
+      const readiness = readinessByMission[selectedMission.mission_id] || {};
+      const ready = !!readiness.ready;
+      const statusLabel = readiness.plain_status || readiness.status || 'unknown';
+      paperReadinessSummary.innerHTML = `<div class="item-title">Paper readiness: ${escapeHtml(ready ? 'Ready' : 'Not Ready')}</div>
+        <div class="item-meta">${escapeHtml(statusLabel)}</div>
+        <div class="item-meta">Next action: ${escapeHtml(readiness.recommended_action || 'Check readiness after gathering sources.')}</div>`;
+      const cards = [
+        ['Reader Claims', readiness.reader_claim_count || 0],
+        ['Linked Claims', `${readiness.linked_claim_count || 0} / ${readiness.reader_claim_count || 0}`],
+        ['Source Notes Reviewed', `${readiness.reviewed_source_note_count || 0} / ${readiness.source_note_count || 0}`],
+        ['Approved Source Links', readiness.reviewed_source_link_count || 0],
+        ['Malformed Notes', readiness.malformed_note_count || 0],
+        ['External Sources', readiness.external_source_count || 0],
+      ];
+      for (const [label, value] of cards) {
+        const card = document.createElement('div');
+        card.className = 'item mission-card';
+        card.innerHTML = `<div class="label">${escapeHtml(label)}</div><div class="item-title">${escapeHtml(String(value))}</div>`;
+        paperReadinessCards.appendChild(card);
+      }
+      const blockers = readiness.blockers || [];
+      if (!blockers.length) {
+        empty(paperReadinessBlockers, 'No readiness blockers reported. Generate the paper, then inspect the PDF before sharing it.');
+        return;
+      }
+      for (const blocker of blockers) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = `<div class="item-title">Needs Work</div><div class="item-meta">${escapeHtml(blocker)}</div>`;
+        paperReadinessBlockers.appendChild(row);
       }
     }
 
@@ -4787,6 +4871,35 @@ def _live_chat_html() -> str:
       window.open(localDocumentUrl(pdf.paper_path), '_blank');
     }
 
+    function requireSelectedMissionForPaper() {
+      if (!selectedMissionId) {
+        addMessage('lucien', 'Select or open a mission before using Make Paper.');
+        return false;
+      }
+      return true;
+    }
+
+    async function gatherSourcesForPaper() {
+      if (!requireSelectedMissionForPaper()) return;
+      await indexCorpusForSelectedMission();
+    }
+
+    function jumpToSourceNotesReview() {
+      if (!requireSelectedMissionForPaper()) return;
+      sourceNotesReview.scrollIntoView({behavior: 'smooth', block: 'center'});
+    }
+
+    function checkPaperReadinessNow() {
+      if (!requireSelectedMissionForPaper()) return;
+      if (currentStatus) renderPaperReadiness(currentStatus.paper_readiness || {}, missionView.activeMission);
+      paperReadinessSummary.scrollIntoView({behavior: 'smooth', block: 'center'});
+      addMessage('lucien', 'Paper readiness refreshed. Follow the next action shown in Make Paper.');
+    }
+
+    function openLatestPaper() {
+      window.open(localDocumentUrl('../knowledge_hub/generated/research_papers/coherence_paper.pdf'), '_blank');
+    }
+
     async function runOneClickCoherenceResearch() {
       const button = document.getElementById('oneClickResearchPdf');
       button.disabled = true;
@@ -4820,6 +4933,16 @@ def _live_chat_html() -> str:
     document.getElementById('workspaceExportPdf').addEventListener('click', exportResearchPdfForSelectedMission);
 
     document.getElementById('oneClickResearchPdf').addEventListener('click', runOneClickCoherenceResearch);
+
+    document.getElementById('paperGatherSources').addEventListener('click', gatherSourcesForPaper);
+
+    document.getElementById('paperReviewNotes').addEventListener('click', jumpToSourceNotesReview);
+
+    document.getElementById('paperCheckReadiness').addEventListener('click', checkPaperReadinessNow);
+
+    document.getElementById('paperGenerateFinal').addEventListener('click', runPaperPipelineForSelectedMission);
+
+    document.getElementById('paperOpenFolder').addEventListener('click', openLatestPaper);
 
     document.getElementById('reviewDeskIndexCorpus').addEventListener('click', indexCorpusForSelectedMission);
 
