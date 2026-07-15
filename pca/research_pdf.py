@@ -81,6 +81,7 @@ def export_research_pdf(
     packet_path.parent.mkdir(parents=True, exist_ok=True)
     argument_graph = mission_argument_graph(ledger, mission_id)
     writer_draft = latest_research_writer_draft(ledger.events(), mission_id)
+    theory_revision_record = _latest_theory_revision_record(ledger.events(), mission_id)
     reader_claims = _reader_facing_claim_entries(claim_map)
     source_links = claim_source_links(reader_claims, source_notes)
     source_coverage = _source_coverage_rows(corpus_sources, source_notes, source_links)
@@ -106,6 +107,7 @@ def export_research_pdf(
         falsification_verdict=falsification_lab_verdict(workspace_root),
         argument_graph=argument_graph,
         research_packet_path=str(packet_path),
+        theory_revision_record=theory_revision_record,
     )
     packet_lines = _research_packet_lines(
         mission_title=mission.title,
@@ -178,6 +180,7 @@ def _scholarly_paper_lines(
     falsification_verdict: dict[str, Any] | None,
     argument_graph: dict[str, Any],
     research_packet_path: str,
+    theory_revision_record: dict[str, Any] | None = None,
 ) -> list[str]:
     reviewed_evidence = int(claim_map.get("reviewed_evidence_count", 0) or 0)
     claim_candidate_notes = [
@@ -433,13 +436,16 @@ def _scholarly_paper_lines(
             "",
             "13. Local Model Manuscript Synthesis",
             *_writer_draft_lines(writer_draft),
+            "",
+            "14. Formal Theory Revision",
+            *_theory_revision_lines(theory_revision_record),
         ]
     )
     source_findings = _source_note_findings(source_notes)
     lines.extend(
         [
             "",
-            "14. Findings",
+            "15. Findings",
             "The findings below are drawn only from claim-candidate source notes "
             "that passed the source relevance gate, not from registration stubs "
             "and not from generic claims about the archive. Section 9 lists all "
@@ -448,14 +454,14 @@ def _scholarly_paper_lines(
             *source_findings,
             *_falsification_finding_lines(falsification_verdict, len(source_findings) + 1),
             "",
-            "15. Argument Structure",
+            "16. Argument Structure",
             "Every line below names the typed object it came from (claim, premise, "
             "implementation fact, counterevidence, inference, test, verdict, or "
             "limitation) so the paragraph can be traced back to what actually "
             "supports it, rather than reading as prewritten prose.",
             *_argument_graph_lines(argument_graph),
             "",
-            "16. Discussion",
+            "17. Discussion",
             "The useful conclusion is cautious: Coherence Physics should be advanced "
             "as a research framework and engineering program before it is presented "
             "as a completed physical theory. Its current strength is the repeatable "
@@ -463,26 +469,26 @@ def _scholarly_paper_lines(
             "actually been put under adversarial test, reporting the result even when "
             "it is mixed rather than favorable.",
             "",
-            "17. Proposed Paper Direction",
+            "18. Proposed Paper Direction",
             "A strong first paper should focus on the narrow, defensible claim: smooth "
             "output is not proof of continuity. From there, PCA can be shown as a "
             "working architecture that records what changed, what evidence exists, "
             "what remains under review, and what claims the system is allowed to make.",
             "",
-            "18. Limitations",
+            "19. Limitations",
             "- This draft is generated from local governed research outputs.",
             "- Raw evidence has not been accepted as reviewed evidence unless marked so.",
             "- The document does not claim proof of consciousness, AGI, personhood, or final physics.",
             "- Source registration is not the same as source interpretation.",
             "",
-            "19. Conclusion",
+            "20. Conclusion",
             "The next best version of Coherence Physics is a paper series built from "
             "reviewed source evidence, explicit claim maps, and falsifiable or "
             "inspectable examples. Lucien can help generate these drafts, but the "
             "system should keep the same rule at every stage: no claim becomes final "
             "without evidence review.",
             "",
-            "20. Research Agenda",
+            "21. Research Agenda",
             "- Review indexed source files and mark useful evidence as reviewed.",
             "- Choose one paper track: PCA/identity continuity, CSM, cognitive physics, or cosmology.",
             "- Replace provisional findings with source-backed claims.",
@@ -867,6 +873,37 @@ def _writer_draft_lines(writer_draft: dict[str, Any] | None) -> list[str]:
         return lines
     lines.extend(["", *draft_text.splitlines()])
     return lines
+
+
+def _latest_theory_revision_record(events: list[Any], mission_id: str) -> dict[str, Any] | None:
+    records = [
+        event.payload
+        for event in events
+        if event.event_type == "theory_revision_draft.created"
+        and event.payload.get("mission_id") == mission_id
+    ]
+    return records[-1] if records else None
+
+
+def _theory_revision_lines(record: dict[str, Any] | None) -> list[str]:
+    if not record:
+        return [
+            "No formal theory revision draft is attached to this mission yet. "
+            "Run the Coherence paper pipeline with theory revision enabled before "
+            "treating the theorem/proof spine as part of the manuscript."
+        ]
+    sections = ", ".join(record.get("sections") or [])
+    return [
+        "A governed formal-theory companion draft is attached to this mission. "
+        "It contains the corrected definitions, theorem statements, corollary, "
+        "honesty caveats, and falsification protocol for the slow-passage scaling "
+        "spine.",
+        f"Companion title: {record.get('title') or 'untitled theory revision'}",
+        f"Sections: {sections or 'not recorded'}",
+        f"Companion PDF: {record.get('pdf_path') or 'not written'}",
+        f"Companion Markdown: {record.get('markdown_path') or 'not written'}",
+        "Governance note: this is a revision draft, not a certified proof or peer-reviewed result.",
+    ]
 
 
 def _reader_facing_claim_entries(claim_map: dict[str, Any]) -> list[dict[str, Any]]:

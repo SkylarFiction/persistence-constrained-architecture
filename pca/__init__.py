@@ -244,6 +244,17 @@ from .mission_steps import (
     require_mission_step,
     start_mission_step,
 )
+from .theory_revision import (
+    CorollaryStatement,
+    TheoremStatement,
+    TheoryDefinition,
+    TheoryRevisionContent,
+    build_theory_revision_draft,
+    build_theory_revision_draft_lines,
+    default_coherence_theory_revision_content,
+    render_theory_revision_draft_text,
+    theory_revision_draft_records_from_events,
+)
 from .tool_router import (
     ToolExecutionRecord,
     ToolExecutionStatus,
@@ -647,6 +658,15 @@ __all__ = [
     "close_chat_session",
     "coherence_corpus_index_records_from_events",
     "coherence_paper_pipeline_records_from_events",
+    "CorollaryStatement",
+    "TheoremStatement",
+    "TheoryDefinition",
+    "TheoryRevisionContent",
+    "build_theory_revision_draft",
+    "build_theory_revision_draft_lines",
+    "default_coherence_theory_revision_content",
+    "render_theory_revision_draft_text",
+    "theory_revision_draft_records_from_events",
     "compile_self_model",
     "complete_mission_step",
     "continuity_claim_from_followups",

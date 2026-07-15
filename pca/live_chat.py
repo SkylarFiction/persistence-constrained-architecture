@@ -288,11 +288,11 @@ def _refresh_live_artifacts(
     shell._write_cockpit()
 
 
-_TIMESTAMP_SUFFIX_PATTERN = re.compile(r"_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z(?=\.pdf$)")
+_TIMESTAMP_SUFFIX_PATTERN = re.compile(r"_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z(?=\.(?:pdf|md)$)")
 
 
 def _publish_latest_copy(path_str: str) -> None:
-    """Mirror a freshly written timestamped PDF onto a stable filename.
+    """Mirror a freshly written timestamped document onto a stable filename.
 
     The TV Mode "Do Research + Save Paper" button stamps every generated
     file with a unique timestamp so each run's output is kept as permanent
@@ -855,11 +855,21 @@ def _apply_steward_action(
             or "../knowledge_hub/generated/research_papers/coherence_paper.pdf",
             packet_output_path=payload.get("packet_output_path")
             or "../knowledge_hub/generated/research_papers/coherence_research_packet.pdf",
+            theory_revision=bool(payload.get("theory_revision")),
+            theory_output_path=payload.get("theory_output_path")
+            or "../knowledge_hub/generated/research_papers/theory_revision_draft.pdf",
+            theory_markdown_output_path=payload.get("theory_markdown_output_path")
+            or "../knowledge_hub/generated/research_papers/theory_revision_draft.md",
             reason=reason or "live Coherence Physics paper pipeline",
         )
         pdf_paths = pipeline_result.get("pdf") or {}
         for key in ("paper_path", "packet_path", "audit_path"):
             path_value = pdf_paths.get(key)
+            if path_value:
+                _publish_latest_copy(path_value)
+        theory_paths = pipeline_result.get("theory_draft") or {}
+        for key in ("pdf_path", "markdown_path"):
+            path_value = theory_paths.get(key)
             if path_value:
                 _publish_latest_copy(path_value)
         return {"coherence_paper_pipeline": pipeline_result}
@@ -1695,7 +1705,9 @@ def _tv_chat_html() -> str:
       return {
         output_path: `${root}/${prefix}_audit_bundle_${stamp}.pdf`,
         paper_output_path: `${root}/${prefix}_paper_${stamp}.pdf`,
-        packet_output_path: `${root}/${prefix}_research_packet_${stamp}.pdf`
+        packet_output_path: `${root}/${prefix}_research_packet_${stamp}.pdf`,
+        theory_output_path: `${root}/${prefix}_theory_revision_${stamp}.pdf`,
+        theory_markdown_output_path: `${root}/${prefix}_theory_revision_${stamp}.md`
       };
     }
 
@@ -1808,7 +1820,10 @@ def _tv_chat_html() -> str:
             output_path: paths.output_path,
             paper_output_path: paths.paper_output_path,
             packet_output_path: paths.packet_output_path,
-            reason: 'TV mode one-click Coherence research paper, packet, and audit bundle'
+            theory_revision: true,
+            theory_output_path: paths.theory_output_path,
+            theory_markdown_output_path: paths.theory_markdown_output_path,
+            reason: 'TV mode one-click Coherence research paper, packet, theory revision, and audit bundle'
           })
         });
         const data = await response.json();
@@ -2675,7 +2690,9 @@ def _live_chat_html() -> str:
       return {
         output_path: `${root}/${prefix}_audit_bundle_${stamp}.pdf`,
         paper_output_path: `${root}/${prefix}_paper_${stamp}.pdf`,
-        packet_output_path: `${root}/${prefix}_research_packet_${stamp}.pdf`
+        packet_output_path: `${root}/${prefix}_research_packet_${stamp}.pdf`,
+        theory_output_path: `${root}/${prefix}_theory_revision_${stamp}.pdf`,
+        theory_markdown_output_path: `${root}/${prefix}_theory_revision_${stamp}.md`
       };
     }
 
@@ -4992,7 +5009,10 @@ def _live_chat_html() -> str:
         output_path: paths.output_path,
         paper_output_path: paths.paper_output_path,
         packet_output_path: paths.packet_output_path,
-        reason: 'ran Coherence Physics paper pipeline from research review desk'
+        theory_revision: true,
+        theory_output_path: paths.theory_output_path,
+        theory_markdown_output_path: paths.theory_markdown_output_path,
+        reason: 'ran Coherence Physics paper pipeline with theory revision from research review desk'
       });
       const pipeline = data && data.result && data.result.coherence_paper_pipeline ? data.result.coherence_paper_pipeline : null;
       const pdf = pipeline && pipeline.pdf ? pipeline.pdf : null;
@@ -5070,7 +5090,10 @@ def _live_chat_html() -> str:
           output_path: paths.output_path,
           paper_output_path: paths.paper_output_path,
           packet_output_path: paths.packet_output_path,
-          reason: 'one-click Coherence research paper, packet, and audit bundle'
+          theory_revision: true,
+          theory_output_path: paths.theory_output_path,
+          theory_markdown_output_path: paths.theory_markdown_output_path,
+          reason: 'one-click Coherence research paper, packet, theory revision, and audit bundle'
         });
         const pipeline = data && data.result && data.result.coherence_paper_pipeline ? data.result.coherence_paper_pipeline : null;
         const record = pipeline && pipeline.record ? pipeline.record : {};

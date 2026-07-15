@@ -222,6 +222,9 @@ from pca import (
     verify_latest_anchor,
     write_constitution_markdown,
     write_session_replay_html,
+    build_theory_revision_draft,
+    render_theory_revision_draft_text,
+    theory_revision_draft_records_from_events,
 )
 
 
@@ -1353,6 +1356,8 @@ def test_live_chat_html_contains_mission_first_home():
     assert "review_evidence_direct" in html
     assert "index_coherence_corpus" in html
     assert "run_coherence_paper_pipeline" in html
+    assert "theory_output_path" in html
+    assert "theory_revision: true" in html
     assert "captured latest Lucien reply from mission evidence panel" in html
     assert "Accept Evidence" in html
     assert "Generate Research Brief" in html
@@ -1389,6 +1394,8 @@ def test_tv_chat_html_is_simple_default_screen():
     assert "researchOutputPaths" in html
     assert "paper_output_path" in html
     assert "packet_output_path" in html
+    assert "theory_output_path" in html
+    assert "theory_revision: true" in html
     assert "Advanced Diagnostics" not in html
 
 
@@ -3654,6 +3661,83 @@ def test_export_research_pdf_writes_mission_packet(tmp_path):
     assert b"Audit Bundle" in output_path.read_bytes()
 
 
+def test_build_theory_revision_draft_writes_pdf_and_markdown(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    pdf_path = tmp_path / "theory_revision_draft.pdf"
+    markdown_path = tmp_path / "theory_revision_draft.md"
+
+    result = build_theory_revision_draft(
+        ledger,
+        manifest,
+        output_path=pdf_path,
+        markdown_output_path=markdown_path,
+        reason="test theory revision draft build",
+    )
+
+    record = result["record"]
+    assert result["pdf_path"] == str(pdf_path)
+    assert result["markdown_path"] == str(markdown_path)
+    assert record["sections"] == [
+        "Definitions",
+        "Theorem 1",
+        "Theorem 2",
+        "Corollary",
+        "Honesty Caveats",
+        "Falsification Protocol",
+    ]
+    assert record["definition_count"] == 5
+    assert record["theorem_count"] == 2
+    assert record["caveat_count"] == 5
+    assert record["falsification_step_count"] == 5
+    assert record["governance"] == (
+        "revision draft only; not a certified proof and not a substitute for "
+        "external peer review"
+    )
+    assert pdf_path.read_bytes().startswith(b"%PDF-1.4")
+    assert b"Theorem 1" in pdf_path.read_bytes()
+    assert b"Falsification Protocol" in pdf_path.read_bytes()
+
+    markdown_text = markdown_path.read_text(encoding="utf-8")
+    assert markdown_text.startswith("# Memory-Driven Critical Slowing")
+    assert "## Theorem 2: Finite-rate slow passage and dynamic breakdown" in markdown_text
+    assert "epsilon^(2/3)" in markdown_text
+
+    stored = theory_revision_draft_records_from_events(ledger.events())
+    assert len(stored) == 1
+    assert stored[0]["draft_id"] == record["draft_id"]
+
+
+def test_theory_revision_draft_records_filter_by_mission_and_render_text(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Theory revision mission",
+        problem_statement="Track the fold-bifurcation revision draft.",
+    )
+
+    result = build_theory_revision_draft(
+        ledger,
+        manifest,
+        mission_id=mission.mission_id,
+        output_path=tmp_path / "draft.pdf",
+        markdown_output_path=tmp_path / "draft.md",
+        reason="test theory revision draft mission tagging",
+    )
+
+    tagged = theory_revision_draft_records_from_events(ledger.events(), mission.mission_id)
+    untagged = theory_revision_draft_records_from_events(ledger.events(), "other-mission")
+    assert len(tagged) == 1
+    assert tagged[0]["mission_id"] == mission.mission_id
+    assert untagged == []
+
+    rendered = render_theory_revision_draft_text(result)
+    assert "Theory Revision Draft" in rendered
+    assert "revision draft, not a certified proof" in rendered
+
+
 def test_audit_bundle_collapses_duplicate_research_outputs(tmp_path):
     manifest = load_manifest()
     ledger = ContinuityLedger(tmp_path / "continuity.log")
@@ -4282,6 +4366,49 @@ def test_coherence_paper_pipeline_finishes_with_pdf_packet(tmp_path):
     assert b"Source-Derived Notes" in paper_output_path.read_bytes()
     assert b"Formal Criteria for Governed Continuity" in paper_output_path.read_bytes()
     assert b"Argument Structure" in paper_output_path.read_bytes()
+
+
+def test_coherence_paper_pipeline_can_attach_theory_revision_draft(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    corpus = tmp_path / "coherence "
+    corpus.mkdir()
+    (corpus / "Coherence_Physics_6.md").write_text(
+        "Coherence Physics claims that recovery and persistence expose collapse boundaries.",
+        encoding="utf-8",
+    )
+    paper_output_path = tmp_path / "coherence_paper.pdf"
+    packet_output_path = tmp_path / "coherence_research_packet.pdf"
+    audit_output_path = tmp_path / "coherence_audit_bundle.pdf"
+    theory_output_path = tmp_path / "theory_revision_draft.pdf"
+    theory_markdown_path = tmp_path / "theory_revision_draft.md"
+
+    result = run_coherence_paper_pipeline(
+        ledger,
+        manifest,
+        project_root=tmp_path / "project",
+        corpus_roots=["coherence "],
+        corpus_limit=2,
+        force=True,
+        output_path=audit_output_path,
+        paper_output_path=paper_output_path,
+        packet_output_path=packet_output_path,
+        theory_revision=True,
+        theory_output_path=theory_output_path,
+        theory_markdown_output_path=theory_markdown_path,
+        reason="test pipeline theory revision companion",
+    )
+
+    records = theory_revision_draft_records_from_events(ledger.events(), result["record"]["mission_id"])
+    paper = paper_output_path.read_bytes()
+
+    assert result["theory_draft"]["pdf_path"] == str(theory_output_path)
+    assert result["record"]["theory_draft"]["pdf_path"] == str(theory_output_path)
+    assert theory_output_path.read_bytes().startswith(b"%PDF-1.4")
+    assert "Theorem 2" in theory_markdown_path.read_text(encoding="utf-8")
+    assert records
+    assert b"Formal Theory Revision" in paper
+    assert b"Companion PDF:" in paper
 
 
 def test_coherence_paper_pipeline_can_include_local_model_writer(tmp_path):

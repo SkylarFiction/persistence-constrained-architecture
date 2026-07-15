@@ -18,6 +18,7 @@ from .research_review import research_review_desk
 from .research_sandbox import create_research_output, research_outputs_from_events
 from .research_writer import generate_llama_research_draft
 from .source_notes import extract_source_notes_for_mission
+from .theory_revision import build_theory_revision_draft
 
 
 def run_coherence_paper_pipeline(
@@ -34,6 +35,9 @@ def run_coherence_paper_pipeline(
     packet_output_path: str | Path = "../knowledge_hub/generated/research_papers/coherence_research_packet.pdf",
     llama_writer: bool = False,
     writer_model_mode: str = "local_ollama",
+    theory_revision: bool = False,
+    theory_output_path: str | Path = "../knowledge_hub/generated/research_papers/theory_revision_draft.pdf",
+    theory_markdown_output_path: str | Path | None = "../knowledge_hub/generated/research_papers/theory_revision_draft.md",
     reason: str = "",
 ) -> dict[str, Any]:
     project_path = Path(project_root).resolve()
@@ -179,6 +183,27 @@ def run_coherence_paper_pipeline(
     else:
         actions.append({"action": "llama_research_writer_skipped"})
 
+    theory_draft = None
+    if theory_revision:
+        theory_draft = build_theory_revision_draft(
+            ledger,
+            manifest,
+            mission_id=selected_mission["mission_id"],
+            output_path=theory_output_path,
+            markdown_output_path=theory_markdown_output_path,
+            reason=reason or "coherence paper pipeline generated formal theory revision",
+        )
+        actions.append(
+            {
+                "action": "theory_revision_draft",
+                "pdf_path": theory_draft.get("pdf_path"),
+                "markdown_path": theory_draft.get("markdown_path"),
+                "content_hash": (theory_draft.get("record") or {}).get("content_hash"),
+            }
+        )
+    else:
+        actions.append({"action": "theory_revision_draft_skipped"})
+
     pdf = export_research_pdf(
         ledger,
         manifest,
@@ -214,6 +239,7 @@ def run_coherence_paper_pipeline(
         reason=reason,
         claim_map=claim_map,
         writer_draft=writer_draft,
+        theory_draft=theory_draft,
     )
     return {
         "record": record,
@@ -222,6 +248,7 @@ def run_coherence_paper_pipeline(
         "autopilot": autopilot,
         "paper_draft": paper_draft,
         "writer_draft": writer_draft,
+        "theory_draft": theory_draft,
         "pdf": pdf,
         "review": review,
     }
@@ -244,6 +271,7 @@ def render_coherence_paper_pipeline_text(result: dict[str, Any]) -> str:
         f"paper: {(record.get('pdf') or {}).get('paper_path') or 'none'}",
         f"research packet: {(record.get('pdf') or {}).get('packet_path') or 'none'}",
         f"audit bundle: {(record.get('pdf') or {}).get('audit_path') or 'none'}",
+        f"theory revision: {(record.get('theory_draft') or {}).get('pdf_path') or 'none'}",
         f"review next: {(record.get('review') or {}).get('next_action') or 'none'}",
         "actions:",
     ]
@@ -274,6 +302,7 @@ def _record_pipeline(
     reason: str = "",
     claim_map: dict[str, Any] | None = None,
     writer_draft: dict[str, Any] | None = None,
+    theory_draft: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     record = {
         "pipeline_id": f"coherence_paper_pipeline_{uuid.uuid4()}",
@@ -288,6 +317,7 @@ def _record_pipeline(
         "autopilot_status": (autopilot.get("record") or {}).get("status") if autopilot else None,
         "paper_draft_output_id": ((paper_draft or {}).get("output") or {}).get("output_id"),
         "writer_draft": _writer_draft_summary(writer_draft),
+        "theory_draft": _theory_draft_summary(theory_draft),
         "pdf": pdf,
         "review": {
             "next_action": (review or {}).get("next_action"),
@@ -376,6 +406,19 @@ def _paper_draft_action(paper_draft: dict[str, Any]) -> str:
     if paper_draft.get("regeneration"):
         return "paper_draft_regenerated"
     return "paper_draft_created"
+
+
+def _theory_draft_summary(theory_draft: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not theory_draft:
+        return None
+    record = theory_draft.get("record") or {}
+    return {
+        "draft_id": record.get("draft_id"),
+        "title": record.get("title"),
+        "pdf_path": theory_draft.get("pdf_path") or record.get("pdf_path"),
+        "markdown_path": theory_draft.get("markdown_path") or record.get("markdown_path"),
+        "content_hash": record.get("content_hash"),
+    }
 
 
 def _corpus_summary(corpus: dict[str, Any] | None) -> str:

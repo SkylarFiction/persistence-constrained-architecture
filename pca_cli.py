@@ -194,6 +194,8 @@ from pca import (
     paper_readiness_for_mission,
     research_review_desk,
     research_sandbox_status,
+    build_theory_revision_draft,
+    render_theory_revision_draft_text,
 )
 from pca.live_chat import chat_once, run_live_chat_server
 from pca.demo_live import run_demo
@@ -381,6 +383,11 @@ def main() -> int:
         help="Model mode for --llama-writer. Defaults to local_ollama.",
     )
     coherence_paper_parser.add_argument(
+        "--theory-revision",
+        action="store_true",
+        help="Also generate the formal theory revision draft companion PDF/Markdown.",
+    )
+    coherence_paper_parser.add_argument(
         "--output",
         default="../knowledge_hub/generated/research_papers/coherence_audit_bundle.pdf",
         help="Audit bundle path (complete, unfiltered machine record).",
@@ -394,6 +401,16 @@ def main() -> int:
         "--packet-output",
         default="../knowledge_hub/generated/research_papers/coherence_research_packet.pdf",
         help="Research packet path (claim matrix, source coverage, unresolved questions).",
+    )
+    coherence_paper_parser.add_argument(
+        "--theory-output",
+        default="../knowledge_hub/generated/research_papers/theory_revision_draft.pdf",
+        help="Formal theory revision companion PDF path.",
+    )
+    coherence_paper_parser.add_argument(
+        "--theory-markdown-output",
+        default="../knowledge_hub/generated/research_papers/theory_revision_draft.md",
+        help="Formal theory revision companion Markdown path.",
     )
     research_sandbox_parser = subparsers.add_parser("research-sandbox")
     research_sandbox_parser.add_argument("--json", action="store_true")
@@ -428,6 +445,27 @@ def main() -> int:
     paper_readiness_parser = subparsers.add_parser("paper-readiness")
     paper_readiness_parser.add_argument("mission_id")
     paper_readiness_parser.add_argument("--json", action="store_true")
+    theory_revision_parser = subparsers.add_parser("theory-revision-draft")
+    theory_revision_parser.add_argument(
+        "--mission", help="Optional mission id to tag the draft record with."
+    )
+    theory_revision_parser.add_argument(
+        "--output",
+        default="../knowledge_hub/generated/research_papers/theory_revision_draft.pdf",
+        help="Revision draft PDF path.",
+    )
+    theory_revision_parser.add_argument(
+        "--markdown-output",
+        default="../knowledge_hub/generated/research_papers/theory_revision_draft.md",
+        help="Revision draft Markdown path (ignored if --no-markdown is passed).",
+    )
+    theory_revision_parser.add_argument(
+        "--no-markdown", action="store_true", help="Skip writing the Markdown copy."
+    )
+    theory_revision_parser.add_argument(
+        "--reason", default="", help="Audit-trail reason for this draft build."
+    )
+    theory_revision_parser.add_argument("--json", action="store_true")
     certification_parser = subparsers.add_parser("continuity-certification")
     certification_parser.add_argument("--json", action="store_true")
     daily_plan_parser = subparsers.add_parser("daily-plan")
@@ -1183,6 +1221,9 @@ def main() -> int:
             packet_output_path=args.packet_output,
             llama_writer=args.llama_writer,
             writer_model_mode=args.writer_model_mode,
+            theory_revision=args.theory_revision,
+            theory_output_path=args.theory_output,
+            theory_markdown_output_path=args.theory_markdown_output,
             reason="manual CLI Coherence Physics paper pipeline",
         )
         if args.json:
@@ -1307,6 +1348,21 @@ def main() -> int:
             print_json({"paper_readiness": result})
         else:
             print(render_paper_readiness_text(result))
+        return 0
+
+    if args.command == "theory-revision-draft":
+        result = build_theory_revision_draft(
+            ledger,
+            manifest,
+            mission_id=args.mission,
+            output_path=args.output,
+            markdown_output_path=None if args.no_markdown else args.markdown_output,
+            reason=args.reason or "manual CLI theory revision draft build",
+        )
+        if args.json:
+            print_json({"theory_revision_draft": result})
+        else:
+            print(render_theory_revision_draft_text(result))
         return 0
 
     if args.command == "continuity-certification":
