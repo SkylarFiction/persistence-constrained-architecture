@@ -360,6 +360,7 @@ from .research_review import (
     research_review_desks,
 )
 from .research_writer import generate_llama_research_draft, latest_research_writer_draft
+from .review_queue import render_review_queue_text, review_queue_for_mission
 from .coherence_corpus import (
     coherence_corpus_index_records_from_events,
     discover_coherence_sources,
@@ -781,6 +782,8 @@ __all__ = [
     "research_autopilot_records_from_events",
     "research_review_desk",
     "research_review_desks",
+    "render_review_queue_text",
+    "review_queue_for_mission",
     "research_outputs_from_events",
     "research_sandbox_status",
     "reflection_records_from_events",

@@ -317,7 +317,13 @@ def build_theory_revision_draft(
 
     pdf_path = Path(output_path)
     pdf_path.parent.mkdir(parents=True, exist_ok=True)
-    _write_text_pdf(pdf_path, lines, draft_content.title)
+    _write_text_pdf(
+        pdf_path,
+        lines,
+        draft_content.title,
+        subtitle=draft_content.subtitle,
+        meta_lines=["Governed formal-theory revision draft."],
+    )
 
     markdown_path: Path | None = None
     if markdown_output_path:

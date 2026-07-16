@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from textwrap import wrap
@@ -142,9 +143,38 @@ def export_research_pdf(
         paper_path=str(paper_path),
         packet_path=str(packet_path),
     )
-    _write_text_pdf(paper_path, paper_lines, title=f"Coherence Physics Paper - {mission.title}")
-    _write_text_pdf(packet_path, packet_lines, title=f"Coherence Physics Research Packet - {mission.title}")
-    _write_text_pdf(audit_path, audit_lines, title=f"Coherence Physics Audit Bundle - {mission.title}")
+    _write_text_pdf(
+        paper_path,
+        paper_lines,
+        title=f"Coherence Physics Paper - {mission.title}",
+        cover_title="Smooth Output Is Not Continuity",
+        subtitle="A Coherence Physics Approach to Governed Artificial Identity",
+        meta_lines=[
+            "Author: Skylar Fiction with Lucien/PCA research assistance",
+            "Status: governed draft for human review",
+            f"Mission: {mission.title}",
+        ],
+    )
+    _write_text_pdf(
+        packet_path,
+        packet_lines,
+        title=f"Coherence Physics Research Packet - {mission.title}",
+        cover_title="Coherence Physics Research Packet",
+        subtitle=mission.title,
+        meta_lines=[
+            "Inspectable research layer: claim matrix, source coverage, gaps, agenda.",
+        ],
+    )
+    _write_text_pdf(
+        audit_path,
+        audit_lines,
+        title=f"Coherence Physics Audit Bundle - {mission.title}",
+        cover_title="Coherence Physics Audit Bundle",
+        subtitle=mission.title,
+        meta_lines=[
+            "Complete machine record: evidence IDs, hashes, review status, full history.",
+        ],
+    )
     return {
         "path": str(audit_path),
         "audit_path": str(audit_path),
@@ -335,18 +365,22 @@ def _scholarly_paper_lines(
                 f"{source.get('theme', 'general_coherence')}: "
                 f"{source.get('path', 'unknown source')}"
             )
+        lines.extend(["", "Source coverage snapshot:"])
         lines.extend(
-            [
-                "",
-                "Source coverage snapshot:",
-                "Source | Parsed | Notes | Used in paper | Reviewed",
-            ]
-        )
-        for row in _source_coverage_rows(corpus_sources, source_notes)[:12]:
-            lines.append(
-                f"{row['source']} | {row['parsed']} | {row['notes']} | "
-                f"{row['used_in_paper']} | {row['reviewed']}"
+            _table_lines(
+                ["Source", "Parsed", "Notes", "Used in paper", "Reviewed"],
+                [
+                    [
+                        row["source"],
+                        row["parsed"],
+                        row["notes"],
+                        row["used_in_paper"],
+                        row["reviewed"],
+                    ]
+                    for row in _source_coverage_rows(corpus_sources, source_notes)[:12]
+                ],
             )
+        )
     else:
         lines.append(
             "No corpus source file names were available in this export. The next run "
@@ -400,26 +434,44 @@ def _scholarly_paper_lines(
             "support should be read as promising but unverified. Claims with reviewed "
             "support may be candidates for stronger public wording. Each row separates "
             "the claim's wording, type, support, counterevidence, review state, and "
-            "current falsification condition rather than hiding many propositions "
-            "under one umbrella claim.",
-            "Claim | Type | Status | Support | Counterevidence | Review | Confidence",
+            "confidence; falsification conditions are listed below the table rather "
+            "than hiding many propositions under one umbrella claim.",
         ]
     )
-    for entry in reader_claims:
+    claim_table_rows: list[list[str]] = []
+    falsification_notes: list[str] = []
+    for claim_number, entry in enumerate(reader_claims, start=1):
         claim_text = str(entry.get("claim_text") or entry.get("claim_hash") or "")
-        if len(claim_text) > 84:
-            claim_text = claim_text[:81].rsplit(" ", 1)[0] + "..."
-        lines.append(
-            f"{claim_text} | {entry.get('claim_type', 'claim')} | "
-            f"{entry.get('support_status', 'unknown')} | "
-            f"{entry.get('direct_support_count', entry.get('evidence_count', 0))} | "
-            f"{entry.get('counterevidence_count', 0)} | "
-            f"{entry.get('review_state', entry.get('claim_status', 'raw'))} | "
-            f"{entry.get('confidence', 'unknown')}"
+        if len(claim_text) > 70:
+            claim_text = claim_text[:67].rsplit(" ", 1)[0] + "..."
+        claim_table_rows.append(
+            [
+                str(claim_number),
+                claim_text,
+                str(entry.get("claim_type", "claim")),
+                str(entry.get("support_status", "unknown")),
+                str(entry.get("direct_support_count", entry.get("evidence_count", 0))),
+                str(entry.get("counterevidence_count", 0)),
+                str(entry.get("review_state", entry.get("claim_status", "raw"))),
+                str(entry.get("confidence", "unknown")),
+            ]
         )
         falsification = str(entry.get("falsification_condition") or "")
         if falsification:
-            lines.append(f"  Falsification condition: {falsification}")
+            falsification_notes.append(f"Claim {claim_number}: {falsification}")
+    if claim_table_rows:
+        lines.extend(
+            _table_lines(
+                ["#", "Claim", "Type", "Status", "Supp.", "Counter", "Review", "Conf."],
+                claim_table_rows,
+            )
+        )
+    else:
+        lines.append("No claims are currently mapped for this mission.")
+    if falsification_notes:
+        lines.extend(["", "Falsification conditions:"])
+        for note in falsification_notes:
+            lines.append(f"- {note}")
     lines.extend(
         [
             "",
@@ -540,18 +592,43 @@ def _research_packet_lines(
         "omitted here (see the audit bundle's Claim Map for the complete record).",
         "",
         "Claim-Evidence Matrix",
-        "Claim ID | Exact Claim | Type | Status | Confidence",
     ]
+    matrix_rows: list[list[str]] = []
+    detail_blocks: list[list[str]] = []
     for entry in reader_claims:
         claim_id = str(entry.get("claim_item_id") or entry.get("claim_hash") or "")
-        lines.extend(
-            _claim_matrix_entry_lines(
+        claim_text = str(entry.get("claim_text") or entry.get("claim_hash") or "")
+        short_id = claim_id if len(claim_id) <= 14 else claim_id[:11] + "..."
+        short_text = claim_text if len(claim_text) <= 70 else claim_text[:67].rsplit(" ", 1)[0] + "..."
+        matrix_rows.append(
+            [
+                short_id,
+                short_text,
+                str(entry.get("claim_type", "claim")),
+                str(entry.get("support_status", "unknown")),
+                str(entry.get("confidence", "unknown")),
+            ]
+        )
+        detail_blocks.append(
+            _claim_matrix_entry_detail_lines(
                 entry,
                 nodes_by_id,
                 nodes_by_hash,
                 source_links_by_claim.get(claim_id, []),
+                claim_id,
+                claim_text,
             )
         )
+    if matrix_rows:
+        lines.extend(
+            _table_lines(["Claim ID", "Exact Claim", "Type", "Status", "Confidence"], matrix_rows)
+        )
+        lines.extend(["", "Claim Detail"])
+        for block in detail_blocks:
+            lines.extend(block)
+            lines.append("")
+    else:
+        lines.append("No claims are currently mapped for this mission.")
     lines.extend(
         [
             "",
@@ -571,17 +648,36 @@ def _research_packet_lines(
         [
             "",
             "Source Coverage Report",
-            "Source file | Canonical family | Parsed | Extracted notes | Usable notes | "
-            "Claim links | Review status | Reason excluded",
         ]
     )
     if source_coverage:
-        for row in source_coverage:
-            lines.append(
-                f"{row['source']} | {row['canonical_family']} | {row['parsed']} | "
-                f"{row['notes']} | {row['usable_notes']} | "
-                f"{row['claim_links']} | {row['review_status']} | {row['reason_excluded']}"
+        lines.extend(
+            _table_lines(
+                [
+                    "Source file",
+                    "Family",
+                    "Parsed",
+                    "Notes",
+                    "Usable",
+                    "Links",
+                    "Review",
+                    "Excluded because",
+                ],
+                [
+                    [
+                        row["source"],
+                        row["canonical_family"],
+                        row["parsed"],
+                        row["notes"],
+                        row["usable_notes"],
+                        row["claim_links"],
+                        row["review_status"],
+                        row["reason_excluded"],
+                    ]
+                    for row in source_coverage
+                ],
             )
+        )
     else:
         lines.append("No source coverage rows available.")
     lines.extend(
@@ -921,19 +1017,16 @@ def _reader_facing_claim_entries(claim_map: dict[str, Any]) -> list[dict[str, An
     ]
 
 
-def _claim_matrix_entry_lines(
+def _claim_matrix_entry_detail_lines(
     entry: dict[str, Any],
     nodes_by_id: dict[str, dict[str, Any]],
     nodes_by_hash: dict[str, dict[str, Any]],
     source_links: list[dict[str, Any]],
+    claim_id: str,
+    claim_text: str,
 ) -> list[str]:
-    claim_id = str(entry.get("claim_item_id") or entry.get("claim_hash") or "unknown")
-    claim_text = str(entry.get("claim_text") or entry.get("claim_hash") or "")
     lines = [
-        (
-            f"{claim_id} | {claim_text} | {entry.get('claim_type', 'claim')} | "
-            f"{entry.get('support_status', 'unknown')} | {entry.get('confidence', 'unknown')}"
-        ),
+        f"Claim {claim_id or 'unknown'}: {claim_text}",
         "  Supporting evidence: "
         + _resolve_statements(entry.get("supporting_evidence_ids") or [], nodes_by_id),
         "  Counterevidence: "
@@ -1538,25 +1631,35 @@ def _falsification_finding_lines(verdict: dict[str, Any] | None, index: int) -> 
     ]
 
 
-def _write_text_pdf(path: Path, lines: list[str], title: str) -> None:
-    page_lines = _paginate_lines(lines)
+def _write_text_pdf(
+    path: Path,
+    lines: list[str],
+    title: str,
+    *,
+    cover_title: str = "",
+    subtitle: str = "",
+    meta_lines: list[str] | None = None,
+) -> None:
+    page_element_lists = _paginate_lines(lines)
     objects: list[bytes] = []
     page_object_numbers: list[int] = []
-    font_object_number = 3
+    regular_font_number = 3
+    bold_font_number = 4
 
     objects.append(b"<< /Type /Catalog /Pages 2 0 R >>")
-    objects.append(b"")
+    objects.append(b"")  # filled in below once every page object exists
     objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+    objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>")
 
-    for page in page_lines:
-        content = _page_stream(page, title)
+    def _append_page(content: bytes) -> None:
         content_number = len(objects) + 2
         page_number = len(objects) + 1
         page_object_numbers.append(page_number)
         objects.append(
             (
                 "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
-                f"/Resources << /Font << /F1 {font_object_number} 0 R >> >> "
+                "/Resources << /Font << "
+                f"/F1 {regular_font_number} 0 R /F2 {bold_font_number} 0 R >> >> "
                 f"/Contents {content_number} 0 R >>"
             ).encode("ascii")
         )
@@ -1565,6 +1668,13 @@ def _write_text_pdf(path: Path, lines: list[str], title: str) -> None:
             + content
             + b"\nendstream"
         )
+
+    _append_page(_title_page_stream(cover_title or title, subtitle, meta_lines or []))
+    header = _short_running_header(title)
+    total_body_pages = len(page_element_lists)
+    for page_index, elements in enumerate(page_element_lists, start=1):
+        footer = f"Page {page_index} of {total_body_pages}"
+        _append_page(_page_stream(elements, header, footer))
 
     kids = " ".join(f"{number} 0 R" for number in page_object_numbers)
     objects[1] = f"<< /Type /Pages /Kids [{kids}] /Count {len(page_object_numbers)} >>".encode("ascii")
@@ -1576,46 +1686,256 @@ def _write_text_pdf(path: Path, lines: list[str], title: str) -> None:
 # hand-picked count that can silently drift out of sync with the layout. The
 # previous hardcoded value of 58 lines/page was never checked against this
 # geometry: content actually starts at PAGE_HEIGHT - TOP_MARGIN - 2 * LEADING
-# (title line, then one blank line, before the first content line) and each
+# (header line, then one blank line, before the first content line) and each
 # line drops by LEADING, so anything past line ~49 was being drawn below
 # y=BOTTOM_MARGIN -- often below y=0 -- and silently clipped by every PDF
 # viewer, truncating the visible page mid-sentence while the "next" page
 # picked up several lines later. Verified by rendering to an image and
 # comparing against the raw content stream, not just by reading extracted
 # text (which doesn't reflect what a viewer actually clips).
+_PAGE_WIDTH = 612
 _PAGE_HEIGHT = 792
 _TOP_MARGIN = 44  # matches "50 748 Td": 792 - 748 = 44
 _BOTTOM_MARGIN = 44
 _LEADING = 14
 _CONTENT_START_Y = _PAGE_HEIGHT - _TOP_MARGIN - 2 * _LEADING
 _LINES_PER_PAGE = (_CONTENT_START_Y - _BOTTOM_MARGIN) // _LEADING + 1
+# A trailing page with fewer elements than this looks like a mistake (e.g. one
+# leftover reference line orphaned onto its own page) rather than a real page
+# break, so _balance_trailing_page redistributes the last two pages instead of
+# leaving it.
+_MIN_TRAILING_PAGE_ELEMENTS = 8
+
+# Sentinel markers a caller can embed in an otherwise-plain list[str] to ask
+# for a real table instead of hand-joined "a | b | c" text: see _table_lines.
+# NUL-prefixed so they can never collide with real prose content.
+_TABLE_HEADER_MARK = "\x00TBLH\x00"
+_TABLE_ROW_MARK = "\x00TBLR\x00"
+_TABLE_FONT_SIZE = 9
+_TABLE_CHAR_WIDTH = 5.0  # approx. points/character for 9pt Helvetica
+_TABLE_COL_GAP = 10.0  # points between columns
+_TABLE_AVAILABLE_WIDTH = _PAGE_WIDTH - 100  # page width minus the 50pt left/right margins
+_TABLE_MIN_COL_CHARS = 6
 
 
-def _paginate_lines(lines: list[str]) -> list[list[str]]:
-    wrapped: list[str] = []
-    for line in lines:
+@dataclass(frozen=True)
+class _TextLine:
+    text: str
+    bold: bool = False
+    indent: int = 0
+
+
+@dataclass(frozen=True)
+class _TableRow:
+    cells: tuple[str, ...]
+    x_offsets: tuple[float, ...]
+    bold: bool = False
+
+
+@dataclass(frozen=True)
+class _Rule:
+    pass
+
+
+_RenderElement = _TextLine | _TableRow | _Rule
+
+
+def _table_lines(headers: list[str], rows: list[list[Any]]) -> list[str]:
+    """Encode a table as sentinel-marked strings that still satisfy the plain
+    list[str] contract every other line in this module produces, so callers
+    don't need to know about the PDF writer's internal element model -- only
+    _paginate_lines below decodes the markers, into real aligned columns with
+    a bold header row instead of a wrapped, unreadable pipe-delimited line."""
+    encoded = [_TABLE_HEADER_MARK + "\x00".join(str(cell) for cell in headers)]
+    for row in rows:
+        encoded.append(_TABLE_ROW_MARK + "\x00".join(str(cell) for cell in row))
+    return encoded
+
+
+def _table_column_chars(headers: list[str], rows: list[list[str]]) -> list[int]:
+    # Every column must fit within the page's content width once gaps are
+    # subtracted, or wide tables (7-8 columns) silently run off the right
+    # edge of the page -- the character budget has to be computed from the
+    # actual page geometry, not a fixed constant that ignores column count.
+    n = len(headers)
+    if n == 0:
+        return []
+    gap_total = (n - 1) * _TABLE_COL_GAP
+    available_chars = max(
+        n * _TABLE_MIN_COL_CHARS,
+        (_TABLE_AVAILABLE_WIDTH - gap_total) / _TABLE_CHAR_WIDTH,
+    )
+    # Every column gets at least enough room for its own header (up to a
+    # cap), so the header word itself never wraps mid-word.
+    floors = [max(_TABLE_MIN_COL_CHARS, min(len(str(header)), 12)) for header in headers]
+    floor_total = sum(floors)
+    weights = []
+    for index in range(n):
+        longest = len(str(headers[index]))
+        for row in rows:
+            if index < len(row):
+                longest = max(longest, len(str(row[index])))
+        # Cap so one very long free-text column (e.g. "Exact Claim") can't
+        # starve every other column down to its floor.
+        weights.append(min(longest, 60))
+    total_weight = sum(weights) or n
+    remaining = max(0.0, available_chars - floor_total)
+    return [
+        floors[index] + int(remaining * weights[index] / total_weight)
+        for index in range(n)
+    ]
+
+
+def _table_x_offsets(col_chars: list[int]) -> list[float]:
+    offsets = [0.0]
+    for chars in col_chars[:-1]:
+        offsets.append(offsets[-1] + chars * _TABLE_CHAR_WIDTH + _TABLE_COL_GAP)
+    return offsets
+
+
+def _table_row_elements(
+    cells: list[str],
+    col_chars: list[int],
+    x_offsets: list[float],
+    bold: bool,
+) -> list[_TableRow]:
+    wrapped_columns = [
+        wrap(_ascii(str(cell)), width=chars) or [""]
+        for cell, chars in zip(cells, col_chars)
+    ]
+    height = max((len(column) for column in wrapped_columns), default=0)
+    elements: list[_TableRow] = []
+    for row_index in range(height):
+        row_cells = tuple(
+            column[row_index] if row_index < len(column) else ""
+            for column in wrapped_columns
+        )
+        elements.append(_TableRow(cells=row_cells, x_offsets=tuple(x_offsets), bold=bold))
+    return elements
+
+
+def _table_elements(headers: list[str], rows: list[list[str]]) -> list[_RenderElement]:
+    col_chars = _table_column_chars(headers, rows)
+    x_offsets = _table_x_offsets(col_chars)
+    elements: list[_RenderElement] = [_Rule()]
+    elements.extend(_table_row_elements(headers, col_chars, x_offsets, bold=True))
+    elements.append(_Rule())
+    for row in rows:
+        elements.extend(_table_row_elements(row, col_chars, x_offsets, bold=False))
+    elements.append(_Rule())
+    elements.append(_TextLine(""))
+    return elements
+
+
+def _build_render_elements(lines: list[str]) -> list[_RenderElement]:
+    elements: list[_RenderElement] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if line.startswith(_TABLE_HEADER_MARK):
+            headers = line[len(_TABLE_HEADER_MARK) :].split("\x00")
+            index += 1
+            rows: list[list[str]] = []
+            while index < len(lines) and lines[index].startswith(_TABLE_ROW_MARK):
+                rows.append(lines[index][len(_TABLE_ROW_MARK) :].split("\x00"))
+                index += 1
+            elements.extend(_table_elements(headers, rows))
+            continue
         clean = _ascii(line)
         if not clean:
-            wrapped.append("")
-            continue
-        wrapped.extend(wrap(clean, width=92, replace_whitespace=False) or [""])
+            elements.append(_TextLine(""))
+        else:
+            for wrapped in wrap(clean, width=92, replace_whitespace=False) or [""]:
+                elements.append(_TextLine(wrapped))
+        index += 1
+    return elements
+
+
+def _balance_trailing_page(pages: list[list[_RenderElement]]) -> list[list[_RenderElement]]:
+    if len(pages) < 2:
+        return pages
+    last = pages[-1]
+    second_last = pages[-2]
+    if not last or len(last) >= _MIN_TRAILING_PAGE_ELEMENTS:
+        return pages
+    combined = second_last + last
+    midpoint = (len(combined) + 1) // 2
+    pages[-2] = combined[:midpoint]
+    pages[-1] = combined[midpoint:]
+    return pages
+
+
+def _paginate_lines(lines: list[str]) -> list[list[_RenderElement]]:
+    elements = _build_render_elements(lines)
     pages = [
-        wrapped[index : index + _LINES_PER_PAGE]
-        for index in range(0, len(wrapped), _LINES_PER_PAGE)
+        elements[index : index + _LINES_PER_PAGE]
+        for index in range(0, len(elements), _LINES_PER_PAGE)
     ]
-    return pages or [["No content."]]
+    pages = _balance_trailing_page(pages)
+    return pages or [[_TextLine("No content.")]]
 
 
-def _page_stream(lines: list[str], title: str) -> bytes:
-    commands = ["BT", "/F1 10 Tf", f"50 {_PAGE_HEIGHT - _TOP_MARGIN} Td", f"{_LEADING} TL"]
-    commands.append(f"({_escape_pdf_text(_ascii(title))}) Tj")
-    commands.append("T*")
-    commands.append("T*")
-    for line in lines:
-        commands.append(f"({_escape_pdf_text(line)}) Tj")
-        commands.append("T*")
-    commands.append("ET")
-    return "\n".join(commands).encode("ascii")
+def _short_running_header(title: str, max_len: int = 78) -> str:
+    if len(title) <= max_len:
+        return title
+    return title[: max_len - 3].rsplit(" ", 1)[0] + "..."
+
+
+def _text_command(text: str, x: float, y: float, font: str, size: int) -> str:
+    return f"BT /{font} {size} Tf {x:.1f} {y:.1f} Td ({_escape_pdf_text(_ascii(text))}) Tj ET"
+
+
+def _title_page_stream(title: str, subtitle: str, meta_lines: list[str]) -> bytes:
+    ops: list[str] = []
+    y = float(_PAGE_HEIGHT - 260)
+    for wrapped in wrap(_ascii(title), width=34) or [title]:
+        ops.append(_text_command(wrapped, x=50, y=y, font="F2", size=22))
+        y -= 28
+    y -= 10
+    if subtitle:
+        for wrapped in wrap(_ascii(subtitle), width=60) or [subtitle]:
+            ops.append(_text_command(wrapped, x=50, y=y, font="F1", size=13))
+            y -= 18
+    y -= 20
+    for meta in meta_lines:
+        ops.append(_text_command(meta, x=50, y=y, font="F1", size=10))
+        y -= 16
+    ops.append(
+        _text_command(
+            "Governed research draft, generated by the PCA / Lucien research pipeline.",
+            x=50,
+            y=54.0,
+            font="F1",
+            size=8,
+        )
+    )
+    return "\n".join(ops).encode("ascii")
+
+
+def _page_stream(elements: list[_RenderElement], header: str, footer: str) -> bytes:
+    ops: list[str] = [_text_command(header, x=50, y=float(_PAGE_HEIGHT - _TOP_MARGIN), font="F2", size=10)]
+    y = float(_PAGE_HEIGHT - _TOP_MARGIN) - _LEADING * 2
+    for element in elements:
+        if isinstance(element, _Rule):
+            rule_y = y + _LEADING * 0.35
+            ops.append(f"q 0.4 w 50 {rule_y:.1f} m {_PAGE_WIDTH - 50} {rule_y:.1f} l S Q")
+            y -= _LEADING * 0.4
+            continue
+        if isinstance(element, _TableRow):
+            font = "F2" if element.bold else "F1"
+            for cell_text, x_offset in zip(element.cells, element.x_offsets):
+                if cell_text:
+                    ops.append(
+                        _text_command(cell_text, x=50 + x_offset, y=y, font=font, size=_TABLE_FONT_SIZE)
+                    )
+            y -= _LEADING
+            continue
+        if element.text:
+            font = "F2" if element.bold else "F1"
+            ops.append(_text_command(element.text, x=50 + element.indent, y=y, font=font, size=10))
+        y -= _LEADING
+    ops.append(_text_command(footer, x=50, y=float(_BOTTOM_MARGIN - 10), font="F1", size=8))
+    return "\n".join(ops).encode("ascii")
 
 
 def _write_pdf_objects(path: Path, objects: list[bytes]) -> None:

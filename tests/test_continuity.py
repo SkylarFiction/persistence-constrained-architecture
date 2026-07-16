@@ -225,6 +225,8 @@ from pca import (
     build_theory_revision_draft,
     render_theory_revision_draft_text,
     theory_revision_draft_records_from_events,
+    review_queue_for_mission,
+    render_review_queue_text,
 )
 
 
@@ -3955,6 +3957,87 @@ def test_reviewed_external_literature_updates_paper_readiness(tmp_path):
     assert reviewed_readiness["external_source_count"] == 1
     assert reviewed_readiness["reviewed_external_source_count"] == 1
     assert not any("external scholarly literature" in blocker.lower() for blocker in reviewed_readiness["blockers"])
+
+
+def test_review_queue_lists_raw_evidence_malformed_notes_and_unlinked_claims(tmp_path):
+    import hashlib
+    from datetime import datetime, timezone
+
+    from pca.argument_graph import seed_continuity_argument_graph
+    from pca.source_notes import SourceNoteRecord
+
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Review queue mission",
+        problem_statement="Surface exactly what needs review before final-paper status.",
+    )
+    seed_continuity_argument_graph(
+        ledger,
+        manifest,
+        mission.mission_id,
+        project_root=tmp_path,
+    )
+
+    evidence = add_evidence(
+        ledger,
+        manifest.system_id,
+        source_type="file",
+        summary="Raw evidence awaiting steward review.",
+        confidence="medium",
+    )
+    link_evidence(
+        ledger,
+        manifest.system_id,
+        evidence.evidence_id,
+        target_type="mission",
+        target_id=mission.mission_id,
+        reason="link raw evidence to mission for review queue test",
+    )
+
+    malformed_note = SourceNoteRecord(
+        note_id="source_note_review_queue_malformed",
+        identity_id=manifest.system_id,
+        mission_id=mission.mission_id,
+        source_path="coherence /review_queue_malformed.pdf",
+        theme="identity_physics",
+        title="Malformed Review Queue Source",
+        note_kind="claim_candidate",
+        summary="The tauScale parameter controls memory decay.",
+        locator="page 3",
+        confidence="medium",
+        review_status="raw",
+        summary_hash=hashlib.sha256(b"review-queue-malformed").hexdigest(),
+        excerpt_hash=hashlib.sha256(b"review-queue-malformed-excerpt").hexdigest(),
+        excerpt_length=64,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        reason="review queue malformed source note",
+        source_content_sha256="review-queue-malformed-hash",
+    )
+    ledger.append("source_note.extracted", manifest.system_id, malformed_note.to_dict())
+
+    result = review_queue_for_mission(ledger, mission.mission_id)
+    rendered = render_review_queue_text(result)
+
+    assert result["mission_id"] == mission.mission_id
+    raw_evidence_ids = {item["evidence_id"] for item in result["raw_evidence"]}
+    assert evidence.evidence_id in raw_evidence_ids
+    malformed_note_ids = {item["note_id"] for item in result["malformed_source_notes"]}
+    assert "source_note_review_queue_malformed" in malformed_note_ids
+    assert result["unlinked_claims"]
+    assert result["external_literature_missing"] is True
+    assert result["total_pending_items"] >= 3
+    for item in result["raw_evidence"]:
+        assert item["command"].startswith("python3 pca_cli.py evidence-review")
+    for item in result["malformed_source_notes"]:
+        assert item["command"].startswith("python3 pca_cli.py source-note-review")
+
+    assert "Review Queue" in rendered
+    assert evidence.evidence_id in rendered
+    assert "source_note_review_queue_malformed" in rendered
+    assert "does not review, accept, or reject anything on its own" in rendered
 
 
 def test_claim_source_links_preserve_tentative_matches_without_overclaiming():

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-import re
 
 from .claim_source_links import claim_source_links
 from .coherence_corpus import (
@@ -13,6 +12,7 @@ from .external_literature import external_literature_for_mission
 from .ledger import ContinuityLedger
 from .mission_claim_map import mission_claim_map
 from .missions import mission_briefs_from_events
+from .research_pdf import _reader_facing_extraction_quality, _source_note_reader_ready
 from .source_notes import source_notes_for_mission
 
 
@@ -232,23 +232,11 @@ def annotate_source_note_quality(note: dict[str, Any]) -> dict[str, Any]:
 
 
 def source_note_reader_ready(note: dict[str, Any]) -> bool:
-    if note.get("note_kind") != "claim_candidate":
-        return False
-    if not is_relevant_source_path(str(note.get("source_path") or "")):
-        return False
-    return reader_facing_extraction_quality(str(note.get("summary") or ""))["usable"]
+    return _source_note_reader_ready(note)
 
 
 def reader_facing_extraction_quality(text: str) -> dict[str, Any]:
-    clean = str(text)
-    reasons: list[str] = []
-    if re.search(r"(?:/x[0-9A-Fa-f]{2}){2,}", clean):
-        reasons.append("raw glyph code leakage")
-    if re.search(r"\b(?:tau|rho|delta|grad|mu|alpha|beta|gamma)[A-Za-z]{3,}(?:\(|=|->|\b)", clean):
-        reasons.append("malformed mathematical extraction")
-    if clean.count("?") >= 3:
-        reasons.append("replacement characters")
-    return {"usable": not reasons, "reasons": reasons}
+    return _reader_facing_extraction_quality(text)
 
 
 def corpus_sources_for_mission(

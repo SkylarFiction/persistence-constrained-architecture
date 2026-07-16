@@ -196,6 +196,8 @@ from pca import (
     research_sandbox_status,
     build_theory_revision_draft,
     render_theory_revision_draft_text,
+    review_queue_for_mission,
+    render_review_queue_text,
 )
 from pca.live_chat import chat_once, run_live_chat_server
 from pca.demo_live import run_demo
@@ -445,6 +447,9 @@ def main() -> int:
     paper_readiness_parser = subparsers.add_parser("paper-readiness")
     paper_readiness_parser.add_argument("mission_id")
     paper_readiness_parser.add_argument("--json", action="store_true")
+    review_queue_parser = subparsers.add_parser("review-queue")
+    review_queue_parser.add_argument("mission_id")
+    review_queue_parser.add_argument("--json", action="store_true")
     theory_revision_parser = subparsers.add_parser("theory-revision-draft")
     theory_revision_parser.add_argument(
         "--mission", help="Optional mission id to tag the draft record with."
@@ -1350,6 +1355,14 @@ def main() -> int:
             print_json({"paper_readiness": result})
         else:
             print(render_paper_readiness_text(result))
+        return 0
+
+    if args.command == "review-queue":
+        result = review_queue_for_mission(ledger, args.mission_id)
+        if args.json:
+            print_json({"review_queue": result})
+        else:
+            print(render_review_queue_text(result))
         return 0
 
     if args.command == "theory-revision-draft":
