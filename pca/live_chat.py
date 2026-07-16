@@ -2444,7 +2444,7 @@ def _live_chat_html() -> str:
           <button type="button" id="workspaceEvidence" class="secondary">Accept as Evidence</button>
           <button type="button" id="workspaceKeepDraft" class="secondary">Keep as Draft</button>
           <button type="button" id="workspaceExport" class="secondary">Export Markdown</button>
-          <button type="button" id="workspaceExportPdf" class="secondary">Save Research PDF</button>
+          <button type="button" id="workspaceExportPdf" class="secondary">Save Clean Paper</button>
         </div>
       </div>
       <div class="output-shell">
@@ -2467,7 +2467,7 @@ def _live_chat_html() -> str:
           <button type="button" id="reviewDeskRun" class="secondary">Run Research</button>
           <button type="button" id="reviewDeskPaperPipeline" class="primary">Make Paper Packet</button>
           <button type="button" id="reviewDeskEvidence" class="secondary">Review Evidence</button>
-          <button type="button" id="reviewDeskPdf" class="secondary">Save PDF</button>
+          <button type="button" id="reviewDeskPdf" class="secondary">Save Clean Paper</button>
         </div>
       </div>
       <div id="researchReviewSummary" class="item"></div>
@@ -5331,8 +5331,8 @@ def _live_chat_html() -> str:
         addMessage('lucien', 'PDF export did not return a file path.');
         return;
       }
-      addMessage('lucien', `Research packet saved at ${pdf.packet_path}. Clean paper saved at ${pdf.paper_path}. Opening the packet now.`);
-      window.open(localDocumentUrl(pdf.packet_path || pdf.path), '_blank');
+      addMessage('lucien', `Clean paper saved at ${pdf.paper_path}. Research packet saved at ${pdf.packet_path}. Opening the clean paper now.`);
+      window.open(localDocumentUrl(pdf.paper_path || pdf.path), '_blank');
     }
 
     async function indexCorpusForSelectedMission() {
