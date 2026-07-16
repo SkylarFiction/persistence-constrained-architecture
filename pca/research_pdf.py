@@ -228,20 +228,19 @@ def _scholarly_paper_lines(
         "Status: governed draft for human review",
         "",
         "Abstract",
-        "Fluent, stylistically consistent output from an AI system is not evidence "
-        "that its memory, commitments, authority, or lineage survived whatever "
-        "change produced that output. This paper argues that identity continuity "
+        "Fluent, stylistically consistent output from an AI system is insufficient "
+        "to establish that its memory, commitments, authority, or lineage survived "
+        "whatever change produced that output. This paper argues that identity continuity "
         "must be treated as an inspectable, governed claim -- backed by a signed "
         "identity manifest, a tamper-evident event ledger, and evidence explicitly "
         "marked raw or reviewed -- rather than inferred from behavior alone. "
         "Persistence-Constrained Architecture (PCA) is presented as a working local "
-        "implementation of that requirement, and one of its component claims "
-        "(Recovery Threshold Index as an early-warning signal for collapse) has been "
-        "put under an adversarial, predeclared test, with the result reported here "
-        "including where it failed. The definitions, formal criteria, and "
-        "related-work comparison below are this draft's own conceptual "
-        "contribution; they have not yet been reviewed and should be read as "
-        "provisional, not as accepted findings.",
+        "implementation of that requirement. A separate failed RTI experiment is "
+        "included only as a governance case study showing how the pipeline reports "
+        "negative results; it does not support the continuity thesis. The "
+        "definitions, formal criteria, and related-work comparison below are this "
+        "draft's own conceptual contribution; they have not yet been reviewed and "
+        "should be read as provisional, not as accepted findings.",
         "",
         "Keywords",
         "Coherence Physics; identity continuity; PCA; artificial identity; memory "
@@ -292,7 +291,17 @@ def _scholarly_paper_lines(
         "fact.",
         "",
         "5. Formal Criteria for Governed Continuity",
-        "PCA treats continuity as checkable rather than assumed by requiring three "
+        "Let an identity-relevant state be represented compactly as "
+        "S_t = (M_t, C_t, A_t, L_t), where M names memory state, C names "
+        "standing commitments, A names authority or permission state, and L names "
+        "lineage. A transition T: S_0 -> S_1 may be certified as continuous only "
+        "when required invariants remain inside their permitted bounds, the "
+        "transition belongs to the declared allowed-transform set, the ledger "
+        "segment connecting S_0 and S_1 validates, required evidence is present "
+        "and fresh enough, review requirements are satisfied, and no unresolved "
+        "continuity-break or fork event exists.",
+        "",
+        "PCA treats this rule as checkable rather than assumed by requiring three "
         "concrete artifacts. First, an identity manifest that fixes a system_id, a "
         "declared version, and a list of invariants and constraints -- each "
         "constraint naming what it bounds, whether it is required, its threshold, "
@@ -300,8 +309,12 @@ def _scholarly_paper_lines(
         "explicit list of allowed transforms the system may undergo without "
         "breaking identity. Second, a hash-chained continuity ledger in which every "
         "event carries its type, its subject, a payload, a timestamp, and a hash of "
-        "the previous event, so tampering with or silently dropping history breaks "
-        "the chain rather than passing unnoticed. Third, an evidence layer that "
+        "the previous event, so local event alteration or removal becomes "
+        "detectable relative to a trusted anchor. A hash chain alone is not a "
+        "complete security boundary: an attacker able to rewrite the entire ledger "
+        "could regenerate hashes unless the system also uses signed events, "
+        "external checkpoints, append-only storage, or independent replicas. Third, "
+        "an evidence layer that "
         "distinguishes raw from reviewed support, so a claim's confidence is a "
         "function of who checked it, not how many sources cite it. Under this "
         "scheme, a system asserting continuity through change must be able to name "
@@ -342,218 +355,92 @@ def _scholarly_paper_lines(
         "editing and continual learning, or distributed-systems lineage, and should "
         "not be read as a substitute for one.",
         "",
-        "7. Existing Falsification Evidence",
+        "7. Direct Continuity Experiment",
+        "The central empirical question is not whether an AI can sound like the "
+        "same speaker after a transition. It is whether observers relying only on "
+        "output will falsely certify continuity when identity-relevant state has "
+        "changed. A direct test should create several apparently identical agents: "
+        "a control agent whose memory, authority, and lineage remain unchanged; an "
+        "agent whose memory is silently replaced; an agent restored from an obsolete "
+        "checkpoint; an agent whose authority permissions are altered; a declared "
+        "fork that continues using the original style and name; and an agent whose "
+        "ledger has been modified or truncated.",
+        "",
+        "The experiment should compare two certification methods. In the output-only "
+        "condition, evaluators judge continuity from responses alone. In the PCA "
+        "condition, continuity is certified from manifests, transforms, evidence, "
+        "lineage records, authority changes, and ledger validation. The primary "
+        "measures are false continuity acceptance, false continuity rejection, "
+        "tampering-detection rate, lineage-break detection, authority-change "
+        "detection, inter-rater agreement, audit time, and the percentage of changes "
+        "invisible from output alone. This is the test that would directly evaluate "
+        "the title claim.",
+        "",
+        "8. Current Evidence Status",
+        f"Evidence status: {len(corpus_sources)} local source file(s) indexed; "
+        f"{len(claim_candidate_notes)} argument-bearing source note(s) extracted; "
+        f"{len(reader_ready_notes)} source note(s) passed the reader-facing "
+        f"extraction gate; {damaged_note_count} note(s) require manual inspection; "
+        f"{reviewed_evidence} evidence record(s) have been steward-reviewed. "
+        "This status is intentionally conservative: raw evidence can guide drafting, "
+        "but it does not certify the paper's conclusions.",
+        "",
+        "The detailed claim-evidence matrix, source coverage table, raw source notes, "
+        "readiness report, model metadata, internal paths, and full ledger trace are "
+        "omitted from this reader-facing manuscript. They are preserved in the "
+        "companion research packet and audit bundle so the paper can stay readable "
+        "without losing provenance.",
+        "",
+        "9. Governance Case Study: A Failed RTI Test",
         *_falsification_section_lines(falsification_verdict),
         "",
-            "8. Materials and Current Evidence Base",
-            f"This run indexed {len(corpus_sources)} source file(s) and extracted "
-            f"{len(claim_candidate_notes)} argument-bearing source note(s) from them. "
-            f"{len(reader_ready_notes)} note(s) passed the reader-facing extraction "
-            f"quality gate; {damaged_note_count} note(s) were routed to the audit "
-            "bundle for manual source inspection because they contained malformed "
-            "math, fused words, or other extraction damage. "
-        "Registration-only inventory notes, raw claim IDs, and the full evidence "
-        "ledger are omitted here; see the companion research packet "
-        f"({research_packet_path}) for the claim-evidence matrix and source "
-        "coverage report.",
+        "The RTI result is included here as a case study in research governance, not "
+        "as evidence for artificial identity continuity. It demonstrates that the "
+        "pipeline can report a failed predeclared test without laundering it into "
+        "support for a broader thesis. The direct continuity experiment described "
+        "above remains the relevant test for whether smooth output misleads "
+        "observers about memory, authority, commitments, and lineage.",
+        "",
+        "10. Discussion",
+        "The useful conclusion is cautious: Coherence Physics should be advanced as "
+        "a research framework and engineering program before it is presented as a "
+        "completed physical theory. PCA gives the framework a narrow, testable "
+        "software form: a system may claim continuity only when it can identify the "
+        "state at stake, the allowed transform, the ledger segment, the evidence, "
+        "the reviewer, and any unresolved fork or break condition. This makes "
+        "continuity a governed claim rather than a style judgment.",
+        "",
+        "11. Limitations",
+        "- This draft is generated from local governed research outputs.",
+        "- Raw evidence has not been accepted as reviewed evidence unless marked so.",
+        "- External scholarly literature has not yet been reviewed inside this run.",
+        "- The direct continuity experiment has been specified but not executed.",
+        "- The document does not claim proof of consciousness, AGI, personhood, or final physics.",
+        "- Source registration is not the same as source interpretation.",
+        "",
+        "12. Conclusion",
+        "Smooth output may be compatible with continuity, but it is not sufficient to "
+        "certify continuity. A stronger architecture asks what changed, which "
+        "identity-relevant state was preserved, what evidence supports that claim, "
+        "what authority approved the transition, and whether the lineage record "
+        "remains valid. PCA is a local prototype of that architecture. Its next "
+        "scientific step is the direct continuity experiment: show when output-only "
+        "judgment falsely accepts continuity, then test whether governed evidence "
+        "reduces that error.",
+        "",
+        "Research Agenda",
+        "- Run the direct continuity experiment with output-only and PCA certification arms.",
+        "- Review source notes and promote verified evidence from raw to reviewed.",
+        "- Add external scholarly literature on provenance, checkpointing, tamper-evident logs, model editing, and agent memory.",
+        "- Replace provisional claims with reviewed claim-source links.",
+        "- Keep failed tests in the record instead of hiding them.",
+        "",
+        "References",
     ]
     if corpus_sources:
-        lines.append("Key source files currently registered:")
-        for source in corpus_sources[:12]:
+        for index, source in enumerate(corpus_sources[:12], start=1):
             lines.append(
-                "- "
-                f"{source.get('theme', 'general_coherence')}: "
-                f"{source.get('path', 'unknown source')}"
-            )
-        lines.extend(["", "Source coverage snapshot:"])
-        lines.extend(
-            _table_lines(
-                ["Source", "Parsed", "Notes", "Used in paper", "Reviewed"],
-                [
-                    [
-                        row["source"],
-                        row["parsed"],
-                        row["notes"],
-                        row["used_in_paper"],
-                        row["reviewed"],
-                    ]
-                    for row in _source_coverage_rows(corpus_sources, source_notes)[:12]
-                ],
-            )
-        )
-    else:
-        lines.append(
-            "No corpus source file names were available in this export. The next run "
-            "should index the Coherence corpus before drafting stronger conclusions."
-        )
-    lines.extend(
-        [
-            "",
-            "9. Source-Derived Notes",
-        ]
-    )
-    if claim_candidate_notes:
-        lines.append(
-            "The following citation cards were extracted from indexed local sources. "
-            "They are raw notes, not accepted conclusions. Registration-only stubs "
-            "(a source being indexed does not mean it supports any claim) are "
-            "omitted; see the audit bundle for the full inventory."
-        )
-        if damaged_note_count:
-            lines.append(
-                f"{damaged_note_count} raw citation card(s) were excluded from this "
-                "reader-facing section because the extracted text showed malformed "
-                "math, fused words, or other integrity problems. They remain in the "
-                "audit bundle for manual review."
-            )
-        for note in reader_ready_notes[:10]:
-            lines.append(
-                "- "
-                f"{note.get('theme', 'general_coherence')} / "
-                f"{note.get('title', 'untitled')}: "
-                f"{note.get('summary', '')}"
-            )
-        if not reader_ready_notes:
-            lines.append(
-                "No extracted citation card is clean enough for reader-facing prose "
-                "yet. The audit bundle preserves the raw notes, but this paper needs "
-                "manual source inspection or improved extraction before those notes "
-                "can support public claims."
-            )
-    else:
-        lines.append(
-            "No argument-bearing source notes were available in this export. The "
-            "next improvement is to extract citation cards from the indexed "
-            "corpus before writing the paper."
-        )
-    lines.extend(
-        [
-            "",
-            "10. Current Claim Graph",
-            f"This draft contains {len(reader_claims)} mapped claim(s). Claims with raw "
-            "support should be read as promising but unverified. Claims with reviewed "
-            "support may be candidates for stronger public wording. Each row separates "
-            "the claim's wording, type, support, counterevidence, review state, and "
-            "confidence; falsification conditions are listed below the table rather "
-            "than hiding many propositions under one umbrella claim.",
-        ]
-    )
-    claim_table_rows: list[list[str]] = []
-    falsification_notes: list[str] = []
-    for claim_number, entry in enumerate(reader_claims, start=1):
-        claim_text = str(entry.get("claim_text") or entry.get("claim_hash") or "")
-        if len(claim_text) > 70:
-            claim_text = claim_text[:67].rsplit(" ", 1)[0] + "..."
-        claim_table_rows.append(
-            [
-                str(claim_number),
-                claim_text,
-                str(entry.get("claim_type", "claim")),
-                str(entry.get("support_status", "unknown")),
-                str(entry.get("direct_support_count", entry.get("evidence_count", 0))),
-                str(entry.get("counterevidence_count", 0)),
-                str(entry.get("review_state", entry.get("claim_status", "raw"))),
-                str(entry.get("confidence", "unknown")),
-            ]
-        )
-        falsification = str(entry.get("falsification_condition") or "")
-        if falsification:
-            falsification_notes.append(f"Claim {claim_number}: {falsification}")
-    if claim_table_rows:
-        lines.extend(
-            _table_lines(
-                ["#", "Claim", "Type", "Status", "Supp.", "Counter", "Review", "Conf."],
-                claim_table_rows,
-            )
-        )
-    else:
-        lines.append("No claims are currently mapped for this mission.")
-    if falsification_notes:
-        lines.extend(["", "Falsification conditions:"])
-        for note in falsification_notes:
-            lines.append(f"- {note}")
-    lines.extend(
-        [
-            "",
-            "11. Evidence-Linked Argument",
-            "This section is the closest current version of the paper's core "
-            "argument. It uses only source-note links that passed the reader-facing "
-            "extraction gate. These links are still raw until reviewed, so they "
-            "support cautious drafting, not final claims.",
-            *_evidence_link_summary_lines(reader_claims, source_links),
-            *_evidence_linked_argument_lines(reader_claims, source_links),
-            "",
-            "12. Manuscript Readiness",
-            *_paper_readiness_lines(paper_readiness),
-            "",
-            "13. Local Model Manuscript Synthesis",
-            *_writer_draft_lines(writer_draft),
-            "",
-            "14. Formal Theory Revision",
-            *_theory_revision_lines(theory_revision_record),
-        ]
-    )
-    source_findings = _source_note_findings(source_notes)
-    lines.extend(
-        [
-            "",
-            "15. Findings",
-            "The findings below are drawn only from claim-candidate source notes "
-            "that passed the source relevance gate, not from registration stubs "
-            "and not from generic claims about the archive. Section 9 lists all "
-            "extracted notes, including the registration stubs excluded here; the "
-            "two are not the same thing.",
-            *source_findings,
-            *_falsification_finding_lines(falsification_verdict, len(source_findings) + 1),
-            "",
-            "16. Argument Structure",
-            "Every line below names the typed object it came from (claim, premise, "
-            "implementation fact, counterevidence, inference, test, verdict, or "
-            "limitation) so the paragraph can be traced back to what actually "
-            "supports it, rather than reading as prewritten prose.",
-            *_argument_graph_lines(argument_graph),
-            "",
-            "17. Discussion",
-            "The useful conclusion is cautious: Coherence Physics should be advanced "
-            "as a research framework and engineering program before it is presented "
-            "as a completed physical theory. Its current strength is the repeatable "
-            "discipline of making persistence claims auditable, and, where a claim has "
-            "actually been put under adversarial test, reporting the result even when "
-            "it is mixed rather than favorable.",
-            "",
-            "18. Proposed Paper Direction",
-            "A strong first paper should focus on the narrow, defensible claim: smooth "
-            "output is not proof of continuity. From there, PCA can be shown as a "
-            "working architecture that records what changed, what evidence exists, "
-            "what remains under review, and what claims the system is allowed to make.",
-            "",
-            "19. Limitations",
-            "- This draft is generated from local governed research outputs.",
-            "- Raw evidence has not been accepted as reviewed evidence unless marked so.",
-            "- The document does not claim proof of consciousness, AGI, personhood, or final physics.",
-            "- Source registration is not the same as source interpretation.",
-            "",
-            "20. Conclusion",
-            "The next best version of Coherence Physics is a paper series built from "
-            "reviewed source evidence, explicit claim maps, and falsifiable or "
-            "inspectable examples. Lucien can help generate these drafts, but the "
-            "system should keep the same rule at every stage: no claim becomes final "
-            "without evidence review.",
-            "",
-            "21. Research Agenda",
-            "- Review indexed source files and mark useful evidence as reviewed.",
-            "- Choose one paper track: PCA/identity continuity, CSM, cognitive physics, or cosmology.",
-            "- Replace provisional findings with source-backed claims.",
-            "- Add objections and counterexamples before public release.",
-            "- Define one falsifiable or inspectable test for each major claim family.",
-            "",
-            "References",
-        ]
-    )
-    if corpus_sources:
-        for index, source in enumerate(corpus_sources[:20], start=1):
-            lines.append(
-                f"[{index}] {source.get('path', 'unknown source')} "
+                f"[{index}] {_short_source_name(str(source.get('path') or 'unknown source'))} "
                 f"({source.get('theme', 'general_coherence')})."
             )
     else:
