@@ -1337,6 +1337,9 @@ def test_live_chat_html_contains_mission_first_home():
     assert "Make Paper" in html
     assert "paperReadinessSummary" in html
     assert "paperReadinessCards" in html
+    assert "Paper Review Workbench" in html
+    assert "paperReviewQueueSummary" in html
+    assert "paperReviewQueueActions" in html
     assert "paperGenerateFinal" in html
     assert "paperAddExternal" in html
     assert "externalLiteratureSummary" in html
@@ -1344,6 +1347,9 @@ def test_live_chat_html_contains_mission_first_home():
     assert "add_external_literature" in html
     assert "review_external_literature" in html
     assert "renderPaperReadiness(status.paper_readiness || {}, missionView.activeMission)" in html
+    assert "renderPaperReviewQueue(status.paper_review_queue || {}, missionView.activeMission)" in html
+    assert "Paper Review Workbench" in html
+    assert "Accept Verified Note" in html
     assert "renderExternalLiterature(status.mission_external_literature || {}, missionView.activeMission)" in html
     assert "Research Coherence Physics and Save a PDF" in html
     assert "oneClickResearchPdf" in html

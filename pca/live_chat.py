@@ -101,6 +101,7 @@ from .coherence_paper_pipeline import run_coherence_paper_pipeline
 from .paper_readiness import paper_readiness_for_mission
 from .research_pdf import export_research_pdf
 from .research_review import research_review_desks
+from .review_queue import review_queue_for_mission
 from .source_notes import review_source_note, source_notes_for_mission
 from .reflection_queue import (
     open_tasks_from_reflection,
@@ -1117,6 +1118,7 @@ def _status_payload(
         for brief in missions
     }
     paper_readiness = {}
+    paper_review_queue = {}
     for brief in missions:
         mission_id = brief["mission"]["mission_id"]
         try:
@@ -1133,6 +1135,23 @@ def _status_payload(
                 "ready": False,
                 "blockers": [str(exc)],
                 "recommended_action": "Run the paper pipeline or inspect diagnostics.",
+            }
+        try:
+            paper_review_queue[mission_id] = review_queue_for_mission(
+                ledger,
+                mission_id,
+            )
+        except Exception as exc:
+            paper_review_queue[mission_id] = {
+                "mission_id": mission_id,
+                "total_pending_items": 0,
+                "raw_evidence": [],
+                "malformed_source_notes": [],
+                "unlinked_claims": [],
+                "external_literature_missing": False,
+                "external_literature_unreviewed": [],
+                "error": str(exc),
+                "governance": "review queue unavailable",
             }
     mission_claim_map_data = mission_claim_maps(ledger)
     research_review_data = research_review_desks(ledger)
@@ -1228,6 +1247,7 @@ def _status_payload(
         "mission_source_notes": mission_source_notes,
         "mission_external_literature": mission_external_literature,
         "paper_readiness": paper_readiness,
+        "paper_review_queue": paper_review_queue,
         "mission_claim_maps": mission_claim_map_data,
         "research_review_desks": research_review_data,
         "mission_flows": mission_flows,
@@ -2447,6 +2467,12 @@ def _live_chat_html() -> str:
       <div id="paperReadinessSummary" class="item"></div>
       <div id="paperReadinessCards" class="mission-card-grid"></div>
       <div id="paperReadinessBlockers" class="queue"></div>
+      <div class="item paper-review-workbench">
+        <div class="item-title">Paper Review Workbench</div>
+        <div class="item-meta">Clear the review blockers that stop this draft from becoming review-ready. These actions use the existing evidence, source-note, and literature review gates.</div>
+      </div>
+      <div id="paperReviewQueueSummary" class="mission-card-grid"></div>
+      <div id="paperReviewQueueActions" class="queue"></div>
       <div id="externalLiteratureSummary" class="metrics"></div>
       <div id="externalLiteratureList" class="queue"></div>
     </section>
@@ -2755,6 +2781,8 @@ def _live_chat_html() -> str:
     const paperReadinessSummary = document.getElementById('paperReadinessSummary');
     const paperReadinessCards = document.getElementById('paperReadinessCards');
     const paperReadinessBlockers = document.getElementById('paperReadinessBlockers');
+    const paperReviewQueueSummary = document.getElementById('paperReviewQueueSummary');
+    const paperReviewQueueActions = document.getElementById('paperReviewQueueActions');
     const externalLiteratureSummary = document.getElementById('externalLiteratureSummary');
     const externalLiteratureList = document.getElementById('externalLiteratureList');
     const missionEvidenceSummary = document.getElementById('missionEvidenceSummary');
@@ -2865,6 +2893,7 @@ def _live_chat_html() -> str:
       renderDailyPlan(status.daily_plan || {});
       renderMissions(status.missions || [], status.mission_flows || {}, status.mission_autonomy || []);
       renderPaperReadiness(status.paper_readiness || {}, missionView.activeMission);
+      renderPaperReviewQueue(status.paper_review_queue || {}, missionView.activeMission);
       renderExternalLiterature(status.mission_external_literature || {}, missionView.activeMission);
       renderMissionEvidence(status.mission_evidence || {}, missionView.activeMission);
       renderSourceNotesReview(status.mission_source_notes || {}, status.mission_claim_maps || {}, missionView.activeMission);
@@ -3339,6 +3368,145 @@ def _live_chat_html() -> str:
         row.className = 'item';
         row.innerHTML = `<div class="item-title">Needs Work</div><div class="item-meta">${escapeHtml(blocker)}</div>`;
         paperReadinessBlockers.appendChild(row);
+      }
+    }
+
+    function renderPaperReviewQueue(reviewQueues, selectedMission) {
+      paperReviewQueueSummary.innerHTML = '';
+      paperReviewQueueActions.innerHTML = '';
+      if (!selectedMission || !selectedMission.mission_id) {
+        empty(paperReviewQueueActions, 'Select or open a mission before reviewing paper blockers.');
+        return;
+      }
+      const queue = reviewQueues[selectedMission.mission_id] || {};
+      if (queue.error) {
+        empty(paperReviewQueueActions, `Paper review queue unavailable: ${queue.error}`);
+        return;
+      }
+      const rawEvidence = queue.raw_evidence || [];
+      const damagedNotes = queue.malformed_source_notes || [];
+      const unlinkedClaims = queue.unlinked_claims || [];
+      const externalUnreviewed = queue.external_literature_unreviewed || [];
+      const externalMissing = !!queue.external_literature_missing;
+      const totalPending = queue.total_pending_items || 0;
+      const cards = [
+        ['Total Pending', totalPending],
+        ['Raw Evidence', rawEvidence.length],
+        ['Damaged Notes', damagedNotes.length],
+        ['Unlinked Claims', unlinkedClaims.length],
+        ['External Literature', externalMissing ? 'missing' : externalUnreviewed.length],
+      ];
+      for (const [label, value] of cards) {
+        const card = document.createElement('div');
+        card.className = 'item mission-card';
+        card.innerHTML = `<div class="label">${escapeHtml(label)}</div><div class="item-title">${escapeHtml(String(value))}</div>`;
+        paperReviewQueueSummary.appendChild(card);
+      }
+      if (!totalPending) {
+        empty(paperReviewQueueActions, 'No paper review blockers are open for this mission. Generate the paper and inspect the PDF before sharing it.');
+        return;
+      }
+
+      const addSection = (titleText, metaText) => {
+        const section = document.createElement('div');
+        section.className = 'item';
+        section.innerHTML = `<div class="item-title">${escapeHtml(titleText)}</div><div class="item-meta">${escapeHtml(metaText)}</div>`;
+        paperReviewQueueActions.appendChild(section);
+        return section;
+      };
+
+      if (rawEvidence.length) {
+        addSection('Raw evidence awaiting review', 'Accept only evidence you have inspected. Reject, dispute, or mark stale when it should not support the paper.');
+        for (const item of rawEvidence.slice(0, 6)) {
+          const row = document.createElement('div');
+          row.className = 'item';
+          const evidenceId = item.evidence_id || '';
+          row.innerHTML = `<div class="item-title">${escapeHtml(item.source_type || 'evidence')} / ${escapeHtml(item.confidence || 'unknown confidence')}</div>
+            <div class="item-meta">${escapeHtml(evidenceId || 'unknown evidence')}</div>`;
+          const actions = document.createElement('div');
+          actions.className = 'actions';
+          actions.appendChild(button('Accept Evidence', {action: 'review_evidence_direct', evidence_id: evidenceId, status: 'reviewed', reason: 'accepted from Paper Review Workbench'}));
+          actions.appendChild(button('Dispute', {action: 'review_evidence_direct', evidence_id: evidenceId, status: 'disputed', reason: 'disputed from Paper Review Workbench'}));
+          actions.appendChild(button('Reject', {action: 'review_evidence_direct', evidence_id: evidenceId, status: 'rejected', reason: 'rejected from Paper Review Workbench'}));
+          actions.appendChild(button('Mark Stale', {action: 'review_evidence_direct', evidence_id: evidenceId, status: 'stale', reason: 'marked stale from Paper Review Workbench'}));
+          row.appendChild(actions);
+          paperReviewQueueActions.appendChild(row);
+        }
+      }
+
+      if (damagedNotes.length) {
+        addSection('Source notes needing manual verification', 'These notes look damaged or too weak for the reader-facing paper. Compare against the original source before accepting.');
+        for (const item of damagedNotes.slice(0, 6)) {
+          const row = document.createElement('div');
+          row.className = 'item';
+          const noteId = item.note_id || '';
+          row.innerHTML = `<div class="item-title">${escapeHtml(noteId || 'source note')}</div>
+            <div class="item-meta">${escapeHtml(item.source_path || 'unknown source')} / ${escapeHtml(item.locator || 'source')}</div>
+            <div class="item-meta">${escapeHtml(String(item.summary || '').slice(0, 260))}</div>`;
+          const actions = document.createElement('div');
+          actions.className = 'actions';
+          actions.appendChild(button('Accept Verified Note', {action: 'review_source_note', note_id: noteId, status: 'reviewed', reason: 'manually verified from Paper Review Workbench'}));
+          actions.appendChild(button('Dispute Note', {action: 'review_source_note', note_id: noteId, status: 'disputed', reason: 'extraction damaged, needs manual verification against the source'}));
+          actions.appendChild(button('Reject Note', {action: 'review_source_note', note_id: noteId, status: 'rejected', reason: 'rejected damaged source note from Paper Review Workbench'}));
+          row.appendChild(actions);
+          paperReviewQueueActions.appendChild(row);
+        }
+      }
+
+      if (unlinkedClaims.length) {
+        addSection('Claims needing source links', 'These claims need reader-ready citations before the paper should be treated as review-ready.');
+        for (const item of unlinkedClaims.slice(0, 6)) {
+          const row = document.createElement('div');
+          row.className = 'item';
+          row.innerHTML = `<div class="item-title">${escapeHtml(item.claim_id || 'claim')}</div>
+            <div class="item-meta">${escapeHtml(item.claim_text || 'No claim text recorded.')}</div>
+            <div class="item-meta">${escapeHtml(item.note || 'Add or review a source note that supports this claim.')}</div>`;
+          const actions = document.createElement('div');
+          actions.className = 'actions';
+          const jump = document.createElement('button');
+          jump.type = 'button';
+          jump.className = 'secondary';
+          jump.textContent = 'Review Source Notes';
+          jump.addEventListener('click', () => sourceNotesReview.scrollIntoView({behavior: 'smooth', block: 'center'}));
+          actions.appendChild(jump);
+          row.appendChild(actions);
+          paperReviewQueueActions.appendChild(row);
+        }
+      }
+
+      if (externalMissing) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = `<div class="item-title">External literature missing</div>
+          <div class="item-meta">Add at least one outside scholarly source so the paper does not rely only on the local archive.</div>`;
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        const add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'secondary';
+        add.textContent = 'Add External Source';
+        add.addEventListener('click', addExternalLiteratureForPaper);
+        actions.appendChild(add);
+        row.appendChild(actions);
+        paperReviewQueueActions.appendChild(row);
+      }
+
+      if (externalUnreviewed.length) {
+        addSection('External literature awaiting review', 'Confirm outside sources before allowing them to strengthen the final paper.');
+        for (const item of externalUnreviewed.slice(0, 6)) {
+          const row = document.createElement('div');
+          row.className = 'item';
+          const literatureId = item.literature_id || '';
+          row.innerHTML = `<div class="item-title">${escapeHtml(item.title || 'external literature')}</div>
+            <div class="item-meta">${escapeHtml(literatureId || 'unknown literature')}</div>`;
+          const actions = document.createElement('div');
+          actions.className = 'actions';
+          actions.appendChild(button('Accept External Source', {action: 'review_external_literature', literature_id: literatureId, status: 'reviewed', reason: 'accepted from Paper Review Workbench'}));
+          actions.appendChild(button('Dispute', {action: 'review_external_literature', literature_id: literatureId, status: 'disputed', reason: 'disputed from Paper Review Workbench'}));
+          actions.appendChild(button('Reject', {action: 'review_external_literature', literature_id: literatureId, status: 'rejected', reason: 'rejected from Paper Review Workbench'}));
+          row.appendChild(actions);
+          paperReviewQueueActions.appendChild(row);
+        }
       }
     }
 
