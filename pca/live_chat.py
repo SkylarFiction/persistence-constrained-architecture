@@ -98,6 +98,7 @@ from .research_sandbox import (
 from .research_autopilot import run_research_autopilot
 from .coherence_corpus import index_coherence_corpus
 from .coherence_paper_pipeline import run_coherence_paper_pipeline
+from .paper_finish_plan import paper_finish_plan_for_mission
 from .paper_readiness import paper_readiness_for_mission
 from .research_pdf import export_research_pdf
 from .research_review import research_review_desks
@@ -1118,6 +1119,7 @@ def _status_payload(
         for brief in missions
     }
     paper_readiness = {}
+    paper_finish_plan = {}
     paper_review_queue = {}
     for brief in missions:
         mission_id = brief["mission"]["mission_id"]
@@ -1135,6 +1137,28 @@ def _status_payload(
                 "ready": False,
                 "blockers": [str(exc)],
                 "recommended_action": "Run the paper pipeline or inspect diagnostics.",
+            }
+        try:
+            paper_finish_plan[mission_id] = paper_finish_plan_for_mission(
+                ledger,
+                mission_id,
+            )
+        except Exception as exc:
+            paper_finish_plan[mission_id] = {
+                "mission_id": mission_id,
+                "mission_title": brief["mission"].get("title"),
+                "ready": False,
+                "plain_status": "Final paper checklist unavailable",
+                "primary_action": {
+                    "id": "inspect_diagnostics",
+                    "label": "Inspect Diagnostics",
+                    "status": "blocked",
+                    "reason": str(exc),
+                },
+                "actions": [],
+                "priority_source_links": [],
+                "counts": {},
+                "error": str(exc),
             }
         try:
             paper_review_queue[mission_id] = review_queue_for_mission(
@@ -1247,6 +1271,7 @@ def _status_payload(
         "mission_source_notes": mission_source_notes,
         "mission_external_literature": mission_external_literature,
         "paper_readiness": paper_readiness,
+        "paper_finish_plan": paper_finish_plan,
         "paper_review_queue": paper_review_queue,
         "mission_claim_maps": mission_claim_map_data,
         "research_review_desks": research_review_data,
@@ -2467,6 +2492,12 @@ def _live_chat_html() -> str:
       <div id="paperReadinessSummary" class="item"></div>
       <div id="paperReadinessCards" class="mission-card-grid"></div>
       <div id="paperReadinessBlockers" class="queue"></div>
+      <div class="item final-paper-checklist">
+        <div class="item-title">Final Paper Checklist</div>
+        <div class="item-meta">A short finishing path for turning the current draft into a reviewable paper without digging through the whole raw queue.</div>
+      </div>
+      <div id="paperFinishPlanSummary" class="mission-card-grid"></div>
+      <div id="paperFinishPlanActions" class="queue"></div>
       <div class="item paper-review-workbench">
         <div class="item-title">Paper Review Workbench</div>
         <div class="item-meta">Clear the review blockers that stop this draft from becoming review-ready. These actions use the existing evidence, source-note, and literature review gates.</div>
@@ -2781,6 +2812,8 @@ def _live_chat_html() -> str:
     const paperReadinessSummary = document.getElementById('paperReadinessSummary');
     const paperReadinessCards = document.getElementById('paperReadinessCards');
     const paperReadinessBlockers = document.getElementById('paperReadinessBlockers');
+    const paperFinishPlanSummary = document.getElementById('paperFinishPlanSummary');
+    const paperFinishPlanActions = document.getElementById('paperFinishPlanActions');
     const paperReviewQueueSummary = document.getElementById('paperReviewQueueSummary');
     const paperReviewQueueActions = document.getElementById('paperReviewQueueActions');
     const externalLiteratureSummary = document.getElementById('externalLiteratureSummary');
@@ -2893,6 +2926,7 @@ def _live_chat_html() -> str:
       renderDailyPlan(status.daily_plan || {});
       renderMissions(status.missions || [], status.mission_flows || {}, status.mission_autonomy || []);
       renderPaperReadiness(status.paper_readiness || {}, missionView.activeMission);
+      renderPaperFinishPlan(status.paper_finish_plan || {}, missionView.activeMission);
       renderPaperReviewQueue(status.paper_review_queue || {}, missionView.activeMission);
       renderExternalLiterature(status.mission_external_literature || {}, missionView.activeMission);
       renderMissionEvidence(status.mission_evidence || {}, missionView.activeMission);
@@ -3368,6 +3402,111 @@ def _live_chat_html() -> str:
         row.className = 'item';
         row.innerHTML = `<div class="item-title">Needs Work</div><div class="item-meta">${escapeHtml(blocker)}</div>`;
         paperReadinessBlockers.appendChild(row);
+      }
+    }
+
+    function renderPaperFinishPlan(plansByMission, selectedMission) {
+      paperFinishPlanSummary.innerHTML = '';
+      paperFinishPlanActions.innerHTML = '';
+      if (!selectedMission || !selectedMission.mission_id) {
+        empty(paperFinishPlanActions, 'Select or open a mission before using the final paper checklist.');
+        return;
+      }
+      const plan = plansByMission[selectedMission.mission_id] || {};
+      if (plan.error) {
+        empty(paperFinishPlanActions, `Final paper checklist unavailable: ${plan.error}`);
+        return;
+      }
+      const primary = plan.primary_action || {};
+      const counts = plan.counts || {};
+      const cards = [
+        ['Primary Action', primary.label || 'Check Paper'],
+        ['Candidate Links', counts.candidate_source_links || 0],
+        ['Unlinked Claims', counts.unlinked_claims || 0],
+        ['Damaged Notes', counts.damaged_notes || 0],
+        ['External Needed', counts.external_missing ? 'yes' : 'no'],
+      ];
+      for (const [label, value] of cards) {
+        const card = document.createElement('div');
+        card.className = 'item mission-card';
+        card.innerHTML = `<div class="label">${escapeHtml(label)}</div><div class="item-title">${escapeHtml(String(value))}</div>`;
+        paperFinishPlanSummary.appendChild(card);
+      }
+
+      const lead = document.createElement('div');
+      lead.className = 'item';
+      lead.innerHTML = `<div class="item-title">${escapeHtml(primary.label || 'Final Paper Checklist')}</div>
+        <div class="item-meta">${escapeHtml(primary.reason || plan.plain_status || 'Review the checklist before generating the paper.')}</div>
+        <div class="item-meta">${escapeHtml(plan.governance || 'Checklist is advisory; PCA review gates still apply.')}</div>`;
+      paperFinishPlanActions.appendChild(lead);
+
+      const actions = plan.actions || [];
+      if (actions.length) {
+        const list = document.createElement('div');
+        list.className = 'item';
+        const rows = actions.map(action => {
+          const status = action.status || 'todo';
+          return `<div class="item-meta"><strong>${escapeHtml(status.toUpperCase())}</strong> - ${escapeHtml(action.label || action.id || 'step')}: ${escapeHtml(action.reason || '')}</div>`;
+        }).join('');
+        list.innerHTML = `<div class="item-title">Finish Steps</div>${rows}`;
+        paperFinishPlanActions.appendChild(list);
+      }
+
+      const links = plan.priority_source_links || [];
+      if (links.length) {
+        const section = document.createElement('div');
+        section.className = 'item';
+        section.innerHTML = `<div class="item-title">Priority Source Links To Review</div>
+          <div class="item-meta">Start here instead of reviewing every raw evidence item. These source notes are already connected to reader-facing claims.</div>`;
+        paperFinishPlanActions.appendChild(section);
+        for (const link of links.slice(0, 5)) {
+          const row = document.createElement('div');
+          row.className = 'item';
+          const noteId = link.note_id || '';
+          row.innerHTML = `<div class="item-title">${escapeHtml(link.link_strength || 'source link')} / ${escapeHtml(link.relation || 'support')}</div>
+            <div class="item-meta">Claim: ${escapeHtml(link.claim_text || link.claim_id || 'claim')}</div>
+            <div class="item-meta">Source: ${escapeHtml(link.source_path || 'unknown source')} / ${escapeHtml(link.locator || 'locator')}</div>
+            <div class="item-meta">${escapeHtml(String(link.summary || '').slice(0, 260))}</div>`;
+          const rowActions = document.createElement('div');
+          rowActions.className = 'actions';
+          rowActions.appendChild(button('Accept Source Link', {
+            action: 'review_source_note',
+            note_id: noteId,
+            status: 'reviewed',
+            reason: 'accepted priority source link from Final Paper Checklist'
+          }));
+          rowActions.appendChild(button('Dispute', {
+            action: 'review_source_note',
+            note_id: noteId,
+            status: 'disputed',
+            reason: 'disputed priority source link from Final Paper Checklist'
+          }));
+          rowActions.appendChild(button('Reject', {
+            action: 'review_source_note',
+            note_id: noteId,
+            status: 'rejected',
+            reason: 'rejected priority source link from Final Paper Checklist'
+          }));
+          row.appendChild(rowActions);
+          paperFinishPlanActions.appendChild(row);
+        }
+      }
+
+      if (counts.external_missing) {
+        const external = document.createElement('div');
+        external.className = 'item';
+        external.innerHTML = `<div class="item-title">Add one outside scholarly source</div>
+          <div class="item-meta">This moves the paper beyond the local archive and is required before final-paper status.</div>`;
+        const externalActions = document.createElement('div');
+        externalActions.className = 'actions';
+        const add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'secondary';
+        add.textContent = 'Add External Source';
+        add.addEventListener('click', addExternalLiteratureForPaper);
+        externalActions.appendChild(add);
+        external.appendChild(externalActions);
+        paperFinishPlanActions.appendChild(external);
       }
     }
 

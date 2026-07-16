@@ -174,12 +174,14 @@ from pca import (
     render_lucien_cockpit_html,
     render_next_governed_build_text,
     render_knowledge_hub_index_text,
+    render_paper_finish_plan_text,
     render_paper_readiness_text,
     render_session_replay_html,
     render_trace_report_html,
     recovery_records_from_events,
     research_outputs_from_events,
     research_sandbox_status,
+    paper_finish_plan_for_mission,
     paper_readiness_for_mission,
     safe_load_policy_pack,
     select_brain_route,
@@ -1337,6 +1339,9 @@ def test_live_chat_html_contains_mission_first_home():
     assert "Make Paper" in html
     assert "paperReadinessSummary" in html
     assert "paperReadinessCards" in html
+    assert "Final Paper Checklist" in html
+    assert "paperFinishPlanSummary" in html
+    assert "paperFinishPlanActions" in html
     assert "Paper Review Workbench" in html
     assert "paperReviewQueueSummary" in html
     assert "paperReviewQueueActions" in html
@@ -1347,6 +1352,8 @@ def test_live_chat_html_contains_mission_first_home():
     assert "add_external_literature" in html
     assert "review_external_literature" in html
     assert "renderPaperReadiness(status.paper_readiness || {}, missionView.activeMission)" in html
+    assert "renderPaperFinishPlan(status.paper_finish_plan || {}, missionView.activeMission)" in html
+    assert "Accept Source Link" in html
     assert "renderPaperReviewQueue(status.paper_review_queue || {}, missionView.activeMission)" in html
     assert "Paper Review Workbench" in html
     assert "Accept Verified Note" in html
@@ -4044,6 +4051,65 @@ def test_review_queue_lists_raw_evidence_malformed_notes_and_unlinked_claims(tmp
     assert evidence.evidence_id in rendered
     assert "source_note_review_queue_malformed" in rendered
     assert "does not review, accept, or reject anything on its own" in rendered
+
+
+def test_paper_finish_plan_prioritizes_reader_ready_source_links(tmp_path):
+    import hashlib
+    from datetime import datetime, timezone
+
+    from pca.argument_graph import seed_continuity_argument_graph
+    from pca.source_notes import SourceNoteRecord
+
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Finish plan mission",
+        problem_statement="Make the paper workflow clear enough to finish.",
+    )
+    seed_continuity_argument_graph(
+        ledger,
+        manifest,
+        mission.mission_id,
+        project_root=tmp_path,
+    )
+    note = SourceNoteRecord(
+        note_id="source_note_finish_plan_priority",
+        identity_id=manifest.system_id,
+        mission_id=mission.mission_id,
+        source_path="coherence /finish_plan_identity.pdf",
+        theme="identity_physics",
+        title="Finish Plan Identity Source",
+        note_kind="claim_candidate",
+        summary=(
+            "A system can preserve fluent output while memory, authority, "
+            "lineage, state, and identity continuity change underneath behavior."
+        ),
+        locator="page 4",
+        confidence="medium",
+        review_status="raw",
+        summary_hash=hashlib.sha256(b"finish-plan-note").hexdigest(),
+        excerpt_hash=hashlib.sha256(b"finish-plan-excerpt").hexdigest(),
+        excerpt_length=180,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        reason="paper finish plan priority source note",
+        source_content_sha256="finish-plan-source-hash",
+    )
+    ledger.append("source_note.extracted", manifest.system_id, note.to_dict())
+
+    plan = paper_finish_plan_for_mission(ledger, mission.mission_id)
+    rendered = render_paper_finish_plan_text(plan)
+
+    assert plan["mission_id"] == mission.mission_id
+    assert plan["primary_action"]["id"] == "review_priority_source_links"
+    assert plan["priority_source_links"]
+    assert plan["priority_source_links"][0]["note_id"] == "source_note_finish_plan_priority"
+    assert plan["priority_source_links"][0]["review_action"]["action"] == "review_source_note"
+    assert plan["counts"]["candidate_source_links"] >= 1
+    assert "Final Paper Checklist" in rendered
+    assert "source_note_finish_plan_priority" in rendered
+    assert "checklist is advisory" in rendered.lower()
 
 
 def test_claim_source_links_preserve_tentative_matches_without_overclaiming():

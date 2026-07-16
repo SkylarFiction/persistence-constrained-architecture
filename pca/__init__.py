@@ -354,6 +354,10 @@ from .paper_readiness import (
     paper_readiness_records,
     render_paper_readiness_text,
 )
+from .paper_finish_plan import (
+    paper_finish_plan_for_mission,
+    render_paper_finish_plan_text,
+)
 from .research_review import (
     render_research_review_text,
     research_review_desk,
@@ -768,6 +772,7 @@ __all__ = [
     "render_knowledge_hub_index_text",
     "render_knowledge_hub_sources_text",
     "render_external_literature_text",
+    "render_paper_finish_plan_text",
     "required_evidence_for",
     "required_checks_for_audit",
     "require_mission",
@@ -784,6 +789,7 @@ __all__ = [
     "research_review_desks",
     "render_review_queue_text",
     "review_queue_for_mission",
+    "paper_finish_plan_for_mission",
     "research_outputs_from_events",
     "research_sandbox_status",
     "reflection_records_from_events",
