@@ -399,6 +399,11 @@ from .coherence_paper_pipeline import (
     render_coherence_paper_pipeline_text,
     run_coherence_paper_pipeline,
 )
+from .coherence_research_cycle import (
+    coherence_research_cycle_records_from_events,
+    render_coherence_research_cycle_text,
+    run_coherence_research_cycle,
+)
 from .research_autopilot import (
     render_research_autopilot_text,
     research_autopilot_records_from_events,
@@ -678,6 +683,7 @@ __all__ = [
     "continuity_certification",
     "current_claim_record",
     "current_recovery_record",
+    "coherence_research_cycle_records_from_events",
     "create_goal_record",
     "create_mission_onboarding_pack",
     "create_research_output",
@@ -766,6 +772,7 @@ __all__ = [
     "render_checkpoint_story_markdown",
     "render_coherence_corpus_index_text",
     "render_coherence_paper_pipeline_text",
+    "render_coherence_research_cycle_text",
     "render_coherence_seed_text",
     "render_commit_readiness_text",
     "render_daily_plan_text",
@@ -825,6 +832,7 @@ __all__ = [
     "run_all_scenarios",
     "run_auto_daily_research_loop",
     "run_coherence_paper_pipeline",
+    "run_coherence_research_cycle",
     "run_research_autopilot",
     "run_scenario",
     "safe_load_policy_directory",

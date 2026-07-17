@@ -114,6 +114,7 @@ from pca import (
     source_note_records_from_events,
     source_note_review_records_from_events,
     run_coherence_paper_pipeline,
+    run_coherence_research_cycle,
     execute_approved_autonomy_actions,
     execute_autonomy_action,
     evidence_records_from_events,
@@ -1371,6 +1372,7 @@ def test_live_chat_html_contains_mission_first_home():
     assert "review_evidence_direct" in html
     assert "index_coherence_corpus" in html
     assert "run_coherence_paper_pipeline" in html
+    assert "run_coherence_research_cycle" in html
     assert "theory_output_path" in html
     assert "theory_revision: true" in html
     assert "captured latest Lucien reply from mission evidence panel" in html
@@ -4603,6 +4605,48 @@ def test_coherence_paper_pipeline_finishes_with_pdf_packet(tmp_path):
     assert b"Governance Case Study" in paper_output_path.read_bytes()
 
 
+def test_coherence_research_cycle_runs_verified_non_certifying_cycle(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "Coherence_Physics_Source.md").write_text(
+        (
+            "Coherence research should map claims to recoverability evidence "
+            "without certifying conclusions automatically."
+        ),
+        encoding="utf-8",
+    )
+    paper_output_path = tmp_path / "coherence_paper.pdf"
+    packet_output_path = tmp_path / "coherence_research_packet.pdf"
+    audit_output_path = tmp_path / "coherence_audit_bundle.pdf"
+
+    result = run_coherence_research_cycle(
+        ledger,
+        manifest,
+        project_root=project_root,
+        corpus_limit=2,
+        use_knowledge_hub=False,
+        force=True,
+        output_path=audit_output_path,
+        paper_output_path=paper_output_path,
+        packet_output_path=packet_output_path,
+    )
+
+    cycle = result["cycle"]
+    assert cycle["status"] == "completed"
+    assert cycle["paper_artifact"]["status"] == "completed"
+    assert cycle["paper_artifact"]["path"] == str(paper_output_path)
+    assert cycle["paper_artifact"]["size_bytes"] == paper_output_path.stat().st_size
+    assert "does not review evidence" in cycle["autonomy_boundary"]
+    assert any(
+        event.event_type == "coherence_research.cycle_ran"
+        for event in ledger.events()
+    )
+
+
 def test_coherence_paper_pipeline_can_attach_theory_revision_draft(tmp_path):
     manifest = load_manifest()
     ledger = ContinuityLedger(tmp_path / "continuity.log")
@@ -5177,6 +5221,44 @@ def test_approved_autonomy_action_executes_read_only_project_brief(tmp_path):
     assert "Project Build Brief" in result["output"]
     assert records[0].item_id == item.item_id
     assert records[0].evidence_id == result["evidence"]["evidence_id"]
+
+
+def test_approved_autonomy_action_executes_coherence_research_cycle(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    item = propose_autonomy_action(
+        ledger,
+        manifest.system_id,
+        "run_coherence_research_cycle",
+        reason="Lucien recommends a safe research expansion cycle.",
+        payload={"limit": 2, "knowledge_hub": False, "force": True},
+    )
+    review_autonomy_action(
+        ledger,
+        manifest.system_id,
+        item.item_id,
+        "approve",
+        reason="non-certifying research expansion approved",
+    )
+
+    result = execute_autonomy_action(
+        ledger,
+        manifest,
+        item.item_id,
+        project_root=project_root,
+        reason="test coherence research cycle execution",
+    )
+
+    assert result["execution"]["status"] == "completed"
+    assert "Coherence Research Cycle" in result["output"]
+    assert "status: completed" in result["output"]
+    assert "does not review evidence" in result["output"]
+    assert any(
+        event.event_type == "coherence_research.cycle_ran"
+        for event in ledger.events()
+    )
 
 
 def test_unapproved_autonomy_action_cannot_execute(tmp_path):

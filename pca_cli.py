@@ -46,6 +46,7 @@ from pca import (
     accepted_skills_from_events,
     run_auto_daily_research_loop,
     run_coherence_paper_pipeline,
+    run_coherence_research_cycle,
     run_research_autopilot,
     authorization_policy_from_packs,
     autonomy_queue_items_from_events,
@@ -149,6 +150,7 @@ from pca import (
     render_checkpoint_story_markdown,
     render_coherence_corpus_index_text,
     render_coherence_paper_pipeline_text,
+    render_coherence_research_cycle_text,
     render_coherence_seed_text,
     render_commit_readiness_text,
     render_daily_command_center_text,
@@ -415,6 +417,26 @@ def main() -> int:
         "--theory-markdown-output",
         default="../knowledge_hub/generated/research_papers/theory_revision_draft.md",
         help="Formal theory revision companion Markdown path.",
+    )
+    coherence_cycle_parser = subparsers.add_parser("coherence-research-cycle")
+    coherence_cycle_parser.add_argument("--json", action="store_true")
+    coherence_cycle_parser.add_argument("--mission")
+    coherence_cycle_parser.add_argument("--limit", type=int, default=12)
+    coherence_cycle_parser.add_argument("--no-knowledge-hub", action="store_true")
+    coherence_cycle_parser.add_argument("--force", action="store_true")
+    coherence_cycle_parser.add_argument("--llama-writer", action="store_true")
+    coherence_cycle_parser.add_argument("--theory-revision", action="store_true")
+    coherence_cycle_parser.add_argument(
+        "--output",
+        default="../knowledge_hub/generated/research_papers/coherence_audit_bundle.pdf",
+    )
+    coherence_cycle_parser.add_argument(
+        "--paper-output",
+        default="../knowledge_hub/generated/research_papers/coherence_paper.pdf",
+    )
+    coherence_cycle_parser.add_argument(
+        "--packet-output",
+        default="../knowledge_hub/generated/research_papers/coherence_research_packet.pdf",
     )
     research_sandbox_parser = subparsers.add_parser("research-sandbox")
     research_sandbox_parser.add_argument("--json", action="store_true")
@@ -1242,6 +1264,28 @@ def main() -> int:
             print_json({"coherence_paper_pipeline": result})
         else:
             print(render_coherence_paper_pipeline_text(result))
+        return 0
+
+    if args.command == "coherence-research-cycle":
+        result = run_coherence_research_cycle(
+            ledger,
+            manifest,
+            project_root=Path.cwd(),
+            mission_id=args.mission,
+            corpus_limit=args.limit,
+            use_knowledge_hub=not args.no_knowledge_hub,
+            force=args.force,
+            output_path=args.output,
+            paper_output_path=args.paper_output,
+            packet_output_path=args.packet_output,
+            llama_writer=args.llama_writer,
+            theory_revision=args.theory_revision,
+            reason="manual CLI Coherence research cycle",
+        )
+        if args.json:
+            print_json({"coherence_research_cycle": result})
+        else:
+            print(render_coherence_research_cycle_text(result))
         return 0
 
     if args.command == "research-sandbox":

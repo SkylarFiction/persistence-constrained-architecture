@@ -101,6 +101,7 @@ from .coherence_paper_pipeline import (
     coherence_paper_pipeline_records_from_events,
     run_coherence_paper_pipeline,
 )
+from .coherence_research_cycle import run_coherence_research_cycle
 from .paper_finish_plan import paper_finish_plan_for_mission
 from .paper_readiness import paper_readiness_for_mission
 from .research_pdf import export_research_pdf
@@ -924,6 +925,34 @@ def _apply_steward_action(
             if path_value:
                 _publish_latest_copy(path_value)
         return {"coherence_paper_pipeline": pipeline_result}
+
+    if action == "run_coherence_research_cycle":
+        mission_id = str(payload.get("mission_id", "")).strip() or None
+        limit = int(payload.get("limit") or 12)
+        cycle_result = run_coherence_research_cycle(
+            ledger,
+            manifest,
+            project_root=Path.cwd(),
+            mission_id=mission_id,
+            corpus_limit=limit,
+            use_knowledge_hub=bool(payload.get("knowledge_hub", True)),
+            force=bool(payload.get("force")),
+            output_path=payload.get("output_path")
+            or "../knowledge_hub/generated/research_papers/coherence_audit_bundle.pdf",
+            paper_output_path=payload.get("paper_output_path")
+            or "../knowledge_hub/generated/research_papers/coherence_paper.pdf",
+            packet_output_path=payload.get("packet_output_path")
+            or "../knowledge_hub/generated/research_papers/coherence_research_packet.pdf",
+            theory_revision=bool(payload.get("theory_revision")),
+            llama_writer=bool(payload.get("llama_writer")),
+            reason=reason or "live Coherence research cycle",
+        )
+        pdf_paths = (cycle_result.get("pipeline") or {}).get("pdf") or {}
+        for key in ("paper_path", "packet_path", "audit_path"):
+            path_value = pdf_paths.get(key)
+            if path_value:
+                _publish_latest_copy(path_value)
+        return {"coherence_research_cycle": cycle_result}
 
     if action == "create_research_output":
         mission_id = str(payload.get("mission_id", "")).strip()
@@ -5510,8 +5539,9 @@ def _live_chat_html() -> str:
       try {
         const paths = researchOutputPaths('coherence');
         const data = await steward({
-          action: 'run_coherence_paper_pipeline',
+          action: 'run_coherence_research_cycle',
           limit: 12,
+          knowledge_hub: true,
           output_path: paths.output_path,
           paper_output_path: paths.paper_output_path,
           packet_output_path: paths.packet_output_path,
@@ -5520,7 +5550,8 @@ def _live_chat_html() -> str:
           theory_markdown_output_path: paths.theory_markdown_output_path,
           reason: 'one-click Coherence research paper, packet, theory revision, and audit bundle'
         });
-        const pipeline = data && data.result && data.result.coherence_paper_pipeline ? data.result.coherence_paper_pipeline : null;
+        const cycle = data && data.result && data.result.coherence_research_cycle ? data.result.coherence_research_cycle : null;
+        const pipeline = cycle && cycle.pipeline ? cycle.pipeline : null;
         const record = pipeline && pipeline.record ? pipeline.record : {};
         const pdf = pipeline && pipeline.pdf ? pipeline.pdf : null;
         const artifact = pdf && pdf.paper_artifact ? pdf.paper_artifact : null;

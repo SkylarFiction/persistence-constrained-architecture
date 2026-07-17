@@ -35,6 +35,7 @@ class AutonomyActionType(str, Enum):
     REVIEW_INBOX = "review_inbox"
     LINK_CHECKPOINT = "link_checkpoint"
     GENERATE_STORY = "generate_story"
+    RUN_COHERENCE_RESEARCH_CYCLE = "run_coherence_research_cycle"
 
 
 class AutonomyQueueStatus(str, Enum):
@@ -423,6 +424,25 @@ def _execute_allowed_action(
         return f"Steward inbox: {len(items)} open item(s).", 0
     if item.action_type == AutonomyActionType.GENERATE_STORY:
         return render_checkpoint_story_markdown(checkpoint_story(project_root)), 0
+    if item.action_type == AutonomyActionType.RUN_COHERENCE_RESEARCH_CYCLE:
+        from .coherence_research_cycle import (
+            render_coherence_research_cycle_text,
+            run_coherence_research_cycle,
+        )
+
+        result = run_coherence_research_cycle(
+            ledger,
+            manifest,
+            project_root=project_root,
+            mission_id=item.payload.get("mission_id") or None,
+            corpus_limit=int(item.payload.get("limit") or 12),
+            use_knowledge_hub=bool(item.payload.get("knowledge_hub", True)),
+            force=bool(item.payload.get("force", False)),
+            theory_revision=bool(item.payload.get("theory_revision", False)),
+            llama_writer=bool(item.payload.get("llama_writer", False)),
+            reason=f"approved autonomy research cycle {item.item_id}",
+        )
+        return render_coherence_research_cycle_text(result), 0
     return (
         f"Autonomy action {item.action_type.value} is approval-only and not executable in this version.",
         1,
@@ -468,5 +488,7 @@ def _risk_for_action(action_type: AutonomyActionType) -> str:
     if action_type == AutonomyActionType.RUN_CHECK_ALL:
         return "medium"
     if action_type == AutonomyActionType.LINK_CHECKPOINT:
+        return "medium"
+    if action_type == AutonomyActionType.RUN_COHERENCE_RESEARCH_CYCLE:
         return "medium"
     return "low"
