@@ -48,6 +48,7 @@ from pca import (
     run_coherence_paper_pipeline,
     run_coherence_research_cycle,
     run_research_autopilot,
+    verify_coherence_research_cycle_readiness,
     authorization_policy_from_packs,
     autonomy_queue_items_from_events,
     auto_propose_skill_candidates,
@@ -151,6 +152,7 @@ from pca import (
     render_coherence_corpus_index_text,
     render_coherence_paper_pipeline_text,
     render_coherence_research_cycle_text,
+    render_coherence_research_cycle_readiness_text,
     render_coherence_seed_text,
     render_commit_readiness_text,
     render_daily_command_center_text,
@@ -438,6 +440,11 @@ def main() -> int:
         "--packet-output",
         default="../knowledge_hub/generated/research_papers/coherence_research_packet.pdf",
     )
+    coherence_readiness_parser = subparsers.add_parser("coherence-cycle-readiness")
+    coherence_readiness_parser.add_argument("--json", action="store_true")
+    coherence_readiness_parser.add_argument("--mission")
+    coherence_readiness_parser.add_argument("--limit", type=int, default=12)
+    coherence_readiness_parser.add_argument("--skip-sample", action="store_true")
     research_sandbox_parser = subparsers.add_parser("research-sandbox")
     research_sandbox_parser.add_argument("--json", action="store_true")
     research_brief_parser = subparsers.add_parser("research-brief")
@@ -1286,6 +1293,22 @@ def main() -> int:
             print_json({"coherence_research_cycle": result})
         else:
             print(render_coherence_research_cycle_text(result))
+        return 0
+
+    if args.command == "coherence-cycle-readiness":
+        result = verify_coherence_research_cycle_readiness(
+            ledger,
+            manifest,
+            project_root=Path.cwd(),
+            mission_id=args.mission,
+            corpus_limit=args.limit,
+            run_sample=not args.skip_sample,
+            reason="manual CLI Coherence research cycle readiness check",
+        )
+        if args.json:
+            print_json({"coherence_cycle_readiness": result})
+        else:
+            print(render_coherence_research_cycle_readiness_text(result))
         return 0
 
     if args.command == "research-sandbox":

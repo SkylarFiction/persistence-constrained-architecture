@@ -115,6 +115,8 @@ from pca import (
     source_note_review_records_from_events,
     run_coherence_paper_pipeline,
     run_coherence_research_cycle,
+    render_coherence_research_cycle_readiness_text,
+    verify_coherence_research_cycle_readiness,
     execute_approved_autonomy_actions,
     execute_autonomy_action,
     evidence_records_from_events,
@@ -4643,6 +4645,43 @@ def test_coherence_research_cycle_runs_verified_non_certifying_cycle(tmp_path):
     assert "does not review evidence" in cycle["autonomy_boundary"]
     assert any(
         event.event_type == "coherence_research.cycle_ran"
+        for event in ledger.events()
+    )
+
+
+def test_coherence_cycle_readiness_verifies_sample_without_reviews_or_source_changes(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "Coherence_Physics_Source.md").write_text(
+        "Coherence readiness checks should not certify evidence or alter source files.",
+        encoding="utf-8",
+    )
+
+    result = verify_coherence_research_cycle_readiness(
+        ledger,
+        manifest,
+        project_root=project_root,
+        corpus_limit=2,
+        run_sample=True,
+        reason="test readiness sample",
+    )
+    rendered = render_coherence_research_cycle_readiness_text(result)
+
+    assert result["safe_to_run_cycle"] is True
+    assert result["sample_run"] is True
+    assert result["paper_artifact"]["status"] == "completed"
+    assert result["review_counts_unchanged"] is True
+    assert result["source_inventory_changed"] is False
+    assert result["review_counts_before"] == result["review_counts_after"]
+    assert "Coherence Research Cycle Readiness" in rendered
+    assert "schedule ready:" in rendered
+    assert "does not" not in " ".join(result["failures"])
+    assert any(
+        event.event_type == "coherence_research.readiness_checked"
         for event in ledger.events()
     )
 

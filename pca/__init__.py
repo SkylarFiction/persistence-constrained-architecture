@@ -401,8 +401,10 @@ from .coherence_paper_pipeline import (
 )
 from .coherence_research_cycle import (
     coherence_research_cycle_records_from_events,
+    render_coherence_research_cycle_readiness_text,
     render_coherence_research_cycle_text,
     run_coherence_research_cycle,
+    verify_coherence_research_cycle_readiness,
 )
 from .research_autopilot import (
     render_research_autopilot_text,
@@ -773,6 +775,7 @@ __all__ = [
     "render_coherence_corpus_index_text",
     "render_coherence_paper_pipeline_text",
     "render_coherence_research_cycle_text",
+    "render_coherence_research_cycle_readiness_text",
     "render_coherence_seed_text",
     "render_commit_readiness_text",
     "render_daily_plan_text",
@@ -833,6 +836,7 @@ __all__ = [
     "run_auto_daily_research_loop",
     "run_coherence_paper_pipeline",
     "run_coherence_research_cycle",
+    "verify_coherence_research_cycle_readiness",
     "run_research_autopilot",
     "run_scenario",
     "safe_load_policy_directory",
