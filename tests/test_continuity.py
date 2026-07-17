@@ -97,6 +97,7 @@ from pca import (
     daily_plan,
     derive_current_claim,
     derive_self_model,
+    direct_continuity_experiment_records_from_events,
     estimate_model_usage,
     evidence_for_target,
     evidence_locker_snapshot,
@@ -115,6 +116,7 @@ from pca import (
     source_note_review_records_from_events,
     run_coherence_paper_pipeline,
     run_coherence_research_cycle,
+    run_direct_continuity_experiment,
     render_coherence_research_cycle_readiness_text,
     verify_coherence_research_cycle_readiness,
     execute_approved_autonomy_actions,
@@ -4608,6 +4610,76 @@ def test_coherence_paper_pipeline_finishes_with_pdf_packet(tmp_path):
     assert b"Direct Continuity Experiment" in paper_output_path.read_bytes()
     assert b"Formal Criteria for Governed Continuity" in paper_output_path.read_bytes()
     assert b"Governance Case Study" in paper_output_path.read_bytes()
+
+
+def test_direct_continuity_experiment_runs_governance_arm(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    output_path = tmp_path / "direct_continuity_experiment.json"
+
+    result = run_direct_continuity_experiment(
+        ledger,
+        manifest,
+        output_path=output_path,
+        reason="test direct continuity experiment",
+    )
+    record = result["record"]
+    conditions = {
+        condition["condition_id"]: condition
+        for condition in record["conditions"]
+    }
+
+    assert record["status"] == "passed"
+    assert record["condition_count"] == 6
+    assert record["passed_count"] == 6
+    assert output_path.exists()
+    assert conditions["control"]["observed_claim"] == "certified_continuity"
+    assert conditions["silent_memory_replacement"]["observed_claim"] == "review_required"
+    assert conditions["declared_fork"]["observed_gate_mode"] == "fork_disclosure"
+    assert conditions["ledger_tampering"]["chain_valid"] is False
+    assert direct_continuity_experiment_records_from_events(ledger.events())
+
+
+def test_reader_paper_reports_latest_direct_continuity_experiment(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "Coherence_Physics_Source.md").write_text(
+        (
+            "Smooth output is not continuity. Identity continuity requires "
+            "ledger validation, evidence freshness, lineage tracking, and "
+            "authority checks."
+        ),
+        encoding="utf-8",
+    )
+    run_direct_continuity_experiment(
+        ledger,
+        manifest,
+        output_path=tmp_path / "direct_continuity_experiment.json",
+        reason="test experiment before paper export",
+    )
+    paper_output_path = tmp_path / "coherence_paper.pdf"
+
+    run_coherence_paper_pipeline(
+        ledger,
+        manifest,
+        project_root=project_root,
+        corpus_roots=["corpus"],
+        corpus_limit=2,
+        force=True,
+        output_path=tmp_path / "coherence_audit_bundle.pdf",
+        paper_output_path=paper_output_path,
+        packet_output_path=tmp_path / "coherence_research_packet.pdf",
+    )
+    paper = paper_output_path.read_bytes()
+
+    assert b"latest PCA-governance arm passed" in paper
+    assert b"6 of 6 condition" in paper
+    assert b"output-only human-rater arm remains unrun" in paper
+    assert b"threshold.;" not in paper
 
 
 def test_coherence_research_cycle_runs_verified_non_certifying_cycle(tmp_path):

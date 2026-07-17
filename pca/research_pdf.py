@@ -11,6 +11,7 @@ import re
 from .argument_graph import mission_argument_graph
 from .claim_source_links import claim_source_links
 from .coherence_corpus import coherence_corpus_index_records_from_events, is_relevant_source_path
+from .direct_continuity_experiment import latest_direct_continuity_experiment
 from .evidence_locker import evidence_for_target
 from .external_literature import external_literature_for_mission
 from .falsification_lab import falsification_lab_verdict
@@ -96,6 +97,7 @@ def export_research_pdf(
         corpus_sources=corpus_sources,
         external_literature=external_literature,
     )
+    direct_experiment = latest_direct_continuity_experiment(ledger.events())
 
     paper_lines = _scholarly_paper_lines(
         mission_title=mission.title,
@@ -109,6 +111,7 @@ def export_research_pdf(
         falsification_verdict=falsification_lab_verdict(workspace_root),
         argument_graph=argument_graph,
         research_packet_path=str(packet_path),
+        direct_experiment=direct_experiment,
         theory_revision_record=theory_revision_record,
     )
     packet_lines = _research_packet_lines(
@@ -246,6 +249,7 @@ def _scholarly_paper_lines(
     falsification_verdict: dict[str, Any] | None,
     argument_graph: dict[str, Any],
     research_packet_path: str,
+    direct_experiment: dict[str, Any] | None,
     theory_revision_record: dict[str, Any] | None = None,
 ) -> list[str]:
     reviewed_evidence = int(claim_map.get("reviewed_evidence_count", 0) or 0)
@@ -411,6 +415,7 @@ def _scholarly_paper_lines(
         "detection, inter-rater agreement, audit time, and the percentage of changes "
         "invisible from output alone. This is the test that would directly evaluate "
         "the title claim.",
+        *_direct_experiment_summary_lines(direct_experiment),
         "",
         "8. Current Evidence Status",
         f"Evidence status: {len(corpus_sources)} local source file(s) indexed; "
@@ -426,6 +431,10 @@ def _scholarly_paper_lines(
         "omitted from this reader-facing manuscript. They are preserved in the "
         "companion research packet and audit bundle so the paper can stay readable "
         "without losing provenance.",
+        f"Lightweight traceability: {len(source_links)} raw source-note link(s) "
+        "currently map reader-facing claims to the companion research packet's "
+        "Claim-Evidence Matrix. Those links make the draft inspectable, but they "
+        "are not treated as peer review or accepted evidence inside this manuscript.",
         "",
         "9. Governance Case Study: A Failed RTI Test",
         *_falsification_section_lines(falsification_verdict),
@@ -450,7 +459,7 @@ def _scholarly_paper_lines(
         "- This draft is generated from local governed research outputs.",
         "- Raw evidence has not been accepted as reviewed evidence unless marked so.",
         "- External scholarly literature has not yet been reviewed inside this run.",
-        "- The direct continuity experiment has been specified but not executed.",
+        _direct_experiment_limitation_line(direct_experiment),
         "- The document does not claim proof of consciousness, AGI, personhood, or final physics.",
         "- Source registration is not the same as source interpretation.",
         "",
@@ -482,6 +491,51 @@ def _scholarly_paper_lines(
     else:
         lines.append("[1] No indexed corpus references were available for this run.")
     return lines
+
+
+def _direct_experiment_summary_lines(
+    direct_experiment: dict[str, Any] | None,
+) -> list[str]:
+    if not direct_experiment:
+        return [
+            "",
+            "Execution status: specified but not yet executed inside this run.",
+        ]
+    status = str(direct_experiment.get("status") or "unknown")
+    passed = int(direct_experiment.get("passed_count", 0) or 0)
+    count = int(direct_experiment.get("condition_count", 0) or 0)
+    output_path = str(direct_experiment.get("output_path") or "not recorded")
+    conditions = direct_experiment.get("conditions") or []
+    condition_summary = "; ".join(
+        f"{item.get('condition_id', 'condition')} -> {item.get('observed_claim', 'unknown')}"
+        for item in conditions[:6]
+    )
+    lines = [
+        "",
+        f"Execution status: latest PCA-governance arm {status}; {passed} of {count} condition(s) passed.",
+        "Observed result: PCA distinguished certified continuity, review-required "
+        "states, fork disclosure, and ledger tampering while smooth output remained "
+        "available across conditions.",
+        f"Report artifact: {output_path}.",
+    ]
+    if condition_summary:
+        lines.append(f"Condition outcomes: {condition_summary}.")
+    lines.append(
+        "Boundary: the output-only human-rater arm remains unrun; this result "
+        "executes the governance classifier, not the full behavioral comparison."
+    )
+    return lines
+
+
+def _direct_experiment_limitation_line(
+    direct_experiment: dict[str, Any] | None,
+) -> str:
+    if not direct_experiment:
+        return "- The direct continuity experiment has been specified but not executed."
+    return (
+        "- The direct continuity experiment has executed the PCA-governance arm, "
+        "but the output-only human-rater comparison remains unrun."
+    )
 
 
 def _research_packet_lines(
@@ -1521,9 +1575,9 @@ def _falsification_section_lines(verdict: dict[str, Any] | None) -> list[str]:
         f"The verdict is reported here without softening: {verdict['verdict']}.",
     ]
     if verdict["summary"]:
-        lines.append("Summary: " + "; ".join(verdict["summary"]) + ".")
+        lines.append("Summary: " + _join_sentence_items(verdict["summary"]))
     if verdict["reasons"]:
-        lines.append("Reasons: " + "; ".join(verdict["reasons"]) + ".")
+        lines.append("Reasons: " + _join_sentence_items(verdict["reasons"]))
     if verdict["boundary"]:
         lines.append(f"Boundary: {verdict['boundary']}")
     lines.append(
@@ -1536,6 +1590,17 @@ def _falsification_section_lines(verdict: dict[str, Any] | None) -> list[str]:
         "no such test at all."
     )
     return lines
+
+
+def _join_sentence_items(items: list[str]) -> str:
+    cleaned = [
+        str(item).strip().rstrip(".;")
+        for item in items
+        if str(item).strip()
+    ]
+    if not cleaned:
+        return ""
+    return "; ".join(cleaned) + "."
 
 
 def _falsification_finding_lines(verdict: dict[str, Any] | None, index: int) -> list[str]:

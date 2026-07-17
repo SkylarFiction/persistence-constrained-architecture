@@ -47,6 +47,7 @@ from pca import (
     run_auto_daily_research_loop,
     run_coherence_paper_pipeline,
     run_coherence_research_cycle,
+    run_direct_continuity_experiment,
     run_research_autopilot,
     verify_coherence_research_cycle_readiness,
     authorization_policy_from_packs,
@@ -153,6 +154,7 @@ from pca import (
     render_coherence_paper_pipeline_text,
     render_coherence_research_cycle_text,
     render_coherence_research_cycle_readiness_text,
+    render_direct_continuity_experiment_text,
     render_coherence_seed_text,
     render_commit_readiness_text,
     render_daily_command_center_text,
@@ -445,6 +447,12 @@ def main() -> int:
     coherence_readiness_parser.add_argument("--mission")
     coherence_readiness_parser.add_argument("--limit", type=int, default=12)
     coherence_readiness_parser.add_argument("--skip-sample", action="store_true")
+    direct_experiment_parser = subparsers.add_parser("direct-continuity-experiment")
+    direct_experiment_parser.add_argument("--json", action="store_true")
+    direct_experiment_parser.add_argument(
+        "--output",
+        default="reports/continuity_experiments/direct_continuity_experiment.json",
+    )
     research_sandbox_parser = subparsers.add_parser("research-sandbox")
     research_sandbox_parser.add_argument("--json", action="store_true")
     research_brief_parser = subparsers.add_parser("research-brief")
@@ -1309,6 +1317,19 @@ def main() -> int:
             print_json({"coherence_cycle_readiness": result})
         else:
             print(render_coherence_research_cycle_readiness_text(result))
+        return 0
+
+    if args.command == "direct-continuity-experiment":
+        result = run_direct_continuity_experiment(
+            ledger,
+            manifest,
+            output_path=args.output,
+            reason="manual CLI direct continuity experiment",
+        )
+        if args.json:
+            print_json({"direct_continuity_experiment": result})
+        else:
+            print(render_direct_continuity_experiment_text(result))
         return 0
 
     if args.command == "research-sandbox":

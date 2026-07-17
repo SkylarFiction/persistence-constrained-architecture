@@ -406,6 +406,12 @@ from .coherence_research_cycle import (
     run_coherence_research_cycle,
     verify_coherence_research_cycle_readiness,
 )
+from .direct_continuity_experiment import (
+    direct_continuity_experiment_records_from_events,
+    latest_direct_continuity_experiment,
+    render_direct_continuity_experiment_text,
+    run_direct_continuity_experiment,
+)
 from .research_autopilot import (
     render_research_autopilot_text,
     research_autopilot_records_from_events,
@@ -693,6 +699,7 @@ __all__ = [
     "default_claim_for_identity_state",
     "derive_current_claim",
     "derive_self_model",
+    "direct_continuity_experiment_records_from_events",
     "discover_coherence_sources",
     "discover_coherence_sources_from_knowledge_hub",
     "discover_knowledge_hub_sources",
@@ -736,6 +743,7 @@ __all__ = [
     "latest_session_id",
     "latest_research_writer_draft",
     "latest_auto_daily_research_loop",
+    "latest_direct_continuity_experiment",
     "load_anchor_records",
     "load_policy_directory",
     "load_policy_pack",
@@ -821,6 +829,7 @@ __all__ = [
     "render_continuity_certification_text",
     "render_daily_command_center_text",
     "render_dashboard_html",
+    "render_direct_continuity_experiment_text",
     "render_lucien_cockpit_html",
     "render_next_governed_build_text",
     "render_project_build_brief_text",
@@ -836,6 +845,7 @@ __all__ = [
     "run_auto_daily_research_loop",
     "run_coherence_paper_pipeline",
     "run_coherence_research_cycle",
+    "run_direct_continuity_experiment",
     "verify_coherence_research_cycle_readiness",
     "run_research_autopilot",
     "run_scenario",
