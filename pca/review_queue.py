@@ -12,6 +12,7 @@ from .research_pdf import _reader_facing_claim_entries, _source_note_reader_read
 from .source_notes import source_notes_for_mission
 
 REVIEWER_PLACEHOLDER = "<your-name>"
+DEFAULT_RENDER_LIMIT = 6
 
 
 def review_queue_for_mission(ledger: ContinuityLedger, mission_id: str) -> dict[str, Any]:
@@ -118,9 +119,26 @@ def review_queue_for_mission(ledger: ContinuityLedger, mission_id: str) -> dict[
         + len(external_unreviewed_items)
         + (1 if external_literature_missing else 0)
     )
+    summary = {
+        "raw_evidence": len(raw_evidence_items),
+        "malformed_source_notes": len(malformed_note_items),
+        "unlinked_claims": len(unlinked_claim_items),
+        "external_literature_missing": external_literature_missing,
+        "external_literature_unreviewed": len(external_unreviewed_items),
+        "total_pending_items": total_pending_items,
+    }
+    priority_actions = _priority_actions(
+        raw_evidence_items=raw_evidence_items,
+        malformed_note_items=malformed_note_items,
+        unlinked_claim_items=unlinked_claim_items,
+        external_literature_missing=external_literature_missing,
+        external_unreviewed_items=external_unreviewed_items,
+    )
 
     return {
         "mission_id": mission_id,
+        "summary": summary,
+        "priority_actions": priority_actions,
         "raw_evidence": raw_evidence_items,
         "malformed_source_notes": malformed_note_items,
         "unlinked_claims": unlinked_claim_items,
@@ -134,32 +152,147 @@ def review_queue_for_mission(ledger: ContinuityLedger, mission_id: str) -> dict[
     }
 
 
+def _priority_actions(
+    *,
+    raw_evidence_items: list[dict[str, Any]],
+    malformed_note_items: list[dict[str, Any]],
+    unlinked_claim_items: list[dict[str, Any]],
+    external_literature_missing: bool,
+    external_unreviewed_items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    if external_literature_missing:
+        actions.append(
+            {
+                "kind": "external_literature_missing",
+                "severity": "high",
+                "title": "Add at least one external scholarly source",
+                "reason": "The paper cannot become final-review ready using only the local archive.",
+                "command": "python3 pca_cli.py external-literature-add ...",
+            }
+        )
+    elif external_unreviewed_items:
+        item = external_unreviewed_items[0]
+        actions.append(
+            {
+                "kind": "external_literature_review",
+                "severity": "high",
+                "title": f"Review external literature: {item.get('title') or item.get('literature_id')}",
+                "reason": "External literature is attached but still raw.",
+                "command": item.get("command"),
+            }
+        )
+    for item in malformed_note_items[:3]:
+        actions.append(
+            {
+                "kind": "source_note_review",
+                "severity": "high",
+                "title": f"Verify damaged source note {item.get('note_id')}",
+                "reason": "Damaged extraction should be checked against the source before it supports the paper.",
+                "command": item.get("command"),
+            }
+        )
+    for item in unlinked_claim_items[:3]:
+        actions.append(
+            {
+                "kind": "claim_source_link",
+                "severity": "medium",
+                "title": f"Link claim {item.get('claim_id')} to a reader-ready source note",
+                "reason": str(item.get("claim_text") or "Claim needs direct support."),
+                "command": "Review source notes and add or approve a direct claim-source link.",
+            }
+        )
+    file_evidence = [
+        item for item in raw_evidence_items
+        if str(item.get("source_type") or "") == "file"
+    ]
+    for item in file_evidence[:3]:
+        actions.append(
+            {
+                "kind": "evidence_review",
+                "severity": "medium",
+                "title": f"Review file evidence {item.get('evidence_id')}",
+                "reason": "File evidence is more useful for a paper than mission-observation bookkeeping.",
+                "command": item.get("command"),
+            }
+        )
+    if not actions and raw_evidence_items:
+        item = raw_evidence_items[0]
+        actions.append(
+            {
+                "kind": "evidence_review",
+                "severity": "low",
+                "title": f"Review evidence {item.get('evidence_id')}",
+                "reason": "Raw evidence remains before final-paper status.",
+                "command": item.get("command"),
+            }
+        )
+    return actions[:10]
+
+
 def render_review_queue_text(result: dict[str, Any]) -> str:
     lines = [
         f"Review Queue - mission {result.get('mission_id')}",
         f"Total pending items: {result.get('total_pending_items', 0)}",
         "",
     ]
+    summary = result.get("summary") or {}
+    if summary:
+        lines.extend(
+            [
+                "Summary:",
+                f"- raw evidence: {summary.get('raw_evidence', 0)}",
+                f"- malformed source notes: {summary.get('malformed_source_notes', 0)}",
+                f"- unlinked claims: {summary.get('unlinked_claims', 0)}",
+                f"- external literature missing: {'yes' if summary.get('external_literature_missing') else 'no'}",
+                f"- unreviewed external literature: {summary.get('external_literature_unreviewed', 0)}",
+                "",
+            ]
+        )
+
+    priority_actions = result.get("priority_actions") or []
+    lines.append(f"Priority next actions ({len(priority_actions)}):")
+    if priority_actions:
+        for index, item in enumerate(priority_actions, start=1):
+            lines.append(
+                f"  {index}. [{item.get('severity', 'unknown')}] "
+                f"{item.get('title', item.get('kind', 'review item'))}"
+            )
+            if item.get("reason"):
+                lines.append(f"     reason: {item['reason']}")
+            if item.get("command"):
+                lines.append(f"     {item['command']}")
+    else:
+        lines.append("  - none")
+    lines.append("")
 
     raw_evidence = result.get("raw_evidence") or []
     lines.append(f"Raw evidence awaiting review ({len(raw_evidence)}):")
     if raw_evidence:
-        for item in raw_evidence:
+        for item in raw_evidence[:DEFAULT_RENDER_LIMIT]:
             lines.append(
                 f"  - {item['evidence_id']} "
                 f"({item.get('source_type') or 'unknown type'}, "
                 f"confidence={item.get('confidence') or 'unknown'})"
             )
             lines.append(f"    {item['command']}")
+        if len(raw_evidence) > DEFAULT_RENDER_LIMIT:
+            lines.append(
+                f"  - ... {len(raw_evidence) - DEFAULT_RENDER_LIMIT} more raw evidence item(s) hidden from text output"
+            )
     else:
         lines.append("  - none")
 
     malformed_notes = result.get("malformed_source_notes") or []
     lines.extend(["", f"Malformed source notes needing manual verification ({len(malformed_notes)}):"])
     if malformed_notes:
-        for item in malformed_notes:
+        for item in malformed_notes[:DEFAULT_RENDER_LIMIT]:
             lines.append(f"  - {item['note_id']} ({item.get('source_path')}, {item.get('locator')})")
             lines.append(f"    {item['command']}")
+        if len(malformed_notes) > DEFAULT_RENDER_LIMIT:
+            lines.append(
+                f"  - ... {len(malformed_notes) - DEFAULT_RENDER_LIMIT} more malformed note(s) hidden from text output"
+            )
     else:
         lines.append("  - none")
 

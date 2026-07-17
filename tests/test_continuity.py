@@ -4042,15 +4042,89 @@ def test_review_queue_lists_raw_evidence_malformed_notes_and_unlinked_claims(tmp
     assert result["unlinked_claims"]
     assert result["external_literature_missing"] is True
     assert result["total_pending_items"] >= 3
+    assert result["summary"]["malformed_source_notes"] == len(result["malformed_source_notes"])
+    assert result["priority_actions"]
+    assert result["priority_actions"][0]["kind"] == "external_literature_missing"
     for item in result["raw_evidence"]:
         assert item["command"].startswith("python3 pca_cli.py evidence-review")
     for item in result["malformed_source_notes"]:
         assert item["command"].startswith("python3 pca_cli.py source-note-review")
 
     assert "Review Queue" in rendered
+    assert "Priority next actions" in rendered
+    assert "Add at least one external scholarly source" in rendered
     assert evidence.evidence_id in rendered
     assert "source_note_review_queue_malformed" in rendered
     assert "does not review, accept, or reject anything on its own" in rendered
+
+
+def test_review_queue_text_limits_large_backlogs(tmp_path):
+    import hashlib
+    from datetime import datetime, timezone
+
+    from pca.argument_graph import seed_continuity_argument_graph
+    from pca.source_notes import SourceNoteRecord
+
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Large review queue mission",
+        problem_statement="Keep paper review queues actionable when many records exist.",
+    )
+    seed_continuity_argument_graph(
+        ledger,
+        manifest,
+        mission.mission_id,
+        project_root=tmp_path,
+    )
+    for index in range(9):
+        evidence = add_evidence(
+            ledger,
+            manifest.system_id,
+            source_type="file",
+            summary=f"Raw evidence item {index}.",
+            confidence="medium",
+        )
+        link_evidence(
+            ledger,
+            manifest.system_id,
+            evidence.evidence_id,
+            target_type="mission",
+            target_id=mission.mission_id,
+            reason="link raw evidence to mission for queue limit test",
+        )
+    for index in range(8):
+        malformed_note = SourceNoteRecord(
+            note_id=f"source_note_large_queue_malformed_{index}",
+            identity_id=manifest.system_id,
+            mission_id=mission.mission_id,
+            source_path=f"coherence /large_queue_malformed_{index}.pdf",
+            theme="identity_physics",
+            title=f"Malformed Large Queue Source {index}",
+            note_kind="claim_candidate",
+            summary="The tauScale parameter controls memory decay.",
+            locator=f"page {index}",
+            confidence="medium",
+            review_status="raw",
+            summary_hash=hashlib.sha256(f"large-queue-malformed-{index}".encode()).hexdigest(),
+            excerpt_hash=hashlib.sha256(f"large-queue-malformed-excerpt-{index}".encode()).hexdigest(),
+            excerpt_length=64,
+            created_at=datetime.now(timezone.utc).isoformat(),
+            reason="large review queue malformed source note",
+            source_content_sha256=f"large-queue-malformed-hash-{index}",
+        )
+        ledger.append("source_note.extracted", manifest.system_id, malformed_note.to_dict())
+
+    result = review_queue_for_mission(ledger, mission.mission_id)
+    rendered = render_review_queue_text(result)
+
+    assert result["summary"]["raw_evidence"] == 9
+    assert result["summary"]["malformed_source_notes"] == 8
+    assert len(result["priority_actions"]) <= 10
+    assert "... 3 more raw evidence item(s) hidden from text output" in rendered
+    assert "... 2 more malformed note(s) hidden from text output" in rendered
 
 
 def test_paper_finish_plan_prioritizes_reader_ready_source_links(tmp_path):

@@ -3528,6 +3528,7 @@ def _live_chat_html() -> str:
       const externalUnreviewed = queue.external_literature_unreviewed || [];
       const externalMissing = !!queue.external_literature_missing;
       const totalPending = queue.total_pending_items || 0;
+      const priorityActions = queue.priority_actions || [];
       const cards = [
         ['Total Pending', totalPending],
         ['Raw Evidence', rawEvidence.length],
@@ -3553,6 +3554,18 @@ def _live_chat_html() -> str:
         paperReviewQueueActions.appendChild(section);
         return section;
       };
+
+      if (priorityActions.length) {
+        addSection('Do these first', 'This is the shortest path through the review backlog. The full queue remains available below.');
+        for (const item of priorityActions.slice(0, 6)) {
+          const row = document.createElement('div');
+          row.className = 'item';
+          row.innerHTML = `<div class="item-title">${escapeHtml(item.title || item.kind || 'Review item')}</div>
+            <div class="item-meta">${escapeHtml(item.severity || 'unknown')} / ${escapeHtml(item.kind || 'review')}</div>
+            <div class="item-meta">${escapeHtml(item.reason || '')}</div>`;
+          paperReviewQueueActions.appendChild(row);
+        }
+      }
 
       if (rawEvidence.length) {
         addSection('Raw evidence awaiting review', 'Accept only evidence you have inspected. Reject, dispute, or mark stale when it should not support the paper.');
