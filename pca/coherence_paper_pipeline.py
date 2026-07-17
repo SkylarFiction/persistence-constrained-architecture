@@ -216,9 +216,12 @@ def run_coherence_paper_pipeline(
     actions.append(
         {
             "action": "research_pdf_exported",
+            "artifact_status": pdf.get("artifact_status"),
             "path": pdf["audit_path"],
             "paper_path": pdf["paper_path"],
             "packet_path": pdf.get("packet_path"),
+            "paper_size_bytes": (pdf.get("paper_artifact") or {}).get("size_bytes"),
+            "paper_sha256": (pdf.get("paper_artifact") or {}).get("sha256"),
         }
     )
     review = research_review_desk(ledger, selected_mission["mission_id"])
@@ -271,6 +274,8 @@ def render_coherence_paper_pipeline_text(result: dict[str, Any]) -> str:
         f"paper: {(record.get('pdf') or {}).get('paper_path') or 'none'}",
         f"research packet: {(record.get('pdf') or {}).get('packet_path') or 'none'}",
         f"audit bundle: {(record.get('pdf') or {}).get('audit_path') or 'none'}",
+        f"artifact status: {(record.get('pdf') or {}).get('artifact_status') or 'unverified'}",
+        f"paper artifact: {_artifact_line(((record.get('pdf') or {}).get('paper_artifact') or {}))}",
         f"theory revision: {(record.get('theory_draft') or {}).get('pdf_path') or 'none'}",
         f"review next: {(record.get('review') or {}).get('next_action') or 'none'}",
         "actions:",
@@ -284,6 +289,19 @@ def render_coherence_paper_pipeline_text(result: dict[str, Any]) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _artifact_line(artifact: dict[str, Any]) -> str:
+    if not artifact:
+        return "none"
+    size = artifact.get("size_bytes")
+    digest = str(artifact.get("sha256") or "")
+    digest_short = digest[:12] if digest else "no-hash"
+    return (
+        f"{artifact.get('status', 'unknown')} "
+        f"{artifact.get('filename', artifact.get('path', 'unknown'))} "
+        f"size={size or 0} sha256={digest_short}"
+    )
 
 
 def _record_pipeline(

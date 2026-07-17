@@ -97,7 +97,10 @@ from .research_sandbox import (
 )
 from .research_autopilot import run_research_autopilot
 from .coherence_corpus import index_coherence_corpus
-from .coherence_paper_pipeline import run_coherence_paper_pipeline
+from .coherence_paper_pipeline import (
+    coherence_paper_pipeline_records_from_events,
+    run_coherence_paper_pipeline,
+)
 from .paper_finish_plan import paper_finish_plan_for_mission
 from .paper_readiness import paper_readiness_for_mission
 from .research_pdf import export_research_pdf
@@ -1228,6 +1231,7 @@ def _status_payload(
     latest_gate = report.output_gate_events[-1] if report.output_gate_events else None
     model_usage = _model_usage_summary(ledger.events())
     latest_daily_loop = latest_auto_daily_research_loop(ledger.events())
+    latest_paper_artifact = _latest_verified_paper_artifact(ledger.events())
     session_id = latest_session_id(ledger)
     session_replay = (
         build_session_replay(ledger, manifest, session_id).to_dict()
@@ -1247,6 +1251,7 @@ def _status_payload(
         "workbench": workbench_status(ledger, manifest),
         "model_adapter": _model_diagnostic_with_runtime(),
         "model_usage": model_usage,
+        "latest_paper_artifact": latest_paper_artifact,
         "daily_research_loop": latest_daily_loop.to_dict() if latest_daily_loop else None,
         "research_sandbox": research_sandbox_status(ledger, manifest),
         "research_outputs": [
@@ -1396,6 +1401,22 @@ def _model_usage_summary(events) -> dict[str, Any]:
         "latest_brain_route_reason": latest.get("brain_route_reason", "none"),
         "latest_openai_requested": bool(latest.get("openai_requested", False)),
     }
+
+
+def _latest_verified_paper_artifact(events) -> dict[str, Any] | None:
+    for record in reversed(coherence_paper_pipeline_records_from_events(events)):
+        pdf = record.get("pdf") or {}
+        artifact = pdf.get("paper_artifact") or {}
+        if artifact.get("status") == "completed" and artifact.get("path"):
+            return {
+                **artifact,
+                "mission_id": record.get("mission_id"),
+                "mission_title": record.get("mission_title"),
+                "pipeline_id": record.get("pipeline_id"),
+                "pipeline_status": record.get("status"),
+                "artifact_status": pdf.get("artifact_status"),
+            }
+    return None
 
 
 def _should_auto_reflect(result: dict[str, Any]) -> bool:
@@ -2346,6 +2367,10 @@ def _live_chat_html() -> str:
             <div class="one-click-title">Research Coherence Physics and Save a PDF</div>
             <div class="start-summary">Lucien will open or reuse a Coherence research mission, index source files, run one governed research pass, draft a paper packet, and save timestamped PDFs in <code>../knowledge_hub/generated/research_papers/</code>.</div>
             <div id="oneClickResearchStatus" class="one-click-status">Ready. Evidence remains reviewable; nothing is published.</div>
+            <div id="latestPaperArtifact" class="item latest-paper-artifact">
+              <div class="item-title">Latest Verified Paper</div>
+              <div class="item-meta">No verified PDF artifact recorded yet.</div>
+            </div>
           </div>
           <button type="button" id="oneClickResearchPdf" class="one-click-button">Do Research + Save Paper</button>
         </div>
@@ -2784,6 +2809,7 @@ def _live_chat_html() -> str:
     const selfModel = document.getElementById('selfModel');
     const governedContext = document.getElementById('governedContext');
     const oneClickResearchStatus = document.getElementById('oneClickResearchStatus');
+    const latestPaperArtifact = document.getElementById('latestPaperArtifact');
     const memoryInbox = document.getElementById('memoryInbox');
     const recall = document.getElementById('recall');
 
@@ -2916,6 +2942,7 @@ def _live_chat_html() -> str:
       document.getElementById('brainRoute').textContent = plainRouting(usage.latest_requested_model_mode, usage.latest_model_mode);
       document.getElementById('brainTask').textContent = usage.latest_brain_task_type || 'none';
       renderBrainStatus(status);
+      renderLatestPaperArtifact(status.latest_paper_artifact || null);
       renderCertification(status.continuity_certification || {});
       renderQueue(status.open_reflection_tasks || []);
       renderSelfModel(status.self_model || {});
@@ -3018,6 +3045,34 @@ def _live_chat_html() -> str:
         return document.getElementById('useOpenAI').checked ? 'On for next message' : 'Off unless checked';
       }
       return 'Off in this mode';
+    }
+
+    function renderLatestPaperArtifact(artifact) {
+      if (!latestPaperArtifact) return;
+      if (!artifact || !artifact.path) {
+        latestPaperArtifact.innerHTML = [
+          '<div class="item-title">Latest Verified Paper</div>',
+          '<div class="item-meta">No verified PDF artifact recorded yet. Run Do Research + Save Paper.</div>'
+        ].join('');
+        return;
+      }
+      const sizeKb = Number(artifact.size_bytes || 0) / 1024;
+      const hash = String(artifact.sha256 || '').slice(0, 12) || 'no-hash';
+      latestPaperArtifact.innerHTML = [
+        '<div class="item-title">Latest Verified Paper</div>',
+        `<div class="item-meta">Status: ${escapeHtml(artifact.status || 'unknown')} / ${escapeHtml(artifact.filename || artifact.path)}</div>`,
+        `<div class="item-meta">Size: ${sizeKb.toFixed(1)} KB / sha256: ${escapeHtml(hash)} / created: ${escapeHtml(artifact.created_at || 'unknown')}</div>`,
+        `<div class="item-meta">Mission: ${escapeHtml(artifact.mission_title || 'unknown')}</div>`
+      ].join('');
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      const open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'primary';
+      open.textContent = 'Open PDF';
+      open.addEventListener('click', () => window.open(localDocumentUrl(artifact.path), '_blank'));
+      actions.appendChild(open);
+      latestPaperArtifact.appendChild(actions);
     }
 
     function renderBrainStatus(status) {
@@ -5340,12 +5395,14 @@ def _live_chat_html() -> str:
         reason: 'exported mission research packet from live workspace'
       });
       const pdf = data && data.result && data.result.research_pdf ? data.result.research_pdf : null;
-      if (!pdf || !pdf.path) {
-        addMessage('lucien', 'PDF export did not return a file path.');
+      const artifact = pdf && pdf.paper_artifact ? pdf.paper_artifact : null;
+      if (!artifact || artifact.status !== 'completed' || !artifact.path) {
+        addMessage('lucien', 'PDF export did not produce a verified paper artifact. Check Advanced Diagnostics before trusting this run.');
         return;
       }
-      addMessage('lucien', `Clean paper saved at ${pdf.paper_path}. Research packet saved at ${pdf.packet_path}. Opening the clean paper now.`);
-      window.open(localDocumentUrl(pdf.paper_path || pdf.path), '_blank');
+      renderLatestPaperArtifact(artifact);
+      addMessage('lucien', `Verified clean paper saved at ${artifact.path} (${artifact.size_bytes} bytes, sha256 ${String(artifact.sha256 || '').slice(0, 12)}...). Opening it now.`);
+      window.open(localDocumentUrl(artifact.path), '_blank');
     }
 
     async function indexCorpusForSelectedMission() {
@@ -5382,12 +5439,14 @@ def _live_chat_html() -> str:
       });
       const pipeline = data && data.result && data.result.coherence_paper_pipeline ? data.result.coherence_paper_pipeline : null;
       const pdf = pipeline && pipeline.pdf ? pipeline.pdf : null;
-      if (!pdf || !pdf.paper_path) {
-        addMessage('lucien', 'Paper pipeline ran, but no paper path was returned.');
+      const artifact = pdf && pdf.paper_artifact ? pdf.paper_artifact : null;
+      if (!artifact || artifact.status !== 'completed' || !artifact.path) {
+        addMessage('lucien', 'Paper pipeline ran, but no verified PDF artifact was recorded. Treat the run as incomplete.');
         return;
       }
-      addMessage('lucien', `Paper saved at ${pdf.paper_path}. Research packet saved at ${pdf.packet_path}. Audit bundle saved at ${pdf.audit_path}. Opening the clean paper now.`);
-      window.open(localDocumentUrl(pdf.paper_path), '_blank');
+      renderLatestPaperArtifact(artifact);
+      addMessage('lucien', `Verified paper saved at ${artifact.path} (${artifact.size_bytes} bytes, sha256 ${String(artifact.sha256 || '').slice(0, 12)}...). Research packet: ${pdf.packet_path}. Audit bundle: ${pdf.audit_path}. Opening the clean paper now.`);
+      window.open(localDocumentUrl(artifact.path), '_blank');
     }
 
     function requireSelectedMissionForPaper() {
@@ -5464,14 +5523,20 @@ def _live_chat_html() -> str:
         const pipeline = data && data.result && data.result.coherence_paper_pipeline ? data.result.coherence_paper_pipeline : null;
         const record = pipeline && pipeline.record ? pipeline.record : {};
         const pdf = pipeline && pipeline.pdf ? pipeline.pdf : null;
-        if (!pdf || !pdf.paper_path) {
-          oneClickResearchStatus.textContent = 'Research ran, but no paper path came back. Check Advanced Diagnostics.';
-          addMessage('lucien', 'The one-click research run did not return a paper path.');
+        const artifact = pdf && pdf.paper_artifact ? pdf.paper_artifact : null;
+        if (!artifact || artifact.status !== 'completed' || !artifact.path) {
+          oneClickResearchStatus.textContent = 'Research ran, but no verified PDF artifact was recorded. Check Advanced Diagnostics.';
+          addMessage('lucien', 'The one-click research run did not produce a verified PDF artifact, so I am treating it as incomplete.');
           return;
         }
-        oneClickResearchStatus.textContent = `Saved paper: ${pdf.paper_path}. Packet: ${pdf.packet_path}. Audit bundle: ${pdf.audit_path}. Mission: ${record.mission_title || 'Coherence Physics Research Program'}.`;
-        addMessage('lucien', `Done. I saved the clean Coherence Physics paper at ${pdf.paper_path}. The research packet is at ${pdf.packet_path}. The governed audit bundle is at ${pdf.audit_path}.`);
-        window.open(localDocumentUrl(pdf.paper_path), '_blank');
+        const enrichedArtifact = {
+          ...artifact,
+          mission_title: record.mission_title || 'Coherence Physics Research Program'
+        };
+        renderLatestPaperArtifact(enrichedArtifact);
+        oneClickResearchStatus.textContent = `Verified paper: ${artifact.filename} (${Math.round(Number(artifact.size_bytes || 0) / 1024)} KB). Packet: ${pdf.packet_path}. Audit bundle: ${pdf.audit_path}.`;
+        addMessage('lucien', `Done. I verified the clean Coherence Physics paper at ${artifact.path} (${artifact.size_bytes} bytes, sha256 ${String(artifact.sha256 || '').slice(0, 12)}...). The research packet is at ${pdf.packet_path}. The governed audit bundle is at ${pdf.audit_path}.`);
+        window.open(localDocumentUrl(artifact.path), '_blank');
       } finally {
         button.disabled = false;
       }

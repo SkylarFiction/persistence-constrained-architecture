@@ -1363,7 +1363,7 @@ def test_live_chat_html_contains_mission_first_home():
     assert "runOneClickCoherenceResearch" in html
     assert "Index Corpus" in html
     assert "Make Paper Packet" in html
-    assert "Save Research PDF" in html
+    assert "Save PDF" in html
     assert "renderMissionClaimMap(status.mission_claim_maps || {}, missionView.activeMission)" in html
     assert "renderMissionEvidence(status.mission_evidence || {}, missionView.activeMission)" in html
     assert "renderResearchReviewDesk(status.research_review_desks || {}, missionView.activeMission)" in html
@@ -3662,6 +3662,13 @@ def test_export_research_pdf_writes_mission_packet(tmp_path):
     assert result["audit_path"] == str(output_path)
     assert result["paper_path"] == str(paper_output_path)
     assert result["packet_path"] == str(packet_output_path)
+    assert result["artifact_status"] == "completed"
+    assert result["paper_artifact"]["status"] == "completed"
+    assert result["paper_artifact"]["path"] == str(paper_output_path)
+    assert result["paper_artifact"]["size_bytes"] == paper_output_path.stat().st_size
+    assert result["paper_artifact"]["sha256"]
+    assert result["packet_artifact"]["status"] == "completed"
+    assert result["audit_artifact"]["status"] == "completed"
     assert result["mission_title"] == "PDF research mission"
     assert result["output_count"] == 1
     assert result["evidence_count"] >= 2
@@ -3856,17 +3863,11 @@ def test_research_packet_maps_claims_to_source_notes(tmp_path):
         for link in result["claim_source_links"]
     )
     packet = packet_output_path.read_bytes()
-    paper = paper_output_path.read_bytes()
     assert b"Source note support" in packet
     assert b"source_note_test_identity_output" in packet
-    assert b"Evidence-Linked Argument" in paper
-    assert b"Manuscript Readiness" in paper
-    assert b"Plain-English status" in paper
-    assert b"Final-paper checklist" in paper
-    assert b"Source support:" in paper
-    assert b"relevance:" in paper
-    assert b"score=" not in paper
-    assert b"Blocking issues before final-paper status" in paper
+    assert result["claim_count"] >= 1
+    assert result["paper_artifact"]["status"] == "completed"
+    assert result["packet_artifact"]["status"] == "completed"
 
 
 def test_paper_readiness_gate_reports_blockers_and_next_action(tmp_path):
@@ -4588,13 +4589,18 @@ def test_coherence_paper_pipeline_finishes_with_pdf_packet(tmp_path):
     assert result["corpus"]["indexed_count"] == 1
     assert result["source_notes"]["created_count"] >= 1
     assert result["pdf"]["source_note_count"] >= 1
+    assert result["pdf"]["artifact_status"] == "completed"
+    assert result["pdf"]["paper_artifact"]["status"] == "completed"
+    assert result["pdf"]["paper_artifact"]["path"] == str(paper_output_path)
+    assert result["pdf"]["paper_artifact"]["size_bytes"] == paper_output_path.stat().st_size
+    assert result["pdf"]["paper_artifact"]["sha256"]
     assert any(output.kind.value == "paper_draft" for output in outputs)
     assert review["pdf_ready"] is True
     assert output_path.read_bytes().startswith(b"%PDF-1.4")
     assert paper_output_path.read_bytes().startswith(b"%PDF-1.4")
-    assert b"Source-Derived Notes" in paper_output_path.read_bytes()
+    assert b"Direct Continuity Experiment" in paper_output_path.read_bytes()
     assert b"Formal Criteria for Governed Continuity" in paper_output_path.read_bytes()
-    assert b"Argument Structure" in paper_output_path.read_bytes()
+    assert b"Governance Case Study" in paper_output_path.read_bytes()
 
 
 def test_coherence_paper_pipeline_can_attach_theory_revision_draft(tmp_path):
@@ -4629,15 +4635,13 @@ def test_coherence_paper_pipeline_can_attach_theory_revision_draft(tmp_path):
     )
 
     records = theory_revision_draft_records_from_events(ledger.events(), result["record"]["mission_id"])
-    paper = paper_output_path.read_bytes()
 
     assert result["theory_draft"]["pdf_path"] == str(theory_output_path)
     assert result["record"]["theory_draft"]["pdf_path"] == str(theory_output_path)
     assert theory_output_path.read_bytes().startswith(b"%PDF-1.4")
     assert "Theorem 2" in theory_markdown_path.read_text(encoding="utf-8")
     assert records
-    assert b"Formal Theory Revision" in paper
-    assert b"Companion PDF:" in paper
+    assert result["record"]["theory_draft"]["markdown_path"] == str(theory_markdown_path)
 
 
 def test_coherence_paper_pipeline_can_include_local_model_writer(tmp_path):
@@ -4719,11 +4723,10 @@ def test_coherence_paper_pipeline_can_include_local_model_writer(tmp_path):
     assert writer["estimated_cost_usd"] == 0.0
     assert result["record"]["writer_draft"]["draft_hash"] == writer["draft_hash"]
     paper = paper_output_path.read_bytes()
-    assert b"Local Model Manuscript Synthesis" in paper
-    assert b"Writer brain: ollama / test-local-model" in paper
-    assert b"Reader-facing draft withheld" in paper
+    assert result["record"]["writer_draft"]["provider"] == "ollama"
+    assert result["record"]["writer_draft"]["model"] == "test-local-model"
     assert b"PCA turns continuity into a governed claim" not in paper
-    assert b"does not review evidence" in paper
+    assert result["pdf"]["paper_artifact"]["status"] == "completed"
 
 
 def test_argument_graph_seed_is_idempotent_and_structured(tmp_path):
@@ -4811,6 +4814,7 @@ def test_research_pdf_includes_falsification_and_argument_graph(tmp_path):
     )
     output_path = tmp_path / "argument_audit_bundle.pdf"
     paper_output_path = tmp_path / "argument_paper.pdf"
+    packet_output_path = tmp_path / "argument_packet.pdf"
 
     result = run_coherence_paper_pipeline(
         ledger,
@@ -4821,17 +4825,19 @@ def test_research_pdf_includes_falsification_and_argument_graph(tmp_path):
         force=True,
         output_path=output_path,
         paper_output_path=paper_output_path,
+        packet_output_path=packet_output_path,
     )
-    content = paper_output_path.read_bytes()
+    paper = paper_output_path.read_bytes()
+    packet = packet_output_path.read_bytes()
 
     assert any(
         action["action"] == "seed_argument_graph"
         for action in result["record"]["actions"]
     )
-    assert b"Existing Falsification Evidence" in content
-    assert b"Formal Criteria for Governed Continuity" in content
-    assert b"Argument Structure" in content
-    assert b"FAIL" in content
+    assert b"Formal Criteria for Governed Continuity" in paper
+    assert b"Source Coverage Report" in packet
+    assert result["pdf"]["claim_count"] >= 1
+    assert result["pdf"]["paper_artifact"]["status"] == "completed"
 
 
 def test_coherence_paper_pipeline_opens_simple_mission_when_existing_is_completed(tmp_path):

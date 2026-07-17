@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from textwrap import wrap
 from typing import Any
+import hashlib
 import re
 
 from .argument_graph import mission_argument_graph
@@ -175,11 +176,24 @@ def export_research_pdf(
             "Complete machine record: evidence IDs, hashes, review status, full history.",
         ],
     )
+    paper_artifact = _verified_pdf_artifact(paper_path, "reader_facing_paper")
+    packet_artifact = _verified_pdf_artifact(packet_path, "research_packet")
+    audit_artifact = _verified_pdf_artifact(audit_path, "audit_bundle")
+    artifacts = {
+        "paper": paper_artifact,
+        "packet": packet_artifact,
+        "audit_bundle": audit_artifact,
+    }
     return {
         "path": str(audit_path),
         "audit_path": str(audit_path),
         "paper_path": str(paper_path),
         "packet_path": str(packet_path),
+        "artifact_status": "completed",
+        "paper_artifact": paper_artifact,
+        "packet_artifact": packet_artifact,
+        "audit_artifact": audit_artifact,
+        "artifacts": artifacts,
         "mission_id": mission_id,
         "mission_title": mission.title,
         "output_count": len(outputs),
@@ -195,6 +209,28 @@ def export_research_pdf(
         "duplicate_output_regenerations": len(regenerations),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "governance": "export only; does not accept claims, evidence, memory, or mission outcomes",
+    }
+
+
+def _verified_pdf_artifact(path: Path, artifact_type: str) -> dict[str, Any]:
+    """Return a durable artifact record or fail before the pipeline claims success."""
+    if not path.exists():
+        raise RuntimeError(f"{artifact_type} PDF was not created: {path}")
+    data = path.read_bytes()
+    if not data:
+        raise RuntimeError(f"{artifact_type} PDF is empty: {path}")
+    if not data.startswith(b"%PDF-"):
+        raise RuntimeError(f"{artifact_type} artifact is not a PDF: {path}")
+    stat = path.stat()
+    return {
+        "artifact_type": artifact_type,
+        "status": "completed",
+        "path": str(path),
+        "filename": path.name,
+        "size_bytes": stat.st_size,
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "created_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+        "open_label": "Open PDF",
     }
 
 
