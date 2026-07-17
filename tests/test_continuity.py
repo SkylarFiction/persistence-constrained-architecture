@@ -1375,6 +1375,7 @@ def test_live_chat_html_contains_mission_first_home():
     assert "index_coherence_corpus" in html
     assert "run_coherence_paper_pipeline" in html
     assert "run_coherence_research_cycle" in html
+    assert "action: 'run_coherence_research_cycle'" in html
     assert "theory_output_path" in html
     assert "theory_revision: true" in html
     assert "captured latest Lucien reply from mission evidence panel" in html
@@ -1403,7 +1404,9 @@ def test_tv_chat_html_is_simple_default_screen():
     assert "Cloud Assist" in html
     assert "Open Full Workbench" in html
     assert "/workbench" in html
-    assert "run_coherence_paper_pipeline" in html
+    assert "run_coherence_research_cycle" in html
+    assert "pdfOpenLink" in html
+    assert "open it here" in html
     assert "response_text" in html
     assert "suppress_auto_reflect: true" in html
     assert "steward_inbox_action" in html

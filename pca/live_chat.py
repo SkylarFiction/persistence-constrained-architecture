@@ -1804,6 +1804,7 @@ def _tv_chat_html() -> str:
           <div class="label">Research PDF</div>
           <div id="pdfStatus" class="value">Ready</div>
           <div class="hint">Saved to <code>../knowledge_hub/generated/research_papers/</code>.</div>
+          <div class="hint"><a id="pdfOpenLink" href="#" target="_blank" rel="noopener" style="display:none;">Open the paper</a></div>
         </div>
         <div class="quick-actions">
           <button id="tvResearch" class="primary" type="button">Do Research + Save Paper</button>
@@ -1837,6 +1838,7 @@ def _tv_chat_html() -> str:
     const tvSend = document.getElementById('tvSend');
     const tvResearch = document.getElementById('tvResearch');
     const pdfStatus = document.getElementById('pdfStatus');
+    const pdfOpenLink = document.getElementById('pdfOpenLink');
     let activeMissionId = '';
     let primaryInboxItemId = '';
 
@@ -1866,6 +1868,30 @@ def _tv_chat_html() -> str:
       const node = document.createElement('div');
       node.className = 'msg ' + kind;
       node.textContent = (kind === 'user' ? 'You: ' : 'Lucien: ') + text;
+      tvMessages.appendChild(node);
+      tvMessages.scrollTop = tvMessages.scrollHeight;
+    }
+
+    // window.open() fired after an await'd fetch (the pipeline can take
+    // several seconds) falls outside the browser's "direct response to a
+    // click" window on most browsers, so it silently gets treated as a
+    // blocked popup -- the PDF is written correctly on disk, but nothing
+    // visibly opens and there's no obvious warning. A real, always-present
+    // clickable link (both in the side panel and inline in the chat
+    // message) doesn't depend on that timing at all: it opens on an actual
+    // click, which is never blocked.
+    function addTvLinkMessage(prefixText, label, href) {
+      const welcome = tvMessages.querySelector('.welcome');
+      if (welcome) welcome.remove();
+      const node = document.createElement('div');
+      node.className = 'msg lucien';
+      node.appendChild(document.createTextNode('Lucien: ' + prefixText + ' '));
+      const link = document.createElement('a');
+      link.href = href;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = label;
+      node.appendChild(link);
       tvMessages.appendChild(node);
       tvMessages.scrollTop = tvMessages.scrollHeight;
     }
@@ -1956,8 +1982,9 @@ def _tv_chat_html() -> str:
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
-            action: 'run_coherence_paper_pipeline',
+            action: 'run_coherence_research_cycle',
             limit: 12,
+            knowledge_hub: true,
             output_path: paths.output_path,
             paper_output_path: paths.paper_output_path,
             packet_output_path: paths.packet_output_path,
@@ -1969,12 +1996,22 @@ def _tv_chat_html() -> str:
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'research failed');
-        const pipeline = data && data.result && data.result.coherence_paper_pipeline ? data.result.coherence_paper_pipeline : null;
+        const cycle = data && data.result && data.result.coherence_research_cycle ? data.result.coherence_research_cycle : null;
+        const pipeline = cycle && cycle.pipeline ? cycle.pipeline : null;
         const pdf = pipeline && pipeline.pdf ? pipeline.pdf : null;
         if (!pdf || !pdf.paper_path) throw new Error('No paper path returned.');
         pdfStatus.textContent = 'Saved';
-        addTvMessage('lucien', `Done. I saved the clean paper at ${pdf.paper_path}. The research packet is at ${pdf.packet_path}. The audit bundle is at ${pdf.audit_path}.`);
-        window.open(localDocumentUrl(pdf.paper_path), '_blank');
+        const paperUrl = localDocumentUrl(pdf.paper_path);
+        addTvLinkMessage('Done. I saved the paper --', 'open it here', paperUrl);
+        addTvMessage('lucien', `The research packet is at ${pdf.packet_path}. The audit bundle is at ${pdf.audit_path}.`);
+        if (pdfOpenLink) {
+          pdfOpenLink.href = paperUrl;
+          pdfOpenLink.style.display = '';
+        }
+        // Still attempt the automatic open for browsers that allow it; if a
+        // popup blocker eats this, the link above and in the side panel are
+        // the reliable path, not a workaround the user has to know about.
+        window.open(paperUrl, '_blank');
         await refreshTvStatus();
       } catch (error) {
         pdfStatus.textContent = 'Needs attention';
