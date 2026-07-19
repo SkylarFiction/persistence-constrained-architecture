@@ -2614,9 +2614,16 @@ def _live_chat_html() -> str:
           <button type="button" id="paperReviewNotes" class="secondary">Review Notes</button>
           <button type="button" id="paperCheckReadiness" class="secondary">Check Readiness</button>
           <button type="button" id="paperGenerateFinal" class="primary">Generate Final Paper</button>
+          <button type="button" id="paperRegenerateAnyway" class="secondary">Regenerate Anyway</button>
           <button type="button" id="paperOpenFolder" class="secondary">Open Paper Folder</button>
         </div>
       </div>
+      <div class="item guided-paper-workflow">
+        <div class="item-title">Guided Paper Workflow</div>
+        <div class="item-meta">Follow the current step. Lucien will ask for evidence review before making another duplicate PDF.</div>
+      </div>
+      <div id="guidedPaperWorkflowSummary" class="item"></div>
+      <div id="guidedPaperWorkflowSteps" class="queue"></div>
       <div id="paperReadinessSummary" class="item"></div>
       <div id="paperReadinessCards" class="mission-card-grid"></div>
       <div id="paperReadinessBlockers" class="queue"></div>
@@ -2954,6 +2961,8 @@ def _live_chat_html() -> str:
     const paperReadinessSummary = document.getElementById('paperReadinessSummary');
     const paperReadinessCards = document.getElementById('paperReadinessCards');
     const paperReadinessBlockers = document.getElementById('paperReadinessBlockers');
+    const guidedPaperWorkflowSummary = document.getElementById('guidedPaperWorkflowSummary');
+    const guidedPaperWorkflowSteps = document.getElementById('guidedPaperWorkflowSteps');
     const paperEvolutionSummary = document.getElementById('paperEvolutionSummary');
     const paperEvolutionCards = document.getElementById('paperEvolutionCards');
     const paperEvolutionChanges = document.getElementById('paperEvolutionChanges');
@@ -2997,6 +3006,7 @@ def _live_chat_html() -> str:
     let currentGuidedAction = null;
     let currentStartHereAction = {kind: 'wait'};
     let currentColdOpenPrompt = '';
+    let currentMissionView = {activeMission: null, cards: []};
     let currentStatus = null;
     let lastLucien = '';
     const missionTemplates = {
@@ -3029,6 +3039,7 @@ def _live_chat_html() -> str:
       currentStatus = status;
       const summary = status.summary || {};
       const missionView = renderMissionDashboard(status);
+      currentMissionView = missionView;
       renderStartHere(status, missionView.activeMission);
       renderDailyCommandCenter(status.daily || {}, status.workbench || {}, missionView.activeMission);
       renderStartupHealth(status.startup_health || {});
@@ -3074,6 +3085,7 @@ def _live_chat_html() -> str:
       renderGoals(status.goals || [], status.missions || []);
       renderDailyPlan(status.daily_plan || {});
       renderMissions(status.missions || [], status.mission_flows || {}, status.mission_autonomy || []);
+      renderGuidedPaperWorkflow(status.paper_readiness || {}, status.paper_evolution || {}, status.evidence_review_desks || {}, missionView.activeMission);
       renderPaperReadiness(status.paper_readiness || {}, missionView.activeMission);
       renderPaperEvolution(status.paper_evolution || {}, missionView.activeMission);
       renderEvidenceReviewFlow(status.evidence_review_desks || {}, missionView.activeMission);
@@ -3581,6 +3593,99 @@ def _live_chat_html() -> str:
         row.className = 'item';
         row.innerHTML = `<div class="item-title">Needs Work</div><div class="item-meta">${escapeHtml(blocker)}</div>`;
         paperReadinessBlockers.appendChild(row);
+      }
+    }
+
+    function guidedPaperState(readinessByMission, evolutionByMission, desksByMission, selectedMission) {
+      if (!selectedMission || !selectedMission.mission_id) {
+        return {
+          step: 'start_mission',
+          label: 'Start Mission First',
+          summary: 'Select or open a Coherence Physics mission before making a paper.',
+          hint: 'No active mission is selected.',
+          steps: []
+        };
+      }
+      const missionId = selectedMission.mission_id;
+      const readiness = readinessByMission[missionId] || {};
+      const evolution = evolutionByMission[missionId] || {};
+      const desk = desksByMission[missionId] || {};
+      const counts = desk.counts || {};
+      if (!evolution.should_regenerate && (counts.raw_source_notes || 0) > 0) {
+        return {
+          step: 'review_evidence',
+          label: 'Review Evidence First',
+          summary: 'The next PDF will probably repeat until at least one useful source note is reviewed.',
+          hint: evolution.recommended_action || desk.recommended_action || 'Review priority source notes before regenerating.',
+          steps: [
+            ['current', 'Review Evidence', `${counts.reviewed_source_notes || 0} / ${counts.source_notes || 0} source notes reviewed`],
+            ['todo', 'Add External Sources', `${counts.external_sources_reviewed || 0} / ${counts.external_sources || 0} reviewed`],
+            ['blocked', 'Regenerate Paper', 'Wait until research state changes'],
+            ['todo', 'Compare Against Last Paper', 'Run after the paper hash changes'],
+            ['todo', 'Export Final PDF', 'Only after evidence and sources are reviewed']
+          ]
+        };
+      }
+      if (evolution.should_regenerate) {
+        return {
+          step: 'regenerate',
+          label: 'Regenerate Improved Paper',
+          summary: 'Research state changed since the last paper. The next PDF should evolve.',
+          hint: evolution.recommended_action || 'Regenerate the paper, then inspect what changed.',
+          steps: [
+            ['done', 'Review Evidence', `${counts.reviewed_source_notes || 0} source note(s) reviewed`],
+            ['current', 'Regenerate Paper', 'Make an improved reader-facing PDF'],
+            ['next', 'Compare Against Last Paper', 'Check the new hash and content'],
+            ['todo', 'Add/Review External Sources', `${counts.external_sources_reviewed || 0} / ${counts.external_sources || 0} reviewed`],
+            ['todo', 'Export Final PDF', readiness.ready ? 'Ready for human manuscript review' : 'Still governed draft']
+          ]
+        };
+      }
+      if ((readiness.external_source_count || 0) === 0) {
+        return {
+          step: 'external_sources',
+          label: 'Add External Source',
+          summary: 'The local archive is indexed, but the paper still needs outside scholarly context before final-paper status.',
+          hint: readiness.recommended_action || 'Add an external DOI, URL, or paper title.',
+          steps: [
+            ['done', 'Review Evidence', `${counts.reviewed_source_notes || 0} source note(s) reviewed`],
+            ['current', 'Add External Sources', 'Attach at least one outside scholarly source'],
+            ['todo', 'Review External Sources', 'Human steward review required'],
+            ['todo', 'Regenerate Paper', 'After source state changes'],
+            ['todo', 'Export Final PDF', 'After review gates clear']
+          ]
+        };
+      }
+      return {
+        step: 'check_readiness',
+        label: readiness.ready ? 'Generate Final Paper' : 'Check Readiness',
+        summary: readiness.plain_status || 'Paper workflow is waiting for the next review gate.',
+        hint: readiness.recommended_action || evolution.recommended_action || 'Check paper readiness.',
+        steps: [
+          ['done', 'Review Evidence', `${counts.reviewed_source_notes || 0} / ${counts.source_notes || 0} source notes reviewed`],
+          ['done', 'Gather Sources', `${readiness.source_note_count || 0} source notes`],
+          [readiness.ready ? 'current' : 'blocked', 'Generate Paper', readiness.ready ? 'Ready to generate' : 'Resolve blockers first'],
+          ['next', 'Compare Against Last Paper', 'Inspect generated PDF'],
+          ['todo', 'Export Final PDF', 'Human review before sharing']
+        ]
+      };
+    }
+
+    function renderGuidedPaperWorkflow(readinessByMission, evolutionByMission, desksByMission, selectedMission) {
+      guidedPaperWorkflowSummary.innerHTML = '';
+      guidedPaperWorkflowSteps.innerHTML = '';
+      const state = guidedPaperState(readinessByMission, evolutionByMission, desksByMission, selectedMission);
+      const mainButton = document.getElementById('paperGenerateFinal');
+      if (mainButton) mainButton.textContent = state.label;
+      guidedPaperWorkflowSummary.innerHTML = `<div class="item-title">${escapeHtml(state.label)}</div>
+        <div class="item-meta">${escapeHtml(state.summary)}</div>
+        <div class="item-meta">Next: ${escapeHtml(state.hint)}</div>`;
+      for (const [status, label, detail] of state.steps || []) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = `<div class="item-title">${escapeHtml(String(status).toUpperCase())} - ${escapeHtml(label)}</div>
+          <div class="item-meta">${escapeHtml(detail)}</div>`;
+        guidedPaperWorkflowSteps.appendChild(row);
       }
     }
 
@@ -5731,6 +5836,33 @@ def _live_chat_html() -> str:
       window.open(localDocumentUrl(artifact.path), '_blank');
     }
 
+    function guidedPaperPrimaryAction() {
+      const state = guidedPaperState(
+        (currentStatus || {}).paper_readiness || {},
+        (currentStatus || {}).paper_evolution || {},
+        (currentStatus || {}).evidence_review_desks || {},
+        currentMissionView.activeMission
+      );
+      if (state.step === 'review_evidence') {
+        evidenceReviewFlowCard.scrollIntoView({behavior: 'smooth', block: 'center'});
+        addMessage('lucien', 'Review evidence first. Accept, reject, or mark the priority source note for manual check, then the paper can evolve instead of repeating.');
+        return;
+      }
+      if (state.step === 'external_sources') {
+        addExternalLiteratureForPaper();
+        return;
+      }
+      if (state.step === 'start_mission') {
+        addMessage('lucien', 'Open or select a Coherence Physics mission first, then I can guide the paper workflow.');
+        return;
+      }
+      if (state.step === 'check_readiness') {
+        checkPaperReadinessNow();
+        return;
+      }
+      runPaperPipelineForSelectedMission();
+    }
+
     function requireSelectedMissionForPaper() {
       if (!selectedMissionId) {
         addMessage('lucien', 'Select or open a mission before using Make Paper.');
@@ -5839,7 +5971,9 @@ def _live_chat_html() -> str:
 
     document.getElementById('paperCheckReadiness').addEventListener('click', checkPaperReadinessNow);
 
-    document.getElementById('paperGenerateFinal').addEventListener('click', runPaperPipelineForSelectedMission);
+    document.getElementById('paperGenerateFinal').addEventListener('click', guidedPaperPrimaryAction);
+
+    document.getElementById('paperRegenerateAnyway').addEventListener('click', runPaperPipelineForSelectedMission);
 
     document.getElementById('paperOpenFolder').addEventListener('click', openLatestPaper);
 

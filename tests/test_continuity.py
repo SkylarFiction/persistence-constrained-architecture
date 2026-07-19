@@ -1351,6 +1351,13 @@ def test_live_chat_html_contains_mission_first_home():
     assert "Research Review Desk" in html
     assert "researchReviewSummary" in html
     assert "Make Paper" in html
+    assert "Guided Paper Workflow" in html
+    assert "guidedPaperWorkflowSummary" in html
+    assert "guidedPaperWorkflowSteps" in html
+    assert "Review Evidence First" in html
+    assert "Regenerate Improved Paper" in html
+    assert "guidedPaperPrimaryAction" in html
+    assert "paperRegenerateAnyway" in html
     assert "paperReadinessSummary" in html
     assert "paperReadinessCards" in html
     assert "Paper Evolution" in html
