@@ -32,6 +32,7 @@ from .checkpoint_story import checkpoint_story
 from .commit_readiness import commit_readiness
 from .cold_open import cold_open_report
 from .daily_command_center import daily_command_center
+from .evidence_review_desk import evidence_review_desk
 from .evidence_locker import add_evidence, evidence_for_target, link_evidence, review_evidence
 from .external_literature import (
     add_external_literature,
@@ -1153,6 +1154,7 @@ def _status_payload(
     }
     paper_readiness = {}
     paper_evolution = {}
+    evidence_review_desks = {}
     paper_finish_plan = {}
     paper_review_queue = {}
     for brief in missions:
@@ -1187,6 +1189,21 @@ def _status_payload(
                 "changes_since_last_paper": [],
                 "stagnation_reasons": [str(exc)],
                 "recommended_action": "Inspect diagnostics before regenerating.",
+            }
+        try:
+            evidence_review_desks[mission_id] = evidence_review_desk(
+                ledger,
+                mission_id=mission_id,
+                limit=4,
+            )
+        except Exception as exc:
+            evidence_review_desks[mission_id] = {
+                "mission_id": mission_id,
+                "mission_title": brief["mission"].get("title"),
+                "status": "unavailable",
+                "items": [],
+                "counts": {},
+                "recommended_action": f"Evidence review unavailable: {exc}",
             }
         try:
             paper_finish_plan[mission_id] = paper_finish_plan_for_mission(
@@ -1324,6 +1341,7 @@ def _status_payload(
         "mission_external_literature": mission_external_literature,
         "paper_readiness": paper_readiness,
         "paper_evolution": paper_evolution,
+        "evidence_review_desks": evidence_review_desks,
         "paper_finish_plan": paper_finish_plan,
         "paper_review_queue": paper_review_queue,
         "mission_claim_maps": mission_claim_map_data,
@@ -2609,6 +2627,12 @@ def _live_chat_html() -> str:
       <div id="paperEvolutionSummary" class="item"></div>
       <div id="paperEvolutionCards" class="mission-card-grid"></div>
       <div id="paperEvolutionChanges" class="queue"></div>
+      <div class="item evidence-review-flow">
+        <div class="item-title">One-Click Evidence Review</div>
+        <div class="item-meta">Review the next source note that is already linked to a reader-facing claim. This is what makes the next paper different.</div>
+      </div>
+      <div id="evidenceReviewFlowSummary" class="item"></div>
+      <div id="evidenceReviewFlowCard" class="queue"></div>
       <div class="item final-paper-checklist">
         <div class="item-title">Final Paper Checklist</div>
         <div class="item-meta">A short finishing path for turning the current draft into a reviewable paper without digging through the whole raw queue.</div>
@@ -2933,6 +2957,8 @@ def _live_chat_html() -> str:
     const paperEvolutionSummary = document.getElementById('paperEvolutionSummary');
     const paperEvolutionCards = document.getElementById('paperEvolutionCards');
     const paperEvolutionChanges = document.getElementById('paperEvolutionChanges');
+    const evidenceReviewFlowSummary = document.getElementById('evidenceReviewFlowSummary');
+    const evidenceReviewFlowCard = document.getElementById('evidenceReviewFlowCard');
     const paperFinishPlanSummary = document.getElementById('paperFinishPlanSummary');
     const paperFinishPlanActions = document.getElementById('paperFinishPlanActions');
     const paperReviewQueueSummary = document.getElementById('paperReviewQueueSummary');
@@ -2967,6 +2993,7 @@ def _live_chat_html() -> str:
     let selectedWorkMode = window.localStorage.getItem('lucien.workMode') || '';
     let selectedOutputId = window.sessionStorage.getItem('lucien.selectedOutputId') || '';
     let outputContentById = JSON.parse(window.sessionStorage.getItem('lucien.outputContentById') || '{}');
+    let evidenceReviewOffsets = JSON.parse(window.sessionStorage.getItem('lucien.evidenceReviewOffsets') || '{}');
     let currentGuidedAction = null;
     let currentStartHereAction = {kind: 'wait'};
     let currentColdOpenPrompt = '';
@@ -3049,6 +3076,7 @@ def _live_chat_html() -> str:
       renderMissions(status.missions || [], status.mission_flows || {}, status.mission_autonomy || []);
       renderPaperReadiness(status.paper_readiness || {}, missionView.activeMission);
       renderPaperEvolution(status.paper_evolution || {}, missionView.activeMission);
+      renderEvidenceReviewFlow(status.evidence_review_desks || {}, missionView.activeMission);
       renderPaperFinishPlan(status.paper_finish_plan || {}, missionView.activeMission);
       renderPaperReviewQueue(status.paper_review_queue || {}, missionView.activeMission);
       renderExternalLiterature(status.mission_external_literature || {}, missionView.activeMission);
@@ -3618,6 +3646,96 @@ def _live_chat_html() -> str:
           paperEvolutionChanges.appendChild(row);
         }
       }
+    }
+
+    function renderEvidenceReviewFlow(desksByMission, selectedMission) {
+      evidenceReviewFlowSummary.innerHTML = '';
+      evidenceReviewFlowCard.innerHTML = '';
+      if (!selectedMission || !selectedMission.mission_id) {
+        empty(evidenceReviewFlowSummary, 'Select or open a mission before reviewing evidence.');
+        empty(evidenceReviewFlowCard, 'No active evidence review item.');
+        return;
+      }
+      const desk = desksByMission[selectedMission.mission_id] || {};
+      const counts = desk.counts || {};
+      evidenceReviewFlowSummary.innerHTML = `<div class="item-title">${escapeHtml(desk.recommended_action || 'Review source notes to advance the paper.')}</div>
+        <div class="item-meta">Reviewed notes: ${escapeHtml(String(counts.reviewed_source_notes || 0))} / ${escapeHtml(String(counts.source_notes || 0))} · reviewed links: ${escapeHtml(String(counts.reviewed_source_links || 0))} · manual checks: ${escapeHtml(String(counts.manual_verification_notes || 0))}</div>
+        <div class="item-meta">${escapeHtml(desk.guardrail || 'Review marks the citation card, not the whole theory.')}</div>`;
+      const items = desk.items || [];
+      if (!items.length) {
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.innerHTML = `<div class="item-title">No priority review card available</div>
+          <div class="item-meta">${escapeHtml(desk.recommended_action || 'Gather sources, extract notes, or use the full source-note review list below.')}</div>`;
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        const refreshButton = document.createElement('button');
+        refreshButton.type = 'button';
+        refreshButton.className = 'secondary';
+        refreshButton.textContent = 'Refresh';
+        refreshButton.addEventListener('click', refresh);
+        const full = document.createElement('button');
+        full.type = 'button';
+        full.className = 'secondary';
+        full.textContent = 'Open Full Notes';
+        full.addEventListener('click', () => sourceNotesReview.scrollIntoView({behavior: 'smooth', block: 'center'}));
+        actions.append(refreshButton, full);
+        row.appendChild(actions);
+        evidenceReviewFlowCard.appendChild(row);
+        return;
+      }
+      const offset = Math.min(
+        Number(evidenceReviewOffsets[selectedMission.mission_id] || 0),
+        Math.max(0, items.length - 1)
+      );
+      const item = items[offset];
+      const remaining = Math.max(0, items.length - offset - 1);
+      const row = document.createElement('div');
+      row.className = 'item';
+      row.innerHTML = `<div class="item-title">${escapeHtml(item.claim_text || item.claim_id || 'Claim needs review')}</div>
+        <div class="item-meta">Source: ${escapeHtml(item.source_path || 'unknown source')} / ${escapeHtml(item.locator || 'source')}</div>
+        <div class="item-meta">Relation: ${escapeHtml(item.relation || 'related')} · strength: ${escapeHtml(item.link_strength || 'tentative')} · confidence: ${escapeHtml(item.confidence || 'unknown')}</div>
+        <div class="item-meta">${escapeHtml(String(item.summary || '').slice(0, 520))}</div>
+        <div class="item-meta">Note: ${escapeHtml(item.note_id || 'unknown')} · ${remaining ? `${remaining} more priority note(s) queued after this.` : 'This is the current priority note.'}</div>`;
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      actions.appendChild(button('Accept', {
+        action: 'review_source_note',
+        note_id: item.note_id,
+        status: 'reviewed',
+        confidence: item.confidence || 'medium',
+        reason: 'accepted from One-Click Evidence Review'
+      }));
+      actions.appendChild(button('Reject', {
+        action: 'review_source_note',
+        note_id: item.note_id,
+        status: 'rejected',
+        reason: 'rejected from One-Click Evidence Review'
+      }));
+      actions.appendChild(button('Needs Manual Check', {
+        action: 'review_source_note',
+        note_id: item.note_id,
+        status: 'stale',
+        reason: 'marked for manual source check from One-Click Evidence Review'
+      }));
+      const next = document.createElement('button');
+      next.type = 'button';
+      next.className = 'secondary';
+      next.textContent = 'Next';
+      next.addEventListener('click', () => {
+        evidenceReviewOffsets[selectedMission.mission_id] = (offset + 1) % items.length;
+        window.sessionStorage.setItem('lucien.evidenceReviewOffsets', JSON.stringify(evidenceReviewOffsets));
+        renderEvidenceReviewFlow(desksByMission, selectedMission);
+      });
+      actions.appendChild(next);
+      const full = document.createElement('button');
+      full.type = 'button';
+      full.className = 'secondary';
+      full.textContent = 'Open Full Notes';
+      full.addEventListener('click', () => sourceNotesReview.scrollIntoView({behavior: 'smooth', block: 'center'}));
+      actions.appendChild(full);
+      row.appendChild(actions);
+      evidenceReviewFlowCard.appendChild(row);
     }
 
     function renderPaperFinishPlan(plansByMission, selectedMission) {

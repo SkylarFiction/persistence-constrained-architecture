@@ -1358,6 +1358,14 @@ def test_live_chat_html_contains_mission_first_home():
     assert "paperEvolutionCards" in html
     assert "paperEvolutionChanges" in html
     assert "renderPaperEvolution(status.paper_evolution || {}, missionView.activeMission)" in html
+    assert "One-Click Evidence Review" in html
+    assert "evidenceReviewFlowSummary" in html
+    assert "evidenceReviewFlowCard" in html
+    assert "renderEvidenceReviewFlow(status.evidence_review_desks || {}, missionView.activeMission)" in html
+    assert "accepted from One-Click Evidence Review" in html
+    assert "Needs Manual Check" in html
+    assert "lucien.evidenceReviewOffsets" in html
+    assert "next.textContent = 'Next'" in html
     assert "Final Paper Checklist" in html
     assert "paperFinishPlanSummary" in html
     assert "paperFinishPlanActions" in html
