@@ -99,6 +99,7 @@ from pca import (
     derive_self_model,
     direct_continuity_experiment_records_from_events,
     evidence_review_desk,
+    paper_evolution_status,
     estimate_model_usage,
     evidence_for_target,
     evidence_locker_snapshot,
@@ -122,6 +123,7 @@ from pca import (
     record_rating,
     render_output_only_samples_text,
     render_evidence_review_desk_text,
+    render_paper_evolution_text,
     score_output_only_arm,
     review_evidence_note,
     render_coherence_research_cycle_readiness_text,
@@ -1351,6 +1353,11 @@ def test_live_chat_html_contains_mission_first_home():
     assert "Make Paper" in html
     assert "paperReadinessSummary" in html
     assert "paperReadinessCards" in html
+    assert "Paper Evolution" in html
+    assert "paperEvolutionSummary" in html
+    assert "paperEvolutionCards" in html
+    assert "paperEvolutionChanges" in html
+    assert "renderPaperEvolution(status.paper_evolution || {}, missionView.activeMission)" in html
     assert "Final Paper Checklist" in html
     assert "paperFinishPlanSummary" in html
     assert "paperFinishPlanActions" in html
@@ -4844,6 +4851,65 @@ def test_evidence_review_desk_lists_priority_notes_and_reviews_note(tmp_path):
 
     assert review["status"] == "reviewed"
     assert updated["counts"]["reviewed_source_notes"] >= 1
+
+
+def test_paper_evolution_flags_unchanged_and_review_progress(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "Coherence_Physics_Source.md").write_text(
+        (
+            "Smooth output is not continuity. Fluent output can continue while "
+            "identity state, memory, authority, lineage, and ledger integrity "
+            "change underneath."
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_coherence_paper_pipeline(
+        ledger,
+        manifest,
+        project_root=project_root,
+        corpus_roots=["corpus"],
+        corpus_limit=2,
+        force=True,
+        output_path=tmp_path / "coherence_audit_bundle.pdf",
+        paper_output_path=tmp_path / "coherence_paper.pdf",
+        packet_output_path=tmp_path / "coherence_research_packet.pdf",
+    )
+    mission_id = result["record"]["mission_id"]
+
+    unchanged = paper_evolution_status(ledger, mission_id=mission_id)
+    rendered = render_paper_evolution_text(unchanged)
+
+    assert unchanged["status"] == "unchanged"
+    assert unchanged["should_regenerate"] is False
+    assert "Likely same paper" in rendered
+    assert "No paper-evolving ledger events" in rendered
+
+    desk = evidence_review_desk(ledger, mission_id=mission_id, limit=1)
+    assert desk["items"]
+    review_evidence_note(
+        ledger,
+        manifest,
+        note_id=desk["items"][0]["note_id"],
+        review_status="reviewed",
+        reviewer="test_steward",
+        confidence="high",
+        reason="verified against source excerpt",
+    )
+
+    changed = paper_evolution_status(ledger, mission_id=mission_id)
+
+    assert changed["status"] == "changed"
+    assert changed["should_regenerate"] is True
+    assert any(
+        item["event_type"] == "source_note.reviewed"
+        for item in changed["changes_since_last_paper"]
+    )
 
 
 def test_reader_paper_reports_reviewed_source_notes(tmp_path):

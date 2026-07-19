@@ -171,6 +171,7 @@ from pca import (
     render_knowledge_hub_sources_text,
     render_external_literature_text,
     render_next_governed_build_text,
+    render_paper_evolution_text,
     render_paper_finish_plan_text,
     render_paper_readiness_text,
     render_project_build_brief_text,
@@ -206,6 +207,7 @@ from pca import (
     review_autonomy_action,
     research_outputs_from_events,
     external_literature_for_mission,
+    paper_evolution_status,
     paper_finish_plan_for_mission,
     paper_readiness_for_mission,
     research_review_desk,
@@ -508,6 +510,9 @@ def main() -> int:
     paper_finish_plan_parser = subparsers.add_parser("paper-finish-plan")
     paper_finish_plan_parser.add_argument("mission_id")
     paper_finish_plan_parser.add_argument("--json", action="store_true")
+    paper_evolution_parser = subparsers.add_parser("paper-evolution")
+    paper_evolution_parser.add_argument("--mission")
+    paper_evolution_parser.add_argument("--json", action="store_true")
     review_queue_parser = subparsers.add_parser("review-queue")
     review_queue_parser.add_argument("mission_id")
     review_queue_parser.add_argument("--json", action="store_true")
@@ -1541,6 +1546,14 @@ def main() -> int:
             print_json({"paper_finish_plan": result})
         else:
             print(render_paper_finish_plan_text(result))
+        return 0
+
+    if args.command == "paper-evolution":
+        result = paper_evolution_status(ledger, mission_id=args.mission)
+        if args.json:
+            print_json({"paper_evolution": result})
+        else:
+            print(render_paper_evolution_text(result))
         return 0
 
     if args.command == "review-queue":

@@ -102,6 +102,7 @@ from .coherence_paper_pipeline import (
     run_coherence_paper_pipeline,
 )
 from .coherence_research_cycle import run_coherence_research_cycle
+from .paper_evolution import paper_evolution_status
 from .paper_finish_plan import paper_finish_plan_for_mission
 from .paper_readiness import paper_readiness_for_mission
 from .research_pdf import export_research_pdf
@@ -1151,6 +1152,7 @@ def _status_payload(
         for brief in missions
     }
     paper_readiness = {}
+    paper_evolution = {}
     paper_finish_plan = {}
     paper_review_queue = {}
     for brief in missions:
@@ -1169,6 +1171,22 @@ def _status_payload(
                 "ready": False,
                 "blockers": [str(exc)],
                 "recommended_action": "Run the paper pipeline or inspect diagnostics.",
+            }
+        try:
+            paper_evolution[mission_id] = paper_evolution_status(
+                ledger,
+                mission_id=mission_id,
+            )
+        except Exception as exc:
+            paper_evolution[mission_id] = {
+                "mission_id": mission_id,
+                "mission_title": brief["mission"].get("title"),
+                "status": "unavailable",
+                "plain_status": "Paper evolution unavailable",
+                "should_regenerate": False,
+                "changes_since_last_paper": [],
+                "stagnation_reasons": [str(exc)],
+                "recommended_action": "Inspect diagnostics before regenerating.",
             }
         try:
             paper_finish_plan[mission_id] = paper_finish_plan_for_mission(
@@ -1305,6 +1323,7 @@ def _status_payload(
         "mission_source_notes": mission_source_notes,
         "mission_external_literature": mission_external_literature,
         "paper_readiness": paper_readiness,
+        "paper_evolution": paper_evolution,
         "paper_finish_plan": paper_finish_plan,
         "paper_review_queue": paper_review_queue,
         "mission_claim_maps": mission_claim_map_data,
@@ -2583,6 +2602,13 @@ def _live_chat_html() -> str:
       <div id="paperReadinessSummary" class="item"></div>
       <div id="paperReadinessCards" class="mission-card-grid"></div>
       <div id="paperReadinessBlockers" class="queue"></div>
+      <div class="item paper-evolution">
+        <div class="item-title">Paper Evolution</div>
+        <div class="item-meta">Before regenerating, check whether the research state changed enough to make a different paper.</div>
+      </div>
+      <div id="paperEvolutionSummary" class="item"></div>
+      <div id="paperEvolutionCards" class="mission-card-grid"></div>
+      <div id="paperEvolutionChanges" class="queue"></div>
       <div class="item final-paper-checklist">
         <div class="item-title">Final Paper Checklist</div>
         <div class="item-meta">A short finishing path for turning the current draft into a reviewable paper without digging through the whole raw queue.</div>
@@ -2904,6 +2930,9 @@ def _live_chat_html() -> str:
     const paperReadinessSummary = document.getElementById('paperReadinessSummary');
     const paperReadinessCards = document.getElementById('paperReadinessCards');
     const paperReadinessBlockers = document.getElementById('paperReadinessBlockers');
+    const paperEvolutionSummary = document.getElementById('paperEvolutionSummary');
+    const paperEvolutionCards = document.getElementById('paperEvolutionCards');
+    const paperEvolutionChanges = document.getElementById('paperEvolutionChanges');
     const paperFinishPlanSummary = document.getElementById('paperFinishPlanSummary');
     const paperFinishPlanActions = document.getElementById('paperFinishPlanActions');
     const paperReviewQueueSummary = document.getElementById('paperReviewQueueSummary');
@@ -3019,6 +3048,7 @@ def _live_chat_html() -> str:
       renderDailyPlan(status.daily_plan || {});
       renderMissions(status.missions || [], status.mission_flows || {}, status.mission_autonomy || []);
       renderPaperReadiness(status.paper_readiness || {}, missionView.activeMission);
+      renderPaperEvolution(status.paper_evolution || {}, missionView.activeMission);
       renderPaperFinishPlan(status.paper_finish_plan || {}, missionView.activeMission);
       renderPaperReviewQueue(status.paper_review_queue || {}, missionView.activeMission);
       renderExternalLiterature(status.mission_external_literature || {}, missionView.activeMission);
@@ -3523,6 +3553,70 @@ def _live_chat_html() -> str:
         row.className = 'item';
         row.innerHTML = `<div class="item-title">Needs Work</div><div class="item-meta">${escapeHtml(blocker)}</div>`;
         paperReadinessBlockers.appendChild(row);
+      }
+    }
+
+    function renderPaperEvolution(evolutionByMission, selectedMission) {
+      paperEvolutionSummary.innerHTML = '';
+      paperEvolutionCards.innerHTML = '';
+      paperEvolutionChanges.innerHTML = '';
+      if (!selectedMission || !selectedMission.mission_id) {
+        empty(paperEvolutionSummary, 'Select or open a mission before checking whether the paper can evolve.');
+        empty(paperEvolutionChanges, 'No paper evolution check yet.');
+        return;
+      }
+      const evolution = evolutionByMission[selectedMission.mission_id] || {};
+      const changed = !!evolution.should_regenerate;
+      const statusLabel = evolution.plain_status || evolution.status || 'unknown';
+      const latest = evolution.latest_paper || {};
+      paperEvolutionSummary.innerHTML = `<div class="item-title">${escapeHtml(statusLabel)}</div>
+        <div class="item-meta">${escapeHtml(evolution.recommended_action || 'Review research state before regenerating.')}</div>
+        <div class="item-meta">${escapeHtml(evolution.guardrail || 'Regeneration is not research progress by itself.')}</div>`;
+      const counts = evolution.counts || {};
+      const cards = [
+        ['Meaningful Change', changed ? 'yes' : 'not yet'],
+        ['Paper Runs', counts.paper_runs || 0],
+        ['Reviewed Notes', `${counts.reviewed_source_notes || 0} / ${counts.source_notes || 0}`],
+        ['Reviewed Links', counts.reviewed_source_links || 0],
+        ['External Reviewed', `${counts.reviewed_external_sources || 0} / ${counts.external_sources || 0}`],
+        ['Latest Hash', latest.paper_sha256 ? String(latest.paper_sha256).slice(0, 12) : 'none'],
+      ];
+      for (const [label, value] of cards) {
+        const card = document.createElement('div');
+        card.className = 'item mission-card';
+        card.innerHTML = `<div class="label">${escapeHtml(label)}</div><div class="item-title">${escapeHtml(String(value))}</div>`;
+        paperEvolutionCards.appendChild(card);
+      }
+      const changes = evolution.changes_since_last_paper || [];
+      if (changes.length) {
+        const section = document.createElement('div');
+        section.className = 'item';
+        section.innerHTML = `<div class="item-title">What Changed Since Last Paper</div>`;
+        paperEvolutionChanges.appendChild(section);
+        for (const change of changes.slice(0, 6)) {
+          const row = document.createElement('div');
+          row.className = 'item';
+          row.innerHTML = `<div class="item-title">${escapeHtml(change.label || change.event_type || 'change')}</div>
+            <div class="item-meta">${escapeHtml(change.detail || change.event_hash || '')}</div>
+            <div class="item-meta">${escapeHtml(change.timestamp || '')}</div>`;
+          paperEvolutionChanges.appendChild(row);
+        }
+      } else {
+        const reasons = evolution.stagnation_reasons || [];
+        if (!reasons.length) {
+          empty(paperEvolutionChanges, 'No change blockers reported.');
+          return;
+        }
+        const section = document.createElement('div');
+        section.className = 'item';
+        section.innerHTML = `<div class="item-title">Why This May Repeat</div>`;
+        paperEvolutionChanges.appendChild(section);
+        for (const reason of reasons) {
+          const row = document.createElement('div');
+          row.className = 'item';
+          row.innerHTML = `<div class="item-title">Needs Research Progress</div><div class="item-meta">${escapeHtml(reason)}</div>`;
+          paperEvolutionChanges.appendChild(row);
+        }
       }
     }
 
@@ -5490,6 +5584,7 @@ def _live_chat_html() -> str:
     }
 
     async function runPaperPipelineForSelectedMission() {
+      const evolution = ((currentStatus || {}).paper_evolution || {})[selectedMissionId] || {};
       const paths = researchOutputPaths('coherence');
       const data = await steward({
         action: 'run_coherence_paper_pipeline',
@@ -5511,7 +5606,10 @@ def _live_chat_html() -> str:
         return;
       }
       renderLatestPaperArtifact(artifact);
-      addMessage('lucien', `Verified paper saved at ${artifact.path} (${artifact.size_bytes} bytes, sha256 ${String(artifact.sha256 || '').slice(0, 12)}...). Research packet: ${pdf.packet_path}. Audit bundle: ${pdf.audit_path}. Opening the clean paper now.`);
+      const evolutionNote = evolution.should_regenerate
+        ? 'Research state changed since the last paper, so this run should evolve the manuscript.'
+        : `Research state may be unchanged: ${evolution.recommended_action || 'review evidence before expecting a different paper.'}`;
+      addMessage('lucien', `Verified paper saved at ${artifact.path} (${artifact.size_bytes} bytes, sha256 ${String(artifact.sha256 || '').slice(0, 12)}...). ${evolutionNote} Research packet: ${pdf.packet_path}. Audit bundle: ${pdf.audit_path}. Opening the clean paper now.`);
       window.open(localDocumentUrl(artifact.path), '_blank');
     }
 
@@ -5561,6 +5659,7 @@ def _live_chat_html() -> str:
     function checkPaperReadinessNow() {
       if (!requireSelectedMissionForPaper()) return;
       if (currentStatus) renderPaperReadiness(currentStatus.paper_readiness || {}, missionView.activeMission);
+      if (currentStatus) renderPaperEvolution(currentStatus.paper_evolution || {}, missionView.activeMission);
       paperReadinessSummary.scrollIntoView({behavior: 'smooth', block: 'center'});
       addMessage('lucien', 'Paper readiness refreshed. Follow the next action shown in Make Paper.');
     }
