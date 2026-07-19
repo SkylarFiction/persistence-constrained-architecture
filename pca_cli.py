@@ -71,6 +71,7 @@ from pca import (
     daily_plan,
     derive_self_model,
     derive_current_claim,
+    evidence_review_desk,
     evidence_for_target,
     evidence_locker_snapshot,
     execute_approved_autonomy_actions,
@@ -130,6 +131,7 @@ from pca import (
     review_growth,
     review_skill_candidate,
     review_evidence,
+    review_evidence_note,
     review_external_literature,
     review_source_note,
     link_evidence,
@@ -158,6 +160,7 @@ from pca import (
     render_coherence_research_cycle_text,
     render_coherence_research_cycle_readiness_text,
     render_direct_continuity_experiment_text,
+    render_evidence_review_desk_text,
     render_output_only_samples_text,
     render_output_only_results_text,
     render_coherence_seed_text,
@@ -667,6 +670,20 @@ def main() -> int:
     source_note_review_parser.add_argument("--reviewer", default="steward")
     source_note_review_parser.add_argument("--confidence")
     source_note_review_parser.add_argument("--reason", required=True)
+    evidence_review_desk_parser = subparsers.add_parser("evidence-review-desk")
+    evidence_review_desk_parser.add_argument("--mission")
+    evidence_review_desk_parser.add_argument("--limit", type=int, default=8)
+    evidence_review_desk_parser.add_argument("--json", action="store_true")
+    evidence_review_note_parser = subparsers.add_parser("evidence-review-note")
+    evidence_review_note_parser.add_argument("note_id")
+    evidence_review_note_group = evidence_review_note_parser.add_mutually_exclusive_group(required=True)
+    evidence_review_note_group.add_argument("--accept", action="store_true")
+    evidence_review_note_group.add_argument("--reject", action="store_true")
+    evidence_review_note_group.add_argument("--manual-check", action="store_true")
+    evidence_review_note_group.add_argument("--dispute", action="store_true")
+    evidence_review_note_parser.add_argument("--reviewer", default="steward")
+    evidence_review_note_parser.add_argument("--confidence")
+    evidence_review_note_parser.add_argument("--reason", required=True)
 
     external_literature_add_parser = subparsers.add_parser("external-literature-add")
     external_literature_add_parser.add_argument("mission_id")
@@ -2078,6 +2095,42 @@ def main() -> int:
         except ValueError as exc:
             raise SystemExit(str(exc))
         print_json({"source_note_review": record.to_dict()})
+        return 0
+
+    if args.command == "evidence-review-desk":
+        result = evidence_review_desk(
+            ledger,
+            mission_id=args.mission,
+            limit=args.limit,
+        )
+        if args.json:
+            print_json({"evidence_review_desk": result})
+        else:
+            print(render_evidence_review_desk_text(result))
+        return 0
+
+    if args.command == "evidence-review-note":
+        if args.accept:
+            status = "reviewed"
+        elif args.reject:
+            status = "rejected"
+        elif args.manual_check or args.dispute:
+            status = "disputed" if args.dispute else "stale"
+        else:
+            status = "raw"
+        try:
+            result = review_evidence_note(
+                ledger,
+                manifest,
+                note_id=args.note_id,
+                review_status=status,
+                reviewer=args.reviewer,
+                confidence=args.confidence,
+                reason=args.reason,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print_json({"evidence_review_note": result})
         return 0
 
     if args.command == "external-literature-add":

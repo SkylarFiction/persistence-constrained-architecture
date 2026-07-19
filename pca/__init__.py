@@ -130,6 +130,11 @@ from .evidence_locker import (
     require_evidence,
     review_evidence,
 )
+from .evidence_review_desk import (
+    evidence_review_desk,
+    render_evidence_review_desk_text,
+    review_evidence_note,
+)
 from .external_literature import (
     ExternalLiteratureRecord,
     ExternalLiteratureReviewRecord,
@@ -727,6 +732,7 @@ __all__ = [
     "evidence_link_records_from_events",
     "evidence_locker_snapshot",
     "evidence_records_from_events",
+    "evidence_review_desk",
     "external_literature_for_mission",
     "external_literature_records_from_events",
     "external_literature_review_records_from_events",
@@ -834,6 +840,7 @@ __all__ = [
     "review_growth",
     "review_skill_candidate",
     "review_evidence",
+    "review_evidence_note",
     "review_external_literature",
     "review_source_note",
     "review_autonomy_action",
@@ -846,6 +853,7 @@ __all__ = [
     "render_daily_command_center_text",
     "render_dashboard_html",
     "render_direct_continuity_experiment_text",
+    "render_evidence_review_desk_text",
     "render_lucien_cockpit_html",
     "render_next_governed_build_text",
     "render_project_build_brief_text",

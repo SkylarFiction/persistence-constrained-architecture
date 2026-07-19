@@ -98,6 +98,7 @@ from pca import (
     derive_current_claim,
     derive_self_model,
     direct_continuity_experiment_records_from_events,
+    evidence_review_desk,
     estimate_model_usage,
     evidence_for_target,
     evidence_locker_snapshot,
@@ -120,7 +121,9 @@ from pca import (
     present_blinded_samples,
     record_rating,
     render_output_only_samples_text,
+    render_evidence_review_desk_text,
     score_output_only_arm,
+    review_evidence_note,
     render_coherence_research_cycle_readiness_text,
     verify_coherence_research_cycle_readiness,
     execute_approved_autonomy_actions,
@@ -4781,6 +4784,130 @@ def test_reader_paper_reports_output_only_rating_arm_when_rated(tmp_path):
     assert b"single rater" in paper
     assert b"Add more independent raters" in paper
     assert b"output-only human-rater arm remains unrun" not in paper
+
+
+def test_evidence_review_desk_lists_priority_notes_and_reviews_note(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "Coherence_Physics_Source.md").write_text(
+        (
+            "Smooth output is not continuity. Fluent output can continue while "
+            "identity state, memory, authority, lineage, and ledger integrity "
+            "change underneath."
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_coherence_paper_pipeline(
+        ledger,
+        manifest,
+        project_root=project_root,
+        corpus_roots=["corpus"],
+        corpus_limit=2,
+        force=True,
+        output_path=tmp_path / "coherence_audit_bundle.pdf",
+        paper_output_path=tmp_path / "coherence_paper.pdf",
+        packet_output_path=tmp_path / "coherence_research_packet.pdf",
+    )
+    mission_id = result["record"]["mission_id"]
+    desk = evidence_review_desk(ledger, mission_id=mission_id, limit=3)
+    rendered = render_evidence_review_desk_text(desk)
+
+    assert desk["items"]
+    empty_latest_mission = open_mission(
+        ledger,
+        manifest.system_id,
+        title="Empty newer mission",
+        problem_statement="Should not hide the evidence review desk.",
+    )
+    auto_desk = evidence_review_desk(ledger, limit=3)
+    assert auto_desk["mission_id"] == mission_id
+    assert auto_desk["mission_id"] != empty_latest_mission.mission_id
+    assert "Evidence Review Desk" in rendered
+    assert "evidence-review-note" in rendered
+
+    note_id = desk["items"][0]["note_id"]
+    review = review_evidence_note(
+        ledger,
+        manifest,
+        note_id=note_id,
+        review_status="reviewed",
+        reviewer="test_steward",
+        confidence="high",
+        reason="verified against source excerpt",
+    )
+    updated = evidence_review_desk(ledger, mission_id=mission_id, limit=3)
+
+    assert review["status"] == "reviewed"
+    assert updated["counts"]["reviewed_source_notes"] >= 1
+
+
+def test_reader_paper_reports_reviewed_source_notes(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "Coherence_Physics_Source.md").write_text(
+        (
+            "Smooth output is not continuity. Fluent output can continue while "
+            "identity state, memory, authority, lineage, and ledger integrity "
+            "change underneath."
+        ),
+        encoding="utf-8",
+    )
+    paper_output_path = tmp_path / "coherence_paper.pdf"
+
+    first = run_coherence_paper_pipeline(
+        ledger,
+        manifest,
+        project_root=project_root,
+        corpus_roots=["corpus"],
+        corpus_limit=2,
+        force=True,
+        output_path=tmp_path / "coherence_audit_bundle.pdf",
+        paper_output_path=paper_output_path,
+        packet_output_path=tmp_path / "coherence_research_packet.pdf",
+    )
+    mission_id = first["record"]["mission_id"]
+    desk = evidence_review_desk(ledger, mission_id=mission_id, limit=1)
+    assert desk["items"]
+    review_evidence_note(
+        ledger,
+        manifest,
+        note_id=desk["items"][0]["note_id"],
+        review_status="reviewed",
+        reviewer="test_steward",
+        confidence="high",
+        reason="verified against source excerpt",
+    )
+    run_coherence_paper_pipeline(
+        ledger,
+        manifest,
+        project_root=project_root,
+        corpus_roots=["corpus"],
+        corpus_limit=2,
+        force=True,
+        output_path=tmp_path / "coherence_audit_bundle.pdf",
+        paper_output_path=paper_output_path,
+        packet_output_path=tmp_path / "coherence_research_packet.pdf",
+    )
+    from pypdf import PdfReader
+
+    paper = "\n".join(
+        page.extract_text() or ""
+        for page in PdfReader(str(paper_output_path)).pages
+    )
+
+    assert "formal Evidence Locker record" in paper
+    assert "source note(s)" in paper
+    assert "claim-source link" in paper
+    assert "steward-reviewed" in paper
 
 
 def test_coherence_research_cycle_runs_verified_non_certifying_cycle(tmp_path):

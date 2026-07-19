@@ -264,6 +264,12 @@ def _scholarly_paper_lines(
         note for note in claim_candidate_notes if _source_note_reader_ready(note)
     ]
     damaged_note_count = len(claim_candidate_notes) - len(reader_ready_notes)
+    reviewed_source_note_count = len([
+        note for note in source_notes if str(note.get("review_status") or "") == "reviewed"
+    ])
+    reviewed_source_link_count = len([
+        link for link in source_links if str(link.get("review_status") or "") == "reviewed"
+    ])
     lines = [
         "Smooth Output Is Not Continuity:",
         "A Coherence Physics Approach to Governed Artificial Identity",
@@ -426,7 +432,9 @@ def _scholarly_paper_lines(
         f"{len(claim_candidate_notes)} argument-bearing source note(s) extracted; "
         f"{len(reader_ready_notes)} source note(s) passed the reader-facing "
         f"extraction gate; {damaged_note_count} note(s) require manual inspection; "
-        f"{reviewed_evidence} evidence record(s) have been steward-reviewed. "
+        f"{reviewed_evidence} formal Evidence Locker record(s), "
+        f"{reviewed_source_note_count} source note(s), and "
+        f"{reviewed_source_link_count} claim-source link(s) have been steward-reviewed. "
         "This status is intentionally conservative: raw evidence can guide drafting, "
         "but it does not certify the paper's conclusions.",
         "",
