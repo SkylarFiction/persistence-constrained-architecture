@@ -125,6 +125,16 @@ def latest_direct_continuity_experiment(events) -> dict[str, Any] | None:
     return records[-1] if records else None
 
 
+def condition_ground_truth() -> dict[str, bool]:
+    """condition_id -> expected_certifiable, for scoring other arms against."""
+    return {condition.condition_id: condition.expected_certifiable for condition in _conditions()}
+
+
+def condition_titles() -> dict[str, str]:
+    """condition_id -> human-readable title, for rendering elsewhere."""
+    return {condition.condition_id: condition.title for condition in _conditions()}
+
+
 def render_direct_continuity_experiment_text(result: dict[str, Any]) -> str:
     record = result.get("record") or result
     lines = [

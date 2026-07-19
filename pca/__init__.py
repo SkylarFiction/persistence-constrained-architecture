@@ -407,10 +407,19 @@ from .coherence_research_cycle import (
     verify_coherence_research_cycle_readiness,
 )
 from .direct_continuity_experiment import (
+    condition_ground_truth,
+    condition_titles,
     direct_continuity_experiment_records_from_events,
     latest_direct_continuity_experiment,
     render_direct_continuity_experiment_text,
     run_direct_continuity_experiment,
+)
+from .output_only_rating import (
+    present_blinded_samples,
+    record_rating,
+    render_output_only_results_text,
+    render_output_only_samples_text,
+    score_output_only_arm,
 )
 from .research_autopilot import (
     render_research_autopilot_text,
@@ -505,6 +514,8 @@ __all__ = [
     "ContinuityStatus",
     "ContextSection",
     "CSMRuntimeBridge",
+    "condition_ground_truth",
+    "condition_titles",
     "daily_command_center",
     "EVALUATION_PRECEDENCE",
     "AuditEngine",
@@ -611,6 +622,7 @@ __all__ = [
     "PolicyDecision",
     "PolicyEngine",
     "PolicyPackLoadResult",
+    "present_blinded_samples",
     "project_build_brief",
     "RecoveryRecord",
     "RecoveryStatus",
@@ -683,7 +695,11 @@ __all__ = [
     "build_theory_revision_draft",
     "build_theory_revision_draft_lines",
     "default_coherence_theory_revision_content",
+    "record_rating",
+    "render_output_only_results_text",
+    "render_output_only_samples_text",
     "render_theory_revision_draft_text",
+    "score_output_only_arm",
     "theory_revision_draft_records_from_events",
     "compile_self_model",
     "complete_mission_step",

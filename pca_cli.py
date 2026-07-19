@@ -48,6 +48,9 @@ from pca import (
     run_coherence_paper_pipeline,
     run_coherence_research_cycle,
     run_direct_continuity_experiment,
+    present_blinded_samples,
+    record_rating,
+    score_output_only_arm,
     run_research_autopilot,
     verify_coherence_research_cycle_readiness,
     authorization_policy_from_packs,
@@ -155,6 +158,8 @@ from pca import (
     render_coherence_research_cycle_text,
     render_coherence_research_cycle_readiness_text,
     render_direct_continuity_experiment_text,
+    render_output_only_samples_text,
+    render_output_only_results_text,
     render_coherence_seed_text,
     render_commit_readiness_text,
     render_daily_command_center_text,
@@ -453,6 +458,17 @@ def main() -> int:
         "--output",
         default="reports/continuity_experiments/direct_continuity_experiment.json",
     )
+    output_only_samples_parser = subparsers.add_parser("output-only-rating-samples")
+    output_only_samples_parser.add_argument("--json", action="store_true")
+    output_only_samples_parser.add_argument("--seed", type=int, default=None)
+    output_only_submit_parser = subparsers.add_parser("output-only-rating-submit")
+    output_only_submit_parser.add_argument("--sample", required=True)
+    output_only_submit_parser.add_argument("--judgment", required=True, choices=["same", "different"])
+    output_only_submit_parser.add_argument("--rater", required=True)
+    output_only_submit_parser.add_argument("--note", default="")
+    output_only_submit_parser.add_argument("--json", action="store_true")
+    output_only_results_parser = subparsers.add_parser("output-only-rating-results")
+    output_only_results_parser.add_argument("--json", action="store_true")
     research_sandbox_parser = subparsers.add_parser("research-sandbox")
     research_sandbox_parser.add_argument("--json", action="store_true")
     research_brief_parser = subparsers.add_parser("research-brief")
@@ -1330,6 +1346,58 @@ def main() -> int:
             print_json({"direct_continuity_experiment": result})
         else:
             print(render_direct_continuity_experiment_text(result))
+        return 0
+
+    if args.command == "output-only-rating-samples":
+        record = present_blinded_samples(
+            ledger,
+            manifest,
+            seed=args.seed,
+            reason="manual CLI output-only rating samples presented",
+        )
+        # The full record (with the label -> condition_id answer key) is what
+        # gets written to the ledger, since scoring needs it later. Nothing
+        # printed back to whoever is about to rate these -- including --json
+        # callers -- should include that key, or the blind is broken for
+        # anyone who happens to look at the raw output.
+        blinded_view = {
+            "presentation_id": record["presentation_id"],
+            "prompt": record["prompt"],
+            "samples": record["samples"],
+            "created_at": record["created_at"],
+        }
+        if args.json:
+            print_json({"output_only_rating_samples": blinded_view})
+        else:
+            print(render_output_only_samples_text(blinded_view))
+        return 0
+
+    if args.command == "output-only-rating-submit":
+        judgment = "same_identity" if args.judgment == "same" else "different_or_uncertain"
+        try:
+            record = record_rating(
+                ledger,
+                manifest,
+                sample_label=args.sample,
+                rater=args.rater,
+                judgment=judgment,
+                note=args.note,
+                reason="manual CLI output-only rating submitted",
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        if args.json:
+            print_json({"output_only_rating": record.to_dict()})
+        else:
+            print(f"Recorded: {args.sample} -> {judgment} (rater: {args.rater})")
+        return 0
+
+    if args.command == "output-only-rating-results":
+        result = score_output_only_arm(ledger, manifest)
+        if args.json:
+            print_json({"output_only_rating_results": result})
+        else:
+            print(render_output_only_results_text(result))
         return 0
 
     if args.command == "research-sandbox":

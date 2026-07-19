@@ -117,6 +117,10 @@ from pca import (
     run_coherence_paper_pipeline,
     run_coherence_research_cycle,
     run_direct_continuity_experiment,
+    present_blinded_samples,
+    record_rating,
+    render_output_only_samples_text,
+    score_output_only_arm,
     render_coherence_research_cycle_readiness_text,
     verify_coherence_research_cycle_readiness,
     execute_approved_autonomy_actions,
@@ -4680,6 +4684,103 @@ def test_reader_paper_reports_latest_direct_continuity_experiment(tmp_path):
     assert b"6 of 6 condition" in paper
     assert b"output-only human-rater arm remains unrun" in paper
     assert b"threshold.;" not in paper
+
+
+def test_output_only_rating_samples_are_blinded_and_score_false_acceptance(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+
+    presentation = present_blinded_samples(
+        ledger,
+        manifest,
+        seed=7,
+        reason="test blinded output-only samples",
+    )
+    rendered = render_output_only_samples_text(
+        {
+            "presentation_id": presentation["presentation_id"],
+            "prompt": presentation["prompt"],
+            "samples": presentation["samples"],
+            "created_at": presentation["created_at"],
+        }
+    )
+
+    assert "mapping" not in rendered
+    assert "silent_memory_replacement" not in rendered
+    assert "ledger_tampering" not in rendered
+    assert len(presentation["samples"]) == 6
+
+    for sample in presentation["samples"]:
+        record_rating(
+            ledger,
+            manifest,
+            sample_label=sample["label"],
+            rater="test-rater",
+            judgment="same_identity",
+            note="output alone sounded continuous",
+        )
+
+    result = score_output_only_arm(ledger, manifest)
+
+    assert result["status"] == "rated"
+    assert result["rating_count"] == 6
+    assert result["rater_count"] == 1
+    assert result["percent_invisible_from_output_alone"] == 1.0
+    assert "ledger_tampering" in result["false_continuity_acceptance"]
+    assert result["tampering_detection"] == "not_detected"
+    assert result["inter_rater_agreement"] == "not_applicable (1 rater(s))"
+
+
+def test_reader_paper_reports_output_only_rating_arm_when_rated(tmp_path):
+    manifest = load_manifest()
+    ledger = ContinuityLedger(tmp_path / "continuity.log")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "Coherence_Physics_Source.md").write_text(
+        (
+            "Smooth output is not continuity. Identity continuity requires "
+            "ledger validation, evidence freshness, lineage tracking, and "
+            "authority checks."
+        ),
+        encoding="utf-8",
+    )
+    run_direct_continuity_experiment(
+        ledger,
+        manifest,
+        output_path=tmp_path / "direct_continuity_experiment.json",
+        reason="test experiment before rated paper export",
+    )
+    presentation = present_blinded_samples(ledger, manifest, seed=11)
+    for sample in presentation["samples"]:
+        record_rating(
+            ledger,
+            manifest,
+            sample_label=sample["label"],
+            rater="test-rater",
+            judgment="same_identity",
+        )
+    paper_output_path = tmp_path / "coherence_paper.pdf"
+
+    run_coherence_paper_pipeline(
+        ledger,
+        manifest,
+        project_root=project_root,
+        corpus_roots=["corpus"],
+        corpus_limit=2,
+        force=True,
+        output_path=tmp_path / "coherence_audit_bundle.pdf",
+        paper_output_path=paper_output_path,
+        packet_output_path=tmp_path / "coherence_research_packet.pdf",
+    )
+    paper = paper_output_path.read_bytes()
+
+    assert b"Output-only arm: 6 blinded rating" in paper
+    assert b"100% of non-control conditions" in paper
+    assert b"single rater" in paper
+    assert b"Add more independent raters" in paper
+    assert b"output-only human-rater arm remains unrun" not in paper
 
 
 def test_coherence_research_cycle_runs_verified_non_certifying_cycle(tmp_path):

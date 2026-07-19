@@ -12,6 +12,7 @@ from .argument_graph import mission_argument_graph
 from .claim_source_links import claim_source_links
 from .coherence_corpus import coherence_corpus_index_records_from_events, is_relevant_source_path
 from .direct_continuity_experiment import latest_direct_continuity_experiment
+from .output_only_rating import score_output_only_arm
 from .evidence_locker import evidence_for_target
 from .external_literature import external_literature_for_mission
 from .falsification_lab import falsification_lab_verdict
@@ -98,6 +99,7 @@ def export_research_pdf(
         external_literature=external_literature,
     )
     direct_experiment = latest_direct_continuity_experiment(ledger.events())
+    output_only_result = score_output_only_arm(ledger, manifest)
 
     paper_lines = _scholarly_paper_lines(
         mission_title=mission.title,
@@ -112,6 +114,7 @@ def export_research_pdf(
         argument_graph=argument_graph,
         research_packet_path=str(packet_path),
         direct_experiment=direct_experiment,
+        output_only_result=output_only_result,
         theory_revision_record=theory_revision_record,
     )
     packet_lines = _research_packet_lines(
@@ -250,6 +253,7 @@ def _scholarly_paper_lines(
     argument_graph: dict[str, Any],
     research_packet_path: str,
     direct_experiment: dict[str, Any] | None,
+    output_only_result: dict[str, Any] | None = None,
     theory_revision_record: dict[str, Any] | None = None,
 ) -> list[str]:
     reviewed_evidence = int(claim_map.get("reviewed_evidence_count", 0) or 0)
@@ -415,7 +419,7 @@ def _scholarly_paper_lines(
         "detection, inter-rater agreement, audit time, and the percentage of changes "
         "invisible from output alone. This is the test that would directly evaluate "
         "the title claim.",
-        *_direct_experiment_summary_lines(direct_experiment),
+        *_direct_experiment_summary_lines(direct_experiment, output_only_result),
         "",
         "8. Current Evidence Status",
         f"Evidence status: {len(corpus_sources)} local source file(s) indexed; "
@@ -459,7 +463,7 @@ def _scholarly_paper_lines(
         "- This draft is generated from local governed research outputs.",
         "- Raw evidence has not been accepted as reviewed evidence unless marked so.",
         "- External scholarly literature has not yet been reviewed inside this run.",
-        _direct_experiment_limitation_line(direct_experiment),
+        _direct_experiment_limitation_line(direct_experiment, output_only_result),
         "- The document does not claim proof of consciousness, AGI, personhood, or final physics.",
         "- Source registration is not the same as source interpretation.",
         "",
@@ -474,7 +478,7 @@ def _scholarly_paper_lines(
         "reduces that error.",
         "",
         "Research Agenda",
-        "- Run the direct continuity experiment with output-only and PCA certification arms.",
+        _direct_experiment_agenda_line(direct_experiment, output_only_result),
         "- Review source notes and promote verified evidence from raw to reviewed.",
         "- Add external scholarly literature on provenance, checkpointing, tamper-evident logs, model editing, and agent memory.",
         "- Replace provisional claims with reviewed claim-source links.",
@@ -495,6 +499,7 @@ def _scholarly_paper_lines(
 
 def _direct_experiment_summary_lines(
     direct_experiment: dict[str, Any] | None,
+    output_only_result: dict[str, Any] | None = None,
 ) -> list[str]:
     if not direct_experiment:
         return [
@@ -520,22 +525,79 @@ def _direct_experiment_summary_lines(
     ]
     if condition_summary:
         lines.append(f"Condition outcomes: {condition_summary}.")
-    lines.append(
-        "Boundary: the output-only human-rater arm remains unrun; this result "
-        "executes the governance classifier, not the full behavioral comparison."
+    lines.extend(_output_only_summary_lines(output_only_result))
+    return lines
+
+
+def _output_only_summary_lines(output_only_result: dict[str, Any] | None) -> list[str]:
+    if not output_only_result or output_only_result.get("status") == "not_yet_rated":
+        return [
+            "Boundary: the output-only human-rater arm remains unrun; this result "
+            "executes the governance classifier, not the full behavioral comparison."
+        ]
+    rater_count = int(output_only_result.get("rater_count", 0) or 0)
+    percent_invisible = output_only_result.get("percent_invisible_from_output_alone")
+    percent_text = (
+        f"{percent_invisible * 100:.0f}%" if isinstance(percent_invisible, (int, float)) else "unknown"
     )
+    lines = [
+        f"Output-only arm: {int(output_only_result.get('rating_count', 0) or 0)} blinded "
+        f"rating(s) from {rater_count} rater(s). {percent_text} of non-control conditions "
+        "were judged 'same identity' from output alone -- invisible to a rater without "
+        "governance access.",
+        f"Tampering detection: {output_only_result.get('tampering_detection', 'not_rated')}. "
+        f"Lineage-break detection: {output_only_result.get('lineage_break_detection', 'not_rated')}. "
+        f"Authority-change detection: {output_only_result.get('authority_change_detection', 'not_rated')}.",
+        f"Inter-rater agreement: {output_only_result.get('inter_rater_agreement')} -- "
+        + (
+            "with only one rater this cannot yet establish statistical confidence; "
+            "more raters are needed before this comparison supports a strong claim."
+            if rater_count < 2
+            else "computed across raters who rated the same conditions."
+        ),
+        "Boundary: this is a single-session blinded rating exercise, not a peer-reviewed "
+        "human-subjects study -- it demonstrates the comparison the title claim requires, "
+        "at a scale too small yet to generalize from.",
+    ]
     return lines
 
 
 def _direct_experiment_limitation_line(
     direct_experiment: dict[str, Any] | None,
+    output_only_result: dict[str, Any] | None = None,
 ) -> str:
     if not direct_experiment:
         return "- The direct continuity experiment has been specified but not executed."
+    rater_count = int((output_only_result or {}).get("rater_count", 0) or 0)
+    if not output_only_result or output_only_result.get("status") == "not_yet_rated":
+        return (
+            "- The direct continuity experiment has executed the PCA-governance arm, "
+            "but the output-only human-rater comparison remains unrun."
+        )
+    if rater_count < 2:
+        return (
+            "- The output-only human-rater arm has been rated by a single rater; "
+            "inter-rater agreement is not yet computable and this comparison should "
+            "not be treated as statistically conclusive until more raters participate."
+        )
     return (
-        "- The direct continuity experiment has executed the PCA-governance arm, "
-        "but the output-only human-rater comparison remains unrun."
+        "- Both arms of the direct continuity experiment have been executed with "
+        "multiple raters; see Section 7 for the comparison and its confidence bounds."
     )
+
+
+def _direct_experiment_agenda_line(
+    direct_experiment: dict[str, Any] | None,
+    output_only_result: dict[str, Any] | None = None,
+) -> str:
+    if not direct_experiment:
+        return "- Run the direct continuity experiment with output-only and PCA certification arms."
+    if not output_only_result or output_only_result.get("status") == "not_yet_rated":
+        return "- Run the output-only human-rater arm against the executed PCA certification arm."
+    rater_count = int(output_only_result.get("rater_count", 0) or 0)
+    if rater_count < 2:
+        return "- Add more independent raters to the output-only arm before treating the comparison as evidence."
+    return "- Expand the direct continuity experiment with more raters and externally reviewed conditions."
 
 
 def _research_packet_lines(
